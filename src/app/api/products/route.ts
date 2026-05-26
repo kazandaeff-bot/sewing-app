@@ -54,8 +54,12 @@ export async function POST(request: NextRequest) {
       },
     })
     return NextResponse.json(product, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create product error:', error)
+    // Check for unique constraint violation (duplicate article)
+    if (error?.code === 'P2002' && error?.meta?.target?.includes('article')) {
+      return NextResponse.json({ error: 'Изделие с таким артикулом уже существует' }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Ошибка создания изделия' }, { status: 500 })
   }
 }

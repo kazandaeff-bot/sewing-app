@@ -132,3 +132,26 @@ Stage Summary:
 - Fixed by adding ClipboardList to imports
 - App rebuilt and server restarted on port 3000 (Caddy proxy on port 81)
 - All endpoints verified working
+
+---
+Task ID: 6
+Agent: Main Agent
+Task: Fix product creation - product doesn't appear after clicking Create
+
+Work Log:
+- User reported that creating a new product doesn't appear in the list
+- Tested product creation API - works correctly for all formats (with/without sizes/colors/kits)
+- Found that duplicate article causes a Prisma unique constraint error (article is @unique in schema)
+- The API was returning generic "Ошибка создания изделия" without explaining the cause
+- User likely entered an article that already exists (e.g., БЖ-01, ФМ-01, etc.)
+- Added specific error handling for Prisma P2002 unique constraint violation
+- Now returns "Изделие с таким артикулом уже существует" with 409 status for duplicate articles
+- The client-side onError handler already shows a toast with the error message
+- Also added same error handling to PATCH route for consistency
+- Rebuilt and restarted server
+
+Stage Summary:
+- Root cause: Duplicate article (unique field) caused silent 500 error
+- Fixed: Now shows clear error message "Изделие с таким артикулом уже существует"
+- Product creation works correctly when article is unique
+- React Query invalidation works - list refreshes after successful creation
