@@ -105,6 +105,20 @@ model Rework {
   updatedAt   DateTime @updatedAt
 }
 
+// Переделки для SewingTaskItem (новая модель)
+model SewingRework {
+  id               String           @id @default(cuid())
+  sewingTaskItemId String           // Ссылка на SewingTaskItem
+  sewingTaskId     String           // Ссылка на SewingTask (для удобства)
+  quantity         Int
+  reason           String
+  status           String           @default("pending") // pending | in_progress | pending_qc | completed
+  sewingTaskItem   SewingTaskItem   @relation(fields: [sewingTaskItemId], references: [id])
+  sewingTask       SewingTask       @relation(fields: [sewingTaskId], references: [id])
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
 // ============ СПРАВОЧНИК: Города ============
 model City {
   id        String   @id @default(cuid())
@@ -190,6 +204,7 @@ model SewingTask {
   employeeId      String
   status          String           @default("issued") // issued | in_work | pending_qc | completed
   items           SewingTaskItem[]
+  reworks         SewingRework[]
   cuttingPlan     CuttingPlan      @relation(fields: [cuttingPlanId], references: [id])
   employee        Employee         @relation(fields: [employeeId], references: [id])
   createdAt       DateTime         @default(now())
@@ -209,6 +224,7 @@ model SewingTaskItem {
   defectNote      String?
   sewingTask      SewingTask  @relation(fields: [sewingTaskId], references: [id], onDelete: Cascade)
   product         Product     @relation(fields: [productId], references: [id])
+  reworks         SewingRework[]
 }
 
 // ============ МОДУЛЬ 4: Распределение по городам (бывш. План селлеров) ============

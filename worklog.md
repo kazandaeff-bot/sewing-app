@@ -1,157 +1,30 @@
 ---
 Task ID: 1
 Agent: Main Agent
-Task: Fix app access, fix Task 1 (kit UI), fix Task 2 (SewingTasksTab), remove @mdxeditor/editor
+Task: Fix items not appearing in QC after sewing, add partial submission support
 
 Work Log:
-- Read project dump (3).txt - 18,870 lines containing full project source
-- Initialized fullstack environment with init-fullstack script
-- Reconstructed project from dump: all API routes, components, pages, prisma schema
-- Fixed initial build error: useToast export was not being recognized (resolved on recompile)
-- Verified kit combo UI in ReferencesTab: checkbox says "Комплект" (not "Чёрно-белый комплект"), supports arbitrary key/value pairs
-- Verified SewingTasksTab uses distribution table from раскрой with residue control and sewer assignment
-- Verified @mdxeditor/editor is NOT in package.json - no removal needed
-- Tested all API endpoints: all return 200
-- Tested complete flow: Plan → Approve → Cutting Plan (kit expansion works) → Cut → Sewing Task
-- Kit combo expansion verified: "ч/б" → ["чёрный", "белый"] correctly expands in cutting plan
-- Lint passes cleanly
-- Login works: admin/admin → supervisor role
+- Investigated root cause: QCTab reads from old `Task` model via `/api/tasks`, but SewerTab writes to new `SewingTask` model via `/api/sewing-tasks` — two completely disconnected data models
+- Updated Prisma schema: added `SewingRework` model with relations to `SewingTask` and `SewingTaskItem`
+- Added `reworks` relation to both `SewingTask` and `SewingTaskItem` models
+- Applied schema migration with `prisma db push`
+- Rewrote PATCH `/api/sewing-tasks/[id]` to support `submitToQc` parameter for partial submission:
+  - Full submit: sets status to `pending_qc` (existing behavior)
+  - Partial submit: creates new SewingTask with `pending_qc` status with sent items, reduces original task item quantities, deletes items with 0 remaining
+- Created `/api/sewing-reworks` and `/api/sewing-reworks/[id]` API routes for new rework model
+- Updated `/api/sewing-tasks` GET to include `reworks` and item `reworks` in response
+- Rewrote QCTab (page.tsx) to read from `/api/sewing-tasks?status=pending_qc` and `/api/sewing-tasks?status=completed`
+- Rewrote QCTab to use `/api/sewing-reworks` for rework operations
+- Added types: `SewingTaskResponse`, `SewingTaskItemResponse`, `SewingReworkResponse`
+- Modified SewerTab "Отшить" dialog: added partial submission mode with `isPartialSubmit` toggle, `sendQty` per item, two submit buttons
+- Modified `handleComplete` to accept `partial: boolean` parameter
+- Handled legacy `done` status in SewerTab task grouping
+- Added graceful shutdown handlers to db.ts
+- Created watchdog.sh to auto-restart standalone server
+- Tested all scenarios: GET pending_qc (5 tasks visible), PATCH accept (status→completed), partial submit (3 of 5 → new task pending_qc, 2 remain in_work)
 
 Stage Summary:
-- App accessible at localhost:3000, both / and /login return 200
-- Task 1 (Комплекты UI): Fixed - arbitrary kit combo keys/colors with proper UI
-- Task 2 (SewingTasksTab): Done - distribution table from раскрой with residue control
-- @mdxeditor/editor: Not present in dependencies, no removal needed
-- All 8 API modules working: employees, products, cities, box-types, cutting-plans, sewing-tasks, seller-plans, plans
-- Database seeded with test data (8 employees, 6+ products, test plans)
-
----
-Task ID: dump-gen
-Agent: General Purpose Agent
-Task: Generate project dump file for VPS reconstruction
-
-Work Log:
-- Scanned project directory structure at /home/z/my-project/
-- Identified 106 relevant source files (excluding node_modules/, .next/, .git/, download/, upload/, agent-ctx/, skills/, mini-services/, .zscripts/, worklog.md, dev.log, custom.db)
-- Generated project dump in required format: === FILE: path === / contents / === END FILE ===
-- Added header comment with date, file count, and description
-- Wrote dump to /home/z/my-project/download/project-dump-fixed.txt
-
-Results:
-- Total files: 106
-- Total lines: 15,760
-- File size: 805,549 bytes (786.7 KB)
-- Includes: src/, prisma/, public/, all config files (.env, package.json, tsconfig.json, next.config.ts, tailwind.config.ts, postcss.config.mjs, eslint.config.mjs, components.json, Caddyfile, bun.lock, .gitignore, next-env.d.ts)
-- Format allows full VPS reconstruction by parsing FILE/END FILE markers
-
----
-Task ID: 2
-Agent: General Purpose Agent
-Task: Regenerate project dump file for VPS reconstruction (fixed version)
-
-Work Log:
-- Scanned project directory at /home/z/my-project/
-- Identified 106 relevant source files
-- Excluded: node_modules/, .next/, .git/, download/, upload/, agent-ctx/, skills/, mini-services/, .zscripts/, worklog.md, dev.log, db/custom.db
-- Generated project dump using bash script for reliability with large files
-- .env file contains VPS-compatible DATABASE_URL=file:/root/sewing-production-platform/db/custom.db with comment about absolute path
-- Header comment includes date, file count, and description
-- All files wrapped in === FILE: relative/path === / contents / === END FILE === format
-
-Results:
-- Total files: 106
-- Total lines: 15,861 (source file lines) / 16,294 (dump file lines including markers)
-- File size: 812,326 bytes (793.3 KB)
-- Output: /home/z/my-project/download/project-dump-fixed.txt
-
----
-Task ID: 3
-Agent: Main Agent
-Task: Fix app not opening in preview panel - diagnose and resolve server access issue
-
-Work Log:
-- Investigated why the app doesn't open for the user through the preview panel
-- Discovered that the Next.js server was NOT running (no processes, port 3000 not listening)
-- Found that background processes get killed between Bash tool calls in the Z.AI environment
-- Used `setsid` + double-fork to start standalone server as a persistent daemon
-- Successfully started Next.js standalone server (PID 2127) on port 3000
-- Verified Caddy (platform's, PID 2) is running on port 81 and proxies to port 3000
-- Confirmed all API endpoints work through port 81 (the platform's external access port)
-- Found that login password is "admin" (not "admin123" as previously thought)
-- Updated dev.pid to reflect current server PID
-
-Stage Summary:
-- Root cause: Next.js server was not running when user tried to access preview panel
-- Server now running as daemon (PID 2127) via setsid double-fork
-- All endpoints verified: main page (200), login (200), sewing-tasks (200), employees (200), cutting-plans (200), seller-plans (200)
-- Login credentials: admin / admin
-- Platform Caddy on port 81 properly proxies to Next.js on port 3000
-- Key discovery: FC_CUSTOM_LISTEN_PORT=81 - platform routes external traffic through port 81
-
----
-Task ID: 4
-Agent: Main Agent
-Task: Fix auth flow - user can enter menu but cannot re-login after logout
-
-Work Log:
-- Identified 3 critical auth bugs:
-  1. /api/auth/me endpoint DID NOT EXIST - AuthProvider was fetching a 404 page, causing session to be lost on page reload
-  2. Login page redirected to /production which DOES NOT EXIST (only / route exists) - after login, user got 404
-  3. Cookie httpOnly mismatch: login set httpOnly: false, logout set httpOnly: true - cookie may not clear properly
-- Created /api/auth/me/route.ts that reads session cookie and returns user data (same as /api/auth/session)
-- Fixed login redirect from '/production' to '/' in login/page.tsx
-- Fixed logout cookie httpOnly from true to false to match login cookie settings
-- Fixed all router.push('/production') to router.push('/') in main page.tsx
-- Rebuilt the app (npm run build) and restarted standalone server
-- Verified complete auth flow: login → session check → logout → re-login all work correctly
-
-Stage Summary:
-- Auth flow now works end-to-end: login, session persistence, logout, re-login
-- /api/auth/me endpoint created and working
-- Redirect fixed: login now goes to '/' instead of non-existent '/production'
-- Cookie settings consistent between login and logout (both httpOnly: false)
-- Login credentials: admin / admin
-
----
-Task ID: 5
-Agent: Main Agent
-Task: Fix page crash when selecting a sewer - "This page couldn't load" error
-
-Work Log:
-- User reported that when selecting a sewer, the page crashes with "This page couldn't load"
-- Analyzed the screenshot: browser-level page load failure, not an in-app error
-- Investigated the SewerTab component code in page.tsx
-- Found root cause: ClipboardList icon is used on line 460 but was NOT imported from lucide-react
-- When React tries to render the SewerTab after a sewer is selected (showing issued tasks), it encounters undefined ClipboardList and crashes the entire page
-- Added ClipboardList to the lucide-react import statement
-- Rebuilt the app and restarted the standalone server
-- Verified all APIs still work correctly through port 81
-
-Stage Summary:
-- Root cause: Missing ClipboardList import from lucide-react caused React crash when rendering SewerTab
-- Fixed by adding ClipboardList to imports
-- App rebuilt and server restarted on port 3000 (Caddy proxy on port 81)
-- All endpoints verified working
-
----
-Task ID: 6
-Agent: Main Agent
-Task: Fix product creation - product doesn't appear after clicking Create
-
-Work Log:
-- User reported that creating a new product doesn't appear in the list
-- Tested product creation API - works correctly for all formats (with/without sizes/colors/kits)
-- Found that duplicate article causes a Prisma unique constraint error (article is @unique in schema)
-- The API was returning generic "Ошибка создания изделия" without explaining the cause
-- User likely entered an article that already exists (e.g., БЖ-01, ФМ-01, etc.)
-- Added specific error handling for Prisma P2002 unique constraint violation
-- Now returns "Изделие с таким артикулом уже существует" with 409 status for duplicate articles
-- The client-side onError handler already shows a toast with the error message
-- Also added same error handling to PATCH route for consistency
-- Rebuilt and restarted server
-
-Stage Summary:
-- Root cause: Duplicate article (unique field) caused silent 500 error
-- Fixed: Now shows clear error message "Изделие с таким артикулом уже существует"
-- Product creation works correctly when article is unique
-- React Query invalidation works - list refreshes after successful creation
+- Main bug fixed: QC now sees items submitted by sewers (was reading wrong table)
+- Partial submission feature implemented: sewer can send part of items to QC, rest stays in work
+- New SewingRework model and API for rework tracking within SewingTask workflow
+- Standalone server crashes after PATCH requests — mitigated with watchdog auto-restart

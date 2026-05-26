@@ -18,8 +18,14 @@ export async function GET(request: NextRequest) {
         cuttingPlan: { include: { plan: true } },
         employee: true,
         items: {
-          include: { product: true },
+          include: { product: true, reworks: true },
           orderBy: { id: 'asc' },
+        },
+        reworks: {
+          include: {
+            sewingTaskItem: { include: { product: true } },
+          },
+          orderBy: { createdAt: 'desc' },
         },
       },
     })

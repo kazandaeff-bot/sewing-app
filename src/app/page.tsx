@@ -182,6 +182,47 @@ interface BoxType {
   capacities: BoxTypeCapacity[]
 }
 
+interface SewingTaskResponse {
+  id: string
+  cuttingPlanId: string
+  employeeId: string
+  status: 'issued' | 'in_work' | 'pending_qc' | 'completed'
+  cuttingPlan: { id: string; plan: { id: string; name: string } }
+  employee: { id: string; name: string; code: string }
+  items: SewingTaskItemResponse[]
+  reworks: SewingReworkResponse[]
+  createdAt: string
+  updatedAt: string
+}
+
+interface SewingTaskItemResponse {
+  id: string
+  sewingTaskId: string
+  productId: string
+  size: string
+  color: string
+  colorHex: string
+  quantity: number
+  actualQuantity: number | null
+  fabricDefect: number
+  defectNote: string | null
+  product: { id: string; name: string; article: string; sewerRate: number; qcRate: number; reworkRate: number }
+  reworks: SewingReworkResponse[]
+}
+
+interface SewingReworkResponse {
+  id: string
+  sewingTaskItemId: string
+  sewingTaskId: string
+  quantity: number
+  reason: string
+  status: 'pending' | 'in_progress' | 'pending_qc' | 'completed'
+  sewingTaskItem: { id: string; product: { name: string }; size: string; color: string }
+  sewingTask: { id: string; employee: { name: string } }
+  createdAt: string
+  updatedAt: string
+}
+
 // ============ Helpers ============
 function getStatusBadge(status: string) {
   switch (status) {
@@ -236,8 +277,9 @@ function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string })
   const queryClient = useQueryClient()
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(preselectedEmployeeId || '')
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false)
-  const [selectedSewingTask, setSelectedSewingTask] = useState<any>(null)
-  const [completeItems, setCompleteItems] = useState<Array<{ id: string; actualQuantity: string; fabricDefect: string; defectNote: string }>>([])
+  const [selectedSewingTask, setSelectedSewingTask] = useState<SewingTaskResponse | null>(null)
+  const [completeItems, setCompleteItems] = useState<Array<{ id: string; sendQty: string; actualQuantity: string; fabricDefect: string; defectNote: string }>>([])
+  const [isPartialSubmit, setIsPartialSubmit] = useState(false)
   const [salaryPeriod, setSalaryPeriod] = useState<'week' | 'month' | 'all'>('month')
 
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
@@ -281,41 +323,76 @@ function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string })
   )
 
   const handleOpenComplete = useCallback(
-    (task: any) => {
+    (task: SewingTaskResponse) => {
       setSelectedSewingTask(task)
-      setCompleteItems(task.items.map((item: any) => ({
+      setCompleteItems(task.items.map((item: SewingTaskItemResponse) => ({
         id: item.id,
+        sendQty: String(item.quantity),
         actualQuantity: String(item.quantity),
         fabricDefect: '0',
         defectNote: '',
       })))
+      setIsPartialSubmit(false)
       setCompleteDialogOpen(true)
     },
     []
   )
 
-  const handleComplete = useCallback(() => {
+  const handleComplete = useCallback((partial: boolean) => {
     if (!selectedSewingTask) return
-    updateSewingTaskMutation.mutate({
-      id: selectedSewingTask.id,
-      data: {
-        status: 'pending_qc',
-        items: completeItems.map(ci => ({
-          id: ci.id,
-          actualQuantity: parseInt(ci.actualQuantity) || 0,
-          fabricDefect: parseInt(ci.fabricDefect) || 0,
-          defectNote: ci.defectNote || null,
-        })),
-      },
-    })
-    setCompleteDialogOpen(false)
-  }, [selectedSewingTask, completeItems, updateSewingTaskMutation])
 
-  // Group tasks by status
+    if (partial) {
+      // Partial submission: send only specified quantities via submitToQc
+      const submitToQc = completeItems.map(ci => ({
+        id: ci.id,
+        sendQty: parseInt(ci.sendQty) || 0,
+        actualQuantity: parseInt(ci.actualQuantity) || 0,
+        fabricDefect: parseInt(ci.fabricDefect) || 0,
+        defectNote: ci.defectNote || null,
+      })).filter(ci => ci.sendQty > 0)
+
+      if (submitToQc.length === 0) {
+        toast({ title: 'Ошибка', description: 'Укажите количество для отправки', variant: 'destructive' })
+        return
+      }
+
+      // Validate sendQty <= quantity
+      const invalidItem = submitToQc.find(ci => {
+        const originalItem = selectedSewingTask.items.find(i => i.id === ci.id)
+        return originalItem && ci.sendQty > originalItem.quantity
+      })
+      if (invalidItem) {
+        toast({ title: 'Ошибка', description: 'Количество для отправки превышает плановое', variant: 'destructive' })
+        return
+      }
+
+      updateSewingTaskMutation.mutate({
+        id: selectedSewingTask.id,
+        data: { submitToQc },
+      })
+    } else {
+      // Full submission: send all items, set task to pending_qc
+      updateSewingTaskMutation.mutate({
+        id: selectedSewingTask.id,
+        data: {
+          status: 'pending_qc',
+          items: completeItems.map(ci => ({
+            id: ci.id,
+            actualQuantity: parseInt(ci.actualQuantity) || 0,
+            fabricDefect: parseInt(ci.fabricDefect) || 0,
+            defectNote: ci.defectNote || null,
+          })),
+        },
+      })
+    }
+    setCompleteDialogOpen(false)
+  }, [selectedSewingTask, completeItems, updateSewingTaskMutation, toast])
+
+  // Group tasks by status (also handle legacy 'done' status)
   const issuedTasks = sewingTasks.filter((t: any) => t.status === 'issued')
   const inWorkTasks = sewingTasks.filter((t: any) => t.status === 'in_work')
   const pendingQcTasks = sewingTasks.filter((t: any) => t.status === 'pending_qc')
-  const completedTasks = sewingTasks.filter((t: any) => t.status === 'completed')
+  const completedTasks = sewingTasks.filter((t: any) => t.status === 'completed' || t.status === 'done')
 
   // Salary calculation for completed tasks
   const now = new Date()
@@ -666,12 +743,40 @@ function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string })
           <DialogHeader>
             <DialogTitle>Завершить пошив</DialogTitle>
             <DialogDescription>
-              Укажите фактическое количество по каждой позиции — задание будет отправлено на проверку ОТК
+              Укажите фактическое количество по каждой позиции
             </DialogDescription>
           </DialogHeader>
           {selectedSewingTask && (
             <div className="space-y-4">
-              {selectedSewingTask.items.map((item: any, idx: number) => (
+              {/* Toggle partial mode */}
+              <div className="flex items-center gap-3">
+                <Label className="text-sm font-medium">Режим отправки:</Label>
+                <Button
+                  size="sm"
+                  variant={isPartialSubmit ? 'outline' : 'default'}
+                  className={!isPartialSubmit ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+                  onClick={() => setIsPartialSubmit(false)}
+                >
+                  Всё сразу
+                </Button>
+                <Button
+                  size="sm"
+                  variant={isPartialSubmit ? 'default' : 'outline'}
+                  className={isPartialSubmit ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+                  onClick={() => setIsPartialSubmit(true)}
+                >
+                  Частями
+                </Button>
+              </div>
+
+              {isPartialSubmit && (
+                <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-700">
+                  <AlertTriangle className="h-4 w-4 inline mr-1" />
+                  Укажите количество для отправки на ОТК. Оставшиеся изделия останутся в работе.
+                </div>
+              )}
+
+              {selectedSewingTask.items.map((item: SewingTaskItemResponse, idx: number) => (
                 <div key={item.id} className="border rounded-lg p-3 space-y-2">
                   <div className="font-medium text-sm">{item.product?.name} ({item.product?.article})</div>
                   <div className="flex gap-2 text-xs text-muted-foreground">
@@ -682,6 +787,25 @@ function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string })
                     </span>
                     <span>План: {item.quantity} шт</span>
                   </div>
+
+                  {isPartialSubmit && (
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium text-amber-700">Отправить на ОТК</Label>
+                      <Input
+                        type="number" min="0" max={item.quantity}
+                        value={completeItems[idx]?.sendQty || '0'}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setCompleteItems(prev => prev.map((ci, i) => {
+                            if (i !== idx) return ci
+                            const sendQty = parseInt(val) || 0
+                            return { ...ci, sendQty: val, actualQuantity: val, fabricDefect: sendQty > 0 ? ci.fabricDefect : '0' }
+                          }))
+                        }}
+                      />
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <Label className="text-xs">Фактически отшито</Label>
@@ -716,25 +840,41 @@ function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string })
                   </div>
                 </div>
               ))}
-              <div className="bg-sky-50 border border-sky-200 rounded-md p-3 text-sm text-sky-700">
-                <Eye className="h-4 w-4 inline mr-1" />
-                После завершения задание будет отправлено на проверку ОТК
-              </div>
-              <DialogFooter>
+              {!isPartialSubmit && (
+                <div className="bg-sky-50 border border-sky-200 rounded-md p-3 text-sm text-sky-700">
+                  <Eye className="h-4 w-4 inline mr-1" />
+                  Все изделия будут отправлены на проверку ОТК
+                </div>
+              )}
+              <DialogFooter className="flex-col sm:flex-row gap-2">
                 <Button variant="outline" onClick={() => setCompleteDialogOpen(false)}>
                   Отмена
                 </Button>
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                  onClick={handleComplete}
-                  disabled={updateSewingTaskMutation.isPending}
-                >
-                  {updateSewingTaskMutation.isPending && (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  )}
-                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                  Отшить и отправить на проверку
-                </Button>
+                {isPartialSubmit ? (
+                  <Button
+                    className="bg-amber-500 hover:bg-amber-600 text-white"
+                    onClick={() => handleComplete(true)}
+                    disabled={updateSewingTaskMutation.isPending}
+                  >
+                    {updateSewingTaskMutation.isPending && (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    )}
+                    <Upload className="h-4 w-4 mr-1" />
+                    Отправить часть на проверку
+                  </Button>
+                ) : (
+                  <Button
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => handleComplete(false)}
+                    disabled={updateSewingTaskMutation.isPending}
+                  >
+                    {updateSewingTaskMutation.isPending && (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    )}
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                    Отшить всё и отправить на проверку
+                  </Button>
+                )}
               </DialogFooter>
             </div>
           )}
@@ -749,7 +889,8 @@ function QCTab() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [reworkDialogOpen, setReworkDialogOpen] = useState(false)
-  const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null)
+  const [selectedTask, setSelectedTask] = useState<SewingTaskResponse | null>(null)
+  const [selectedItemForRework, setSelectedItemForRework] = useState<SewingTaskItemResponse | null>(null)
   const [reworkQty, setReworkQty] = useState<string>('')
   const [reworkReason, setReworkReason] = useState<string>('')
   const [reworkCustomReason, setReworkCustomReason] = useState<string>('')
@@ -762,33 +903,33 @@ function QCTab() {
   })
 
   const { data: pendingQcTasks = [], isLoading: pendingLoading } = useQuery({
-    queryKey: ['tasks', 'status', 'pending_qc'],
-    queryFn: () => fetch('/api/tasks?status=pending_qc').then((r) => r.json()),
+    queryKey: ['sewing-tasks', 'status', 'pending_qc'],
+    queryFn: () => fetch('/api/sewing-tasks?status=pending_qc').then((r) => r.json()),
   })
 
   const { data: completedTasks = [], isLoading: completedLoading } = useQuery({
-    queryKey: ['tasks', 'status', 'completed'],
-    queryFn: () => fetch('/api/tasks?status=completed').then((r) => r.json()),
+    queryKey: ['sewing-tasks', 'status', 'completed'],
+    queryFn: () => fetch('/api/sewing-tasks?status=completed').then((r) => r.json()),
   })
 
   const { data: reworks = [], isLoading: reworksLoading } = useQuery({
-    queryKey: ['reworks', reworkStatusFilter],
+    queryKey: ['sewing-reworks', reworkStatusFilter],
     queryFn: () => {
       const params = reworkStatusFilter !== 'all' ? `?status=${reworkStatusFilter}` : ''
-      return fetch(`/api/reworks${params}`).then((r) => r.json())
+      return fetch(`/api/sewing-reworks${params}`).then((r) => r.json())
     },
   })
 
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/tasks/${id}`, {
+      fetch(`/api/sewing-tasks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      queryClient.invalidateQueries({ queryKey: ['reworks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
       toast({ title: 'Задание принято', description: 'Изделие прошло проверку ОТК' })
     },
     onError: () => {
@@ -797,15 +938,15 @@ function QCTab() {
   })
 
   const createReworkMutation = useMutation({
-    mutationFn: (data: { taskId: string; quantity: number; reason: string }) =>
-      fetch('/api/reworks', {
+    mutationFn: (data: { sewingTaskItemId: string; sewingTaskId: string; quantity: number; reason: string }) =>
+      fetch('/api/sewing-reworks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }).then((r) => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reworks'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
       setReworkDialogOpen(false)
       toast({ title: 'Переделка создана', description: 'Изделие возвращено швее на переделку' })
     },
@@ -816,14 +957,14 @@ function QCTab() {
 
   const updateReworkMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      fetch(`/api/reworks/${id}`, {
+      fetch(`/api/sewing-reworks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
       }).then((r) => r.json()),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reworks'] })
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
+      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
       toast({ title: 'Статус обновлён', description: 'Статус переделки изменён' })
     },
     onError: () => {
@@ -832,14 +973,15 @@ function QCTab() {
   })
 
   const handleAccept = useCallback(
-    (task: TaskWithRelations) => {
+    (task: SewingTaskResponse) => {
       updateTaskMutation.mutate({ id: task.id, data: { status: 'completed' } })
     },
     [updateTaskMutation]
   )
 
-  const handleOpenRework = useCallback((task: TaskWithRelations) => {
+  const handleOpenRework = useCallback((task: SewingTaskResponse, item: SewingTaskItemResponse) => {
     setSelectedTask(task)
+    setSelectedItemForRework(item)
     setReworkQty('')
     setReworkReason('')
     setReworkCustomReason('')
@@ -847,24 +989,25 @@ function QCTab() {
   }, [])
 
   const handleCreateRework = useCallback(() => {
-    if (!selectedTask || !reworkQty) return
+    if (!selectedTask || !selectedItemForRework || !reworkQty) return
     const reason = reworkReason === '__custom__' ? reworkCustomReason : reworkReason
     if (!reason) return
     createReworkMutation.mutate({
-      taskId: selectedTask.id,
+      sewingTaskItemId: selectedItemForRework.id,
+      sewingTaskId: selectedTask.id,
       quantity: parseInt(reworkQty),
       reason,
     })
-  }, [selectedTask, reworkQty, reworkReason, reworkCustomReason, createReworkMutation])
+  }, [selectedTask, selectedItemForRework, reworkQty, reworkReason, reworkCustomReason, createReworkMutation])
 
   // Reworks pending_qc (seamstress completed rework, needs QC check)
   const pendingQcReworks = reworks.filter(
-    (r: Rework & { task?: TaskWithRelations }) => r.status === 'pending_qc'
+    (r: SewingReworkResponse) => r.status === 'pending_qc'
   )
 
   // Other reworks filtered
   const filteredReworks = reworks.filter(
-    (r: Rework & { task?: TaskWithRelations }) => r.status !== 'pending_qc'
+    (r: SewingReworkResponse) => r.status !== 'pending_qc'
   )
 
   const getProductReworkReasons = (productId: string): ReworkReason[] => {
@@ -880,20 +1023,27 @@ function QCTab() {
     const diffDays = (qcNow.getTime() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24)
     return qcSalaryPeriod === 'week' ? diffDays <= 7 : diffDays <= 30
   }
-  // Принятые ОТК задания — это completed tasks (ОТК нажал "Принять")
-  const qcAcceptedFiltered = completedTasks.filter((t: TaskWithRelations) => filterByPeriod(t.completedAt))
-  // Переделки, проверенные ОТК (status = completed, одобрено ОТК)
-  const qcReworksChecked = reworks.filter((r: Rework & { task?: TaskWithRelations }) => r.status === 'completed' && filterByPeriod(r.updatedAt))
+  // Принятые ОТК задания — completed SewingTasks
+  const qcAcceptedFiltered = completedTasks.filter((t: SewingTaskResponse) => filterByPeriod(t.updatedAt))
+  // Flatten items from completed tasks for salary calc
+  const qcCompletedItems = qcAcceptedFiltered.flatMap((t: SewingTaskResponse) =>
+    t.items.map((item: SewingTaskItemResponse) => ({
+      ...item,
+      taskUpdatedAt: t.updatedAt,
+    }))
+  )
+  // Переделки, проверенные ОТК (status = completed)
+  const qcReworksChecked = reworks.filter((r: SewingReworkResponse) => r.status === 'completed' && filterByPeriod(r.updatedAt))
   // Количество проверенных единиц
-  const qcTotalUnitsChecked = qcAcceptedFiltered.reduce((sum: number, t: TaskWithRelations) => sum + (t.actualQuantity || 0), 0)
-  const qcTotalReworksChecked = qcReworksChecked.reduce((sum: number, r: Rework & { task?: TaskWithRelations }) => sum + r.quantity, 0)
+  const qcTotalUnitsChecked = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => sum + (item.actualQuantity || item.quantity), 0)
+  const qcTotalReworksChecked = qcReworksChecked.reduce((sum: number, r: SewingReworkResponse) => sum + r.quantity, 0)
   const qcTotalInspected = qcTotalUnitsChecked + qcTotalReworksChecked
   // Зарплата с учётом ставок по каждому изделию
-  const qcSalaryMain = qcAcceptedFiltered.reduce((sum: number, t: TaskWithRelations) => {
-    return sum + (t.actualQuantity || 0) * (t.product.qcRate || 50)
+  const qcSalaryMain = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => {
+    return sum + (item.actualQuantity || item.quantity) * (item.product.qcRate || 50)
   }, 0)
-  const qcSalaryReworks = qcReworksChecked.reduce((sum: number, r: Rework & { task?: TaskWithRelations }) => {
-    return sum + r.quantity * (r.task?.product?.qcRate || 50)
+  const qcSalaryReworks = qcReworksChecked.reduce((sum: number, r: SewingReworkResponse) => {
+    return sum + r.quantity * (r.sewingTaskItem?.product?.qcRate || 50)
   }, 0)
   const qcSalary = qcSalaryMain + qcSalaryReworks
   const qcPeriodLabel = qcSalaryPeriod === 'week' ? 'за неделю' : qcSalaryPeriod === 'month' ? 'за месяц' : 'за всё время'
@@ -943,7 +1093,7 @@ function QCTab() {
             </div>
           </div>
           {/* Расшифровка по изделиям */}
-          {qcAcceptedFiltered.length > 0 && (
+          {qcCompletedItems.length > 0 && (
             <div className="bg-white/60 rounded-lg p-3">
               <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
                 <Calculator className="h-3 w-3" /> Расшифровка по изделиям
@@ -951,15 +1101,16 @@ function QCTab() {
               <div className="space-y-1">
                 {(() => {
                   const byProduct: Record<string, { name: string; units: number; rate: number; reworkUnits: number }> = {}
-                  qcAcceptedFiltered.forEach((t: TaskWithRelations) => {
-                    const key = t.productId
-                    if (!byProduct[key]) byProduct[key] = { name: t.product.name, units: 0, rate: t.product.qcRate || 50, reworkUnits: 0 }
-                    byProduct[key].units += (t.actualQuantity || 0)
+                  qcCompletedItems.forEach((item: SewingTaskItemResponse) => {
+                    const key = item.productId
+                    if (!byProduct[key]) byProduct[key] = { name: item.product?.name || 'Изделие', units: 0, rate: item.product?.qcRate || 50, reworkUnits: 0 }
+                    byProduct[key].units += (item.actualQuantity || item.quantity)
                   })
-                  qcReworksChecked.forEach((r: Rework & { task?: TaskWithRelations }) => {
-                    if (!r.task) return
-                    const key = r.task.productId
-                    if (!byProduct[key]) byProduct[key] = { name: r.task.product.name, units: 0, rate: r.task.product.qcRate || 50, reworkUnits: 0 }
+                  qcReworksChecked.forEach((r: SewingReworkResponse) => {
+                    const key = r.sewingTaskItemId
+                    const productName = r.sewingTaskItem?.product?.name || 'Изделие'
+                    const rate = r.sewingTaskItem?.product?.qcRate || 50
+                    if (!byProduct[key]) byProduct[key] = { name: productName, units: 0, rate, reworkUnits: 0 }
                     byProduct[key].reworkUnits += r.quantity
                   })
                   return Object.values(byProduct).map((p, i) => (
@@ -977,7 +1128,7 @@ function QCTab() {
         </CardContent>
       </Card>
 
-      {/* PENDING QC — Tasks waiting for initial inspection */}
+      {/* PENDING QC — SewingTasks waiting for initial inspection */}
       <div>
         <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <Eye className="h-5 w-5 text-sky-500" />
@@ -995,69 +1146,72 @@ function QCTab() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {pendingQcTasks.map((task: TaskWithRelations) => (
+            {pendingQcTasks.map((task: SewingTaskResponse) => (
               <Card key={task.id} className="border-sky-200 bg-sky-50/30">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-base">{task.product.name}</CardTitle>
+                      <CardTitle className="text-base">Задание #{task.id.slice(-6)}</CardTitle>
                       <CardDescription className="text-xs">
-                        {task.product.article}
+                        {task.cuttingPlan?.plan?.name || 'План раскроя'}
                       </CardDescription>
                     </div>
                     {getStatusBadge(task.status)}
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div className="text-sm">
+                  <div className="text-sm mt-1">
                     <span className="text-muted-foreground">Швея:</span>{' '}
-                    <span className="font-medium">{task.employee.name}</span>
+                    <span className="font-medium">{task.employee?.name}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      Размер: {task.size}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {getColorDot(task.colorHex)}
-                      {task.color}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-xs text-muted-foreground">План</div>
-                      <div className="font-semibold">{task.quantity}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Факт</div>
-                      <div className="font-semibold">{task.actualQuantity}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Брак</div>
-                      <div className={`font-semibold ${task.fabricDefect > 0 ? 'text-red-600' : ''}`}>
-                        {task.fabricDefect}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {task.items.map((item: SewingTaskItemResponse) => (
+                    <div key={item.id} className="text-sm space-y-1 border-b border-sky-100 last:border-0 pb-2 last:pb-0">
+                      <div className="font-medium">{item.product?.name} <span className="text-muted-foreground text-xs">({item.product?.article})</span></div>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline" className="text-xs">Р: {item.size}</Badge>
+                        <Badge variant="outline" className="text-xs gap-1">
+                          {getColorDot(item.colorHex)}
+                          {item.color}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-xs text-muted-foreground">План</div>
+                          <div className="font-semibold">{item.quantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Факт</div>
+                          <div className="font-semibold">{item.actualQuantity ?? '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Брак</div>
+                          <div className={`font-semibold ${item.fabricDefect > 0 ? 'text-red-600' : ''}`}>
+                            {item.fabricDefect}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-orange-400 text-orange-700 hover:bg-orange-50 min-h-[36px] text-xs"
+                          onClick={() => handleOpenRework(task, item)}
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          На переделку
+                        </Button>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-                      onClick={() => handleAccept(task)}
-                      disabled={updateTaskMutation.isPending}
-                    >
-                      <ShieldCheck className="h-4 w-4 mr-1" />
-                      Принять
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 border-orange-400 text-orange-700 hover:bg-orange-50 min-h-[44px]"
-                      onClick={() => handleOpenRework(task)}
-                    >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      На переделку
-                    </Button>
-                  </div>
+                  ))}
+                  <Button
+                    size="sm"
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+                    onClick={() => handleAccept(task)}
+                    disabled={updateTaskMutation.isPending}
+                  >
+                    <ShieldCheck className="h-4 w-4 mr-1" />
+                    Принять всё задание
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -1073,20 +1227,18 @@ function QCTab() {
             Переделки на проверке ({pendingQcReworks.length})
           </h3>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {pendingQcReworks.map((rework: Rework & { task?: TaskWithRelations }) => (
+            {pendingQcReworks.map((rework: SewingReworkResponse) => (
               <Card key={rework.id} className="border-purple-200 bg-purple-50/30">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">
-                      {rework.task?.product?.name || 'Изделие'}
+                      {rework.sewingTaskItem?.product?.name || 'Изделие'}
                     </CardTitle>
                     {getReworkStatusBadge(rework.status)}
                   </div>
-                  {rework.task && (
-                    <CardDescription className="text-xs">
-                      {rework.task.product?.article} · Размер {rework.task.size} · {rework.task.employee?.name}
-                    </CardDescription>
-                  )}
+                  <CardDescription className="text-xs">
+                    Размер {rework.sewingTaskItem?.size} · {rework.sewingTaskItem?.color} · Швея: {rework.sewingTask?.employee?.name}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div>
@@ -1134,64 +1286,67 @@ function QCTab() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {completedTasks.map((task: TaskWithRelations) => (
+            {completedTasks.map((task: SewingTaskResponse) => (
               <Card key={task.id}>
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-base">{task.product.name}</CardTitle>
+                      <CardTitle className="text-base">Задание #{task.id.slice(-6)}</CardTitle>
                       <CardDescription className="text-xs">
-                        {task.product.article}
+                        {task.cuttingPlan?.plan?.name || 'План раскроя'}
                       </CardDescription>
                     </div>
                     {getStatusBadge(task.status)}
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                  <div>
+                  <div className="text-sm mt-1">
                     <span className="text-muted-foreground">Швея:</span>{' '}
-                    <span className="font-medium">{task.employee.name}</span>
+                    <span className="font-medium">{task.employee?.name}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="text-xs">
-                      Размер: {task.size}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {getColorDot(task.colorHex)}
-                      {task.color}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <div className="text-xs text-muted-foreground">План</div>
-                      <div className="font-semibold">{task.quantity}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Факт</div>
-                      <div className="font-semibold">{task.actualQuantity}</div>
-                    </div>
-                    <div>
-                      <div className="text-xs text-muted-foreground">Брак</div>
-                      <div className={`font-semibold ${task.fabricDefect > 0 ? 'text-red-600' : ''}`}>
-                        {task.fabricDefect}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {task.items.map((item: SewingTaskItemResponse) => (
+                    <div key={item.id} className="text-sm space-y-1 border-b last:border-0 pb-2 last:pb-0">
+                      <div className="font-medium">{item.product?.name}</div>
+                      <div className="flex flex-wrap gap-1">
+                        <Badge variant="outline" className="text-xs">Р: {item.size}</Badge>
+                        <Badge variant="outline" className="text-xs gap-1">
+                          {getColorDot(item.colorHex)}
+                          {item.color}
+                        </Badge>
                       </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <div className="text-xs text-muted-foreground">План</div>
+                          <div className="font-semibold">{item.quantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Факт</div>
+                          <div className="font-semibold">{item.actualQuantity ?? item.quantity}</div>
+                        </div>
+                        <div>
+                          <div className="text-xs text-muted-foreground">Брак</div>
+                          <div className={`font-semibold ${item.fabricDefect > 0 ? 'text-red-600' : ''}`}>
+                            {item.fabricDefect}
+                          </div>
+                        </div>
+                      </div>
+                      {item.reworks.length > 0 && (
+                        <div className="flex items-center gap-1 text-orange-600 text-xs">
+                          <RotateCcw className="h-3 w-3" />
+                          Переделок: {item.reworks.length}
+                        </div>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full border-orange-400 text-orange-700 hover:bg-orange-50 min-h-[36px] text-xs"
+                        onClick={() => handleOpenRework(task, item)}
+                      >
+                        <RotateCcw className="h-3 w-3 mr-1" />
+                        На переделку
+                      </Button>
                     </div>
-                  </div>
-                  {task.reworks.length > 0 && (
-                    <div className="flex items-center gap-1 text-orange-600 text-xs">
-                      <RotateCcw className="h-3 w-3" />
-                      Переделок: {task.reworks.length}
-                    </div>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full border-orange-400 text-orange-700 hover:bg-orange-50 min-h-[44px]"
-                    onClick={() => handleOpenRework(task)}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-1" />
-                    На переделку
-                  </Button>
+                  ))}
                 </CardContent>
               </Card>
             ))}
@@ -1230,20 +1385,18 @@ function QCTab() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredReworks.map((rework: Rework & { task?: TaskWithRelations }) => (
+            {filteredReworks.map((rework: SewingReworkResponse) => (
               <Card key={rework.id} className="border-orange-200">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">
-                      {rework.task?.product?.name || 'Изделие'}
+                      {rework.sewingTaskItem?.product?.name || 'Изделие'}
                     </CardTitle>
                     {getReworkStatusBadge(rework.status)}
                   </div>
-                  {rework.task && (
-                    <CardDescription className="text-xs">
-                      {rework.task.product?.article} · Размер {rework.task.size} · {rework.task.employee?.name}
-                    </CardDescription>
-                  )}
+                  <CardDescription className="text-xs">
+                    Размер {rework.sewingTaskItem?.size} · {rework.sewingTaskItem?.color} · Швея: {rework.sewingTask?.employee?.name}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
                   <div>
@@ -1269,15 +1422,25 @@ function QCTab() {
               Укажите причину и количество изделий для переделки
             </DialogDescription>
           </DialogHeader>
-          {selectedTask && (
+          {selectedTask && selectedItemForRework && (
             <div className="space-y-4">
               <div className="text-sm">
                 <span className="text-muted-foreground">Изделие:</span>{' '}
-                <span className="font-medium">{selectedTask.product.name} ({selectedTask.product.article})</span>
+                <span className="font-medium">{selectedItemForRework.product?.name} ({selectedItemForRework.product?.article})</span>
+              </div>
+              <div className="text-sm flex gap-2">
+                <span>
+                  <span className="text-muted-foreground">Размер:</span>{' '}
+                  <span className="font-medium">{selectedItemForRework.size}</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  {getColorDot(selectedItemForRework.colorHex)}
+                  <span className="font-medium">{selectedItemForRework.color}</span>
+                </span>
               </div>
               <div className="text-sm">
                 <span className="text-muted-foreground">Швея:</span>{' '}
-                <span className="font-medium">{selectedTask.employee.name}</span>
+                <span className="font-medium">{selectedTask.employee?.name}</span>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reworkQty">Количество на переделку</Label>
@@ -1285,7 +1448,7 @@ function QCTab() {
                   id="reworkQty"
                   type="number"
                   min="1"
-                  max={selectedTask.actualQuantity || selectedTask.quantity}
+                  max={selectedItemForRework.actualQuantity || selectedItemForRework.quantity}
                   value={reworkQty}
                   onChange={(e) => setReworkQty(e.target.value)}
                 />
@@ -1297,7 +1460,7 @@ function QCTab() {
                     <SelectValue placeholder="-- Выберите причину --" />
                   </SelectTrigger>
                   <SelectContent>
-                    {getProductReworkReasons(selectedTask.productId).map((r: ReworkReason) => (
+                    {getProductReworkReasons(selectedItemForRework.productId).map((r: ReworkReason) => (
                       <SelectItem key={r.id} value={r.text}>
                         {r.text}
                       </SelectItem>
