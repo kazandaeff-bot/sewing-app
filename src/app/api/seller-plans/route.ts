@@ -1,9 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url)
+    const customerId = url.searchParams.get('customerId')
+    const where: Record<string, unknown> = {}
+    if (customerId) {
+      where.customerId = customerId
+    }
     const sellerPlans = await db.sellerPlan.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         items: {
@@ -18,6 +25,7 @@ export async function GET() {
             items: { include: { product: true } },
           },
         },
+        customer: { select: { id: true, name: true } },
       },
     })
     return NextResponse.json(sellerPlans)
@@ -30,10 +38,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sellerName, items } = body
+    const { sellerName, customerId, items } = body
 
     if (!sellerName) {
-      return NextResponse.json({ error: 'Укажите имя селлера' }, { status: 400 })
+      return NextResponse.json({ error: 'Укажите название плана' }, { status: 400 })
     }
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -43,6 +51,7 @@ export async function POST(request: NextRequest) {
     const sellerPlan = await db.sellerPlan.create({
       data: {
         sellerName,
+        customerId: customerId || null,
         items: {
           create: items.map((item: { productId: string; size: string; color: string; colorHex?: string; quantity: number; cities?: { city: string; quantity: number }[] }) => ({
             productId: item.productId,

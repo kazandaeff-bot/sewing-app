@@ -7,6 +7,7 @@ interface User {
   name: string
   role: string
   code: string
+  customerId?: string | null
 }
 
 interface AuthContextType {

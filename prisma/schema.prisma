@@ -13,7 +13,9 @@ model Employee {
   code      String   @unique
   username  String   @unique
   password  String
-  role      String   @default("sewer") // sewer | qc | supervisor | seller | technologist | cutter | ironing
+  role      String   @default("sewer") // sewer | qc | supervisor | seller | technologist | cutter | ironing | customer
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
   tasks        Task[]
   sewingTasks  SewingTask[]
   createdAt    DateTime @default(now())
@@ -41,6 +43,8 @@ model Product {
   sellerPlanItems  SellerPlanItem[]
   boxItems         BoxItem[]
   boxCapacities    BoxCapacity[]
+  customerProducts CustomerProduct[]
+  materialNorms   MaterialNorm[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -149,11 +153,41 @@ model BoxCapacity {
   @@unique([boxTypeId, productId, size])
 }
 
+// ============ СПРАВОЧНИК: Заказчики ============
+model Customer {
+  id            String           @id @default(cuid())
+  name          String           @unique  // Название компании-заказчика
+  contactInfo   String?          // Контактная информация
+  employees     Employee[]
+  customerProducts CustomerProduct[]
+  plans         Plan[]
+  sellerPlans   SellerPlan[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model CustomerProduct {
+  id              String    @id @default(cuid())
+  customerId      String
+  productId       String
+  customBoxCapacity Int?    // Вместимость в короб — своя для этого заказчика (override)
+  customWeight    Float?    // Вес в упаковке, гр (override)
+  customDimensions String?  // Габариты упаковки (override), напр. "40x30x20"
+  customWidth     Float?    // Ширина, см (override)
+  customHeight    Float?    // Высота, см (override)
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, productId])
+}
+
 // ============ МОДУЛЬ 1: План пошива ============
 model Plan {
   id           String        @id @default(cuid())
   name         String
   status       String        @default("draft") // draft | approved | in_work | shipped | shipped_paid
+  customerId   String?
+  customer     Customer?     @relation(fields: [customerId], references: [id])
   items        PlanItem[]
   cuttingPlan  CuttingPlan?
   createdAt    DateTime      @default(now())
@@ -232,6 +266,8 @@ model SellerPlan {
   id          String           @id @default(cuid())
   sellerName  String
   status      String           @default("draft") // draft | approved
+  customerId  String?
+  customer    Customer?        @relation(fields: [customerId], references: [id])
   items       SellerPlanItem[]
   boxes       Box[]
   createdAt   DateTime         @default(now())
@@ -285,4 +321,52 @@ model BoxItem {
   actualQty   Int?
   box         Box     @relation(fields: [boxId], references: [id], onDelete: Cascade)
   product     Product @relation(fields: [productId], references: [id])
+}
+
+// ============ МОДУЛЬ 6: Учёт материалов ============
+model MaterialType {
+  id        String         @id @default(cuid())
+  name      String         @unique  // ткань, фурнитура, размерник, нитки, etc.
+  unit      String         @default("шт")  // кг, м, шт, гр, см
+  materials Material[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model Material {
+  id             String         @id @default(cuid())
+  materialTypeId String
+  name           String         // e.g. "Кулирка хлопок 100%", "Нитки чёрные"
+  totalQty       Float          @default(0)  // Current stock quantity
+  unit           String         @default("шт")  // Unit of measurement
+  entries        MaterialEntry[]
+  norms          MaterialNorm[]
+  materialType   MaterialType   @relation(fields: [materialTypeId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model MaterialEntry {
+  id             String     @id @default(cuid())
+  materialId     String
+  type           String     // incoming | consumed
+  qty            Float      // positive number
+  date           DateTime   @default(now())
+  cuttingPlanId  String?    // If consumed during cutting
+  note           String?    // Optional note
+  material       Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  createdAt      DateTime   @default(now())
+}
+
+model MaterialNorm {
+  id                   String   @id @default(cuid())
+  materialId           String
+  productId            String
+  consumptionPerUnit   Float    // Consumption per 1 unit of product
+  unit                 String   @default("гр")  // гр, см, шт
+  autoCalculated       Boolean  @default(false)  // Whether this was auto-calculated
+  material             Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  product              Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, productId])
 }

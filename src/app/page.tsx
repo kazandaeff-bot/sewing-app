@@ -14,17 +14,12 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Progress } from '@/components/ui/progress'
-import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/use-toast'
 import {
   Scissors,
   ClipboardCheck,
   ClipboardList,
   ListTodo,
-  BarChart3,
   Play,
   CheckCircle2,
   AlertTriangle,
@@ -34,12 +29,10 @@ import {
   Eye,
   ShieldCheck,
   Users,
-  Package,
   Pencil,
   Trash2,
   Upload,
   X,
-  Image as ImageIcon,
   LogOut,
   Wallet,
   Calculator,
@@ -49,11 +42,9 @@ import {
   BookOpen,
   Store,
   FlaskConical,
-  Shirt,
   Heater,
-  ChevronRight,
   FileText,
-  Truck,
+  Package,
 } from 'lucide-react'
 import {
   SewingPlansTab,
@@ -63,7 +54,30 @@ import {
   BoxesTab,
   ReferencesTab,
   StubTab,
+  CustomerProductsTab,
+  CustomerPlanTab,
 } from '@/components/production-tabs'
+
+// ============ Size Ordering ============
+const SIZE_ORDER: string[] = [
+  'XXS', '2XS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL',
+  '80', '86', '92', '98', '104', '110', '116', '122', '128', '134', '140', '146', '152', '158', '164',
+  '42', '44', '46', '48', '50', '52', '54', '56', '58', '60', '62', '64',
+  'ONE SIZE',
+]
+
+const SIZE_ORDER_MAP = new Map(SIZE_ORDER.map((s, i) => [s, i]))
+
+function sortSizes(sizes: string[]): string[] {
+  return [...sizes].sort((a, b) => {
+    const ai = SIZE_ORDER_MAP.get(a)
+    const bi = SIZE_ORDER_MAP.get(b)
+    if (ai !== undefined && bi !== undefined) return ai - bi
+    if (ai !== undefined) return -1
+    if (bi !== undefined) return 1
+    return a.localeCompare(b, undefined, { numeric: true })
+  })
+}
 
 // ============ Types ============
 interface Employee {
@@ -267,6 +281,7 @@ function getRoleLabel(role: string) {
     case 'technologist': return 'Технолог'
     case 'cutter': return 'Закройщик'
     case 'ironing': return 'ВТО'
+    case 'customer': return 'Заказчик'
     default: return role
   }
 }
@@ -2237,272 +2252,6 @@ function EmployeesTab() {
   )
 }
 
-// ============ TAB 5: ИЗДЕЛИЯ ============
-function ProductsTab() {
-  const { toast } = useToast()
-  const queryClient = useQueryClient()
-  const [createOpen, setCreateOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
-  const [newName, setNewName] = useState('')
-  const [newArticle, setNewArticle] = useState('')
-  const [newSewerRate, setNewSewerRate] = useState('150')
-  const [newHomeRate, setNewHomeRate] = useState('0')
-  const [newQcRate, setNewQcRate] = useState('50')
-  const [newReworkRate, setNewReworkRate] = useState('80')
-  const [newIsKit, setNewIsKit] = useState(false)
-  const [newKitComboColors, setNewKitComboColors] = useState<Record<string, string[]>>({})
-  const [newKitKey, setNewKitKey] = useState('')
-  const [newKitValue, setNewKitValue] = useState('')
-  const [newSizes, setNewSizes] = useState<string[]>([])
-  const [newSizeInput, setNewSizeInput] = useState('')
-  const [newColors, setNewColors] = useState<Array<{ color: string; colorHex: string }>>([])
-  const [newColorName, setNewColorName] = useState('')
-  const [newColorHex, setNewColorHex] = useState('#9ca3af')
-  const [newReworkReasons, setNewReworkReasons] = useState<string[]>([])
-  const [newReasonInput, setNewReasonInput] = useState('')
-  const [editName, setEditName] = useState('')
-  const [editArticle, setEditArticle] = useState('')
-  const [editSewerRate, setEditSewerRate] = useState('150')
-  const [editHomeRate, setEditHomeRate] = useState('0')
-  const [editQcRate, setEditQcRate] = useState('50')
-  const [editReworkRate, setEditReworkRate] = useState('80')
-  const [editIsKit, setEditIsKit] = useState(false)
-  const [editKitComboColors, setEditKitComboColors] = useState<Record<string, string[]>>({})
-  const [editKitKey, setEditKitKey] = useState('')
-  const [editKitValue, setEditKitValue] = useState('')
-  const [editSizes, setEditSizes] = useState<string[]>([])
-  const [editSizeInput, setEditSizeInput] = useState('')
-  const [editColors, setEditColors] = useState<Array<{ color: string; colorHex: string }>>([])
-  const [editColorName, setEditColorName] = useState('')
-  const [editColorHex, setEditColorHex] = useState('#9ca3af')
-  const [editReworkReasons, setEditReworkReasons] = useState<string[]>([])
-  const [editReasonInput, setEditReasonInput] = useState('')
-
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => fetch('/api/products').then((r) => r.json()),
-  })
-
-  const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setCreateOpen(false); resetCreateForm(); toast({ title: 'Изделие создано' }) },
-    onError: () => { toast({ title: 'Ошибка', description: 'Не удалось создать изделие', variant: 'destructive' }) },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setEditOpen(false); setSelectedProduct(null); toast({ title: 'Изделие обновлено' }) },
-    onError: () => { toast({ title: 'Ошибка', description: 'Не удалось обновить изделие', variant: 'destructive' }) },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/products/${id}`, { method: 'DELETE' }).then((r) => r.json()),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setDeleteOpen(false); setSelectedProduct(null); toast({ title: 'Изделие удалено' }) },
-    onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить изделие', variant: 'destructive' }) },
-  })
-
-  const resetCreateForm = useCallback(() => {
-    setNewName(''); setNewArticle(''); setNewSewerRate('150'); setNewHomeRate('0'); setNewQcRate('50'); setNewReworkRate('80'); setNewIsKit(false); setNewKitComboColors({}); setNewKitKey(''); setNewKitValue(''); setNewSizes([]); setNewSizeInput(''); setNewColors([]); setNewColorName(''); setNewColorHex('#9ca3af'); setNewReworkReasons([]); setNewReasonInput('')
-  }, [])
-
-  const handleCreate = useCallback(() => {
-    if (!newName.trim() || !newArticle.trim()) { toast({ title: 'Ошибка', description: 'Заполните название и артикул', variant: 'destructive' }); return }
-    createMutation.mutate({ name: newName, article: newArticle, sewerRate: parseInt(newSewerRate) || 150, homeRate: parseInt(newHomeRate) || 0, qcRate: parseInt(newQcRate) || 50, reworkRate: parseInt(newReworkRate) || 80, isKit: newIsKit, kitComboColors: newIsKit ? newKitComboColors : null, sizes: newSizes, colors: newColors })
-  }, [newName, newArticle, newSewerRate, newHomeRate, newQcRate, newReworkRate, newIsKit, newKitComboColors, newSizes, newColors, createMutation, toast])
-
-  const handleOpenEdit = useCallback((product: Product) => {
-    let parsedKitComboColors: Record<string, string[]> = {}
-    if (product.isKit && product.kitComboColors) {
-      try {
-        parsedKitComboColors = typeof product.kitComboColors === 'string' ? JSON.parse(product.kitComboColors) : (product.kitComboColors as Record<string, string[]>)
-      } catch { parsedKitComboColors = {} }
-    }
-    setSelectedProduct(product); setEditName(product.name); setEditArticle(product.article); setEditSewerRate(String(product.sewerRate)); setEditHomeRate(String(product.homeRate)); setEditQcRate(String(product.qcRate)); setEditReworkRate(String(product.reworkRate)); setEditIsKit(product.isKit); setEditKitComboColors(parsedKitComboColors); setEditKitKey(''); setEditKitValue(''); setEditSizes(product.sizes.map((s) => s.size)); setEditSizeInput(''); setEditColors(product.colors.map((c) => ({ color: c.color, colorHex: c.colorHex }))); setEditColorName(''); setEditColorHex('#9ca3af'); setEditReworkReasons(product.reworkReasons.map((r) => r.text)); setEditReasonInput(''); setEditOpen(true)
-  }, [])
-
-  const handleUpdate = useCallback(() => {
-    if (!selectedProduct || !editName.trim() || !editArticle.trim()) { toast({ title: 'Ошибка', description: 'Заполните название и артикул', variant: 'destructive' }); return }
-    updateMutation.mutate({ id: selectedProduct.id, data: { name: editName, article: editArticle, sewerRate: parseInt(editSewerRate) || 150, homeRate: parseInt(editHomeRate) || 0, qcRate: parseInt(editQcRate) || 50, reworkRate: parseInt(editReworkRate) || 80, isKit: editIsKit, kitComboColors: editIsKit ? editKitComboColors : null, sizes: editSizes, colors: editColors } })
-  }, [selectedProduct, editName, editArticle, editSewerRate, editHomeRate, editQcRate, editReworkRate, editIsKit, editKitComboColors, editSizes, editColors, updateMutation, toast])
-
-  if (isLoading) { return (<div className="flex items-center justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-emerald-600" /><span className="ml-2 text-muted-foreground">Загрузка...</span></div>) }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Изделия</h2>
-        <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { resetCreateForm(); setCreateOpen(true) }}><Plus className="h-4 w-4 mr-1" />Добавить изделие</Button>
-      </div>
-      {products.length === 0 ? (
-        <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground"><Package className="h-12 w-12 mb-3 opacity-30" /><p>Нет изделий в справочнике</p></CardContent></Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((product: Product) => (
-            <Card key={product.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div><CardTitle className="text-base">{product.name}</CardTitle><CardDescription className="text-xs">{product.article}</CardDescription></div>
-                  {product.isKit && <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100">ч/б</Badge>}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="text-muted-foreground">Швея:</span> {product.sewerRate} ₽</div>
-                  <div><span className="text-muted-foreground">Дома:</span> {product.homeRate} ₽</div>
-                  <div><span className="text-muted-foreground">ОТК:</span> {product.qcRate} ₽</div>
-                  <div><span className="text-muted-foreground">Перед.:</span> {product.reworkRate} ₽</div>
-                </div>
-                {product.sizes.length > 0 && (<div className="flex flex-wrap gap-1">{product.sizes.map((s) => (<Badge key={s.id} variant="outline" className="text-xs">{s.size}</Badge>))}</div>)}
-                {product.colors.length > 0 && (<div className="flex flex-wrap gap-1">{product.colors.map((c) => (<Badge key={c.id} variant="outline" className="text-xs">{getColorDot(c.colorHex)}{c.color}</Badge>))}</div>)}
-                {product.reworkReasons.length > 0 && (<div className="text-xs text-muted-foreground">Переделки: {product.reworkReasons.map((r) => r.text).join(', ')}</div>)}
-                <div className="flex gap-2 pt-1">
-                  <Button size="sm" variant="outline" className="flex-1 min-h-[44px]" onClick={() => handleOpenEdit(product)}><Pencil className="h-4 w-4 mr-1" />Изменить</Button>
-                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 min-h-[44px]" onClick={() => { setSelectedProduct(product); setDeleteOpen(true) }}><Trash2 className="h-4 w-4" /></Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Create Product Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
-          <DialogHeader><DialogTitle>Новое изделие</DialogTitle><DialogDescription>Заполните данные изделия</DialogDescription></DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Название</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Футболка" /></div>
-                <div className="space-y-2"><Label>Артикул</Label><Input value={newArticle} onChange={(e) => setNewArticle(e.target.value)} placeholder="ФК-001" /></div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="space-y-2"><Label>Швея, ₽</Label><Input type="number" min="0" value={newSewerRate} onChange={(e) => setNewSewerRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Дома, ₽</Label><Input type="number" min="0" value={newHomeRate} onChange={(e) => setNewHomeRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>ОТК, ₽</Label><Input type="number" min="0" value={newQcRate} onChange={(e) => setNewQcRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Переделка, ₽</Label><Input type="number" min="0" value={newReworkRate} onChange={(e) => setNewReworkRate(e.target.value)} /></div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2"><Checkbox id="newIsKit" checked={newIsKit} onCheckedChange={(c) => setNewIsKit(c === true)} /><Label htmlFor="newIsKit" className="cursor-pointer">Комплект</Label></div>
-                {newIsKit && (
-                  <div className="space-y-2 border rounded-lg p-3 bg-amber-50/50">
-                    <p className="text-xs text-muted-foreground">Например: &quot;ч/б&quot; → [чёрный, белый]. Комбо-цвет разворачивается в плане раскроя.</p>
-                    {Object.entries(newKitComboColors).map(([key, values]) => (
-                      <div key={key} className="flex items-center gap-2 bg-white rounded-md px-3 py-1.5 border text-sm">
-                        <span className="font-medium">{key}</span><span className="text-muted-foreground">→</span><span>[{values.join(', ')}]</span>
-                        <Button size="sm" variant="ghost" className="text-red-500 ml-auto p-0 h-auto" onClick={() => setNewKitComboColors(prev => { const n = { ...prev }; delete n[key]; return n })}><X className="h-3 w-3" /></Button>
-                      </div>
-                    ))}
-                    <div className="flex gap-2 items-end">
-                      <div className="w-20"><Label className="text-xs text-muted-foreground">Код</Label><Input value={newKitKey} onChange={(e) => setNewKitKey(e.target.value)} placeholder="ч/б" /></div>
-                      <div className="flex-1"><Label className="text-xs text-muted-foreground">Цвета (через запятую)</Label><Input value={newKitValue} onChange={(e) => setNewKitValue(e.target.value)} placeholder="чёрный, белый" onKeyDown={(e) => { if (e.key === 'Enter' && newKitKey.trim()) { setNewKitComboColors(prev => ({ ...prev, [newKitKey.trim()]: newKitValue.trim() ? newKitValue.split(',').map(v => v.trim()).filter(Boolean) : [] })); setNewKitKey(''); setNewKitValue('') } }} /></div>
-                      <Button size="sm" variant="outline" onClick={() => { if (newKitKey.trim()) { setNewKitComboColors(prev => ({ ...prev, [newKitKey.trim()]: newKitValue.trim() ? newKitValue.split(',').map(v => v.trim()).filter(Boolean) : [] })); setNewKitKey(''); setNewKitValue('') } }}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Размеры</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{newSizes.map((s, i) => (<Badge key={i} variant="secondary" className="gap-1">{s}<X className="h-3 w-3 cursor-pointer" onClick={() => setNewSizes((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2"><Input value={newSizeInput} onChange={(e) => setNewSizeInput(e.target.value)} placeholder="S, M, L..." onKeyDown={(e) => { if (e.key === 'Enter' && newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }} /><Button size="sm" variant="outline" onClick={() => { if (newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Цвета</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{newColors.map((c, i) => (<Badge key={i} variant="secondary" className="gap-1">{getColorDot(c.colorHex)}{c.color}<X className="h-3 w-3 cursor-pointer" onClick={() => setNewColors((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2 items-end"><div className="flex-1"><Input value={newColorName} onChange={(e) => setNewColorName(e.target.value)} placeholder="Название цвета" /></div><input type="color" value={newColorHex} onChange={(e) => setNewColorHex(e.target.value)} className="w-10 h-10 rounded cursor-pointer border p-0" /><Button size="sm" variant="outline" onClick={() => { if (newColorName.trim()) { setNewColors((prev) => [...prev, { color: newColorName.trim(), colorHex: newColorHex }]); setNewColorName(''); setNewColorHex('#9ca3af') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Причины переделок</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{newReworkReasons.map((r, i) => (<Badge key={i} variant="secondary" className="gap-1">{r}<X className="h-3 w-3 cursor-pointer" onClick={() => setNewReworkReasons((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2"><Input value={newReasonInput} onChange={(e) => setNewReasonInput(e.target.value)} placeholder="Кривой шов..." onKeyDown={(e) => { if (e.key === 'Enter' && newReasonInput.trim()) { setNewReworkReasons((prev) => [...prev, newReasonInput.trim()]); setNewReasonInput('') } }} /><Button size="sm" variant="outline" onClick={() => { if (newReasonInput.trim()) { setNewReworkReasons((prev) => [...prev, newReasonInput.trim()]); setNewReasonInput('') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Отмена</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleCreate} disabled={createMutation.isPending}>{createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Создать</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Product Dialog */}
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
-          <DialogHeader><DialogTitle>Редактировать изделие</DialogTitle><DialogDescription>Измените данные изделия</DialogDescription></DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2"><Label>Название</Label><Input value={editName} onChange={(e) => setEditName(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Артикул</Label><Input value={editArticle} onChange={(e) => setEditArticle(e.target.value)} /></div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="space-y-2"><Label>Швея, ₽</Label><Input type="number" min="0" value={editSewerRate} onChange={(e) => setEditSewerRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Дома, ₽</Label><Input type="number" min="0" value={editHomeRate} onChange={(e) => setEditHomeRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>ОТК, ₽</Label><Input type="number" min="0" value={editQcRate} onChange={(e) => setEditQcRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Переделка, ₽</Label><Input type="number" min="0" value={editReworkRate} onChange={(e) => setEditReworkRate(e.target.value)} /></div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2"><Checkbox id="editIsKit" checked={editIsKit} onCheckedChange={(c) => setEditIsKit(c === true)} /><Label htmlFor="editIsKit" className="cursor-pointer">Комплект</Label></div>
-                {editIsKit && (
-                  <div className="space-y-2 border rounded-lg p-3 bg-amber-50/50">
-                    <p className="text-xs text-muted-foreground">Например: &quot;ч/б&quot; → [чёрный, белый]. Комбо-цвет разворачивается в плане раскроя.</p>
-                    {Object.entries(editKitComboColors).map(([key, values]) => (
-                      <div key={key} className="flex items-center gap-2 bg-white rounded-md px-3 py-1.5 border text-sm">
-                        <span className="font-medium">{key}</span><span className="text-muted-foreground">→</span><span>[{values.join(', ')}]</span>
-                        <Button size="sm" variant="ghost" className="text-red-500 ml-auto p-0 h-auto" onClick={() => setEditKitComboColors(prev => { const n = { ...prev }; delete n[key]; return n })}><X className="h-3 w-3" /></Button>
-                      </div>
-                    ))}
-                    <div className="flex gap-2 items-end">
-                      <div className="w-20"><Label className="text-xs text-muted-foreground">Код</Label><Input value={editKitKey} onChange={(e) => setEditKitKey(e.target.value)} placeholder="ч/б" /></div>
-                      <div className="flex-1"><Label className="text-xs text-muted-foreground">Цвета (через запятую)</Label><Input value={editKitValue} onChange={(e) => setEditKitValue(e.target.value)} placeholder="чёрный, белый" onKeyDown={(e) => { if (e.key === 'Enter' && editKitKey.trim()) { setEditKitComboColors(prev => ({ ...prev, [editKitKey.trim()]: editKitValue.trim() ? editKitValue.split(',').map(v => v.trim()).filter(Boolean) : [] })); setEditKitKey(''); setEditKitValue('') } }} /></div>
-                      <Button size="sm" variant="outline" onClick={() => { if (editKitKey.trim()) { setEditKitComboColors(prev => ({ ...prev, [editKitKey.trim()]: editKitValue.trim() ? editKitValue.split(',').map(v => v.trim()).filter(Boolean) : [] })); setEditKitKey(''); setEditKitValue('') } }}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Separator />
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Размеры</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{editSizes.map((s, i) => (<Badge key={i} variant="secondary" className="gap-1">{s}<X className="h-3 w-3 cursor-pointer" onClick={() => setEditSizes((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2"><Input value={editSizeInput} onChange={(e) => setEditSizeInput(e.target.value)} placeholder="S, M, L..." onKeyDown={(e) => { if (e.key === 'Enter' && editSizeInput.trim()) { setEditSizes((prev) => [...prev, editSizeInput.trim()]); setEditSizeInput('') } }} /><Button size="sm" variant="outline" onClick={() => { if (editSizeInput.trim()) { setEditSizes((prev) => [...prev, editSizeInput.trim()]); setEditSizeInput('') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Цвета</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{editColors.map((c, i) => (<Badge key={i} variant="secondary" className="gap-1">{getColorDot(c.colorHex)}{c.color}<X className="h-3 w-3 cursor-pointer" onClick={() => setEditColors((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2 items-end"><div className="flex-1"><Input value={editColorName} onChange={(e) => setEditColorName(e.target.value)} placeholder="Название цвета" /></div><input type="color" value={editColorHex} onChange={(e) => setEditColorHex(e.target.value)} className="w-10 h-10 rounded cursor-pointer border p-0" /><Button size="sm" variant="outline" onClick={() => { if (editColorName.trim()) { setEditColors((prev) => [...prev, { color: editColorName.trim(), colorHex: editColorHex }]); setEditColorName(''); setEditColorHex('#9ca3af') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Причины переделок</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{editReworkReasons.map((r, i) => (<Badge key={i} variant="secondary" className="gap-1">{r}<X className="h-3 w-3 cursor-pointer" onClick={() => setEditReworkReasons((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2"><Input value={editReasonInput} onChange={(e) => setEditReasonInput(e.target.value)} placeholder="Кривой шов..." onKeyDown={(e) => { if (e.key === 'Enter' && editReasonInput.trim()) { setEditReworkReasons((prev) => [...prev, editReasonInput.trim()]); setEditReasonInput('') } }} /><Button size="sm" variant="outline" onClick={() => { if (editReasonInput.trim()) { setEditReworkReasons((prev) => [...prev, editReasonInput.trim()]); setEditReasonInput('') } }}><Plus className="h-4 w-4" /></Button></div>
-              </div>
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditOpen(false)}>Отмена</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleUpdate} disabled={updateMutation.isPending}>{updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}Сохранить</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Удалить изделие?</AlertDialogTitle><AlertDialogDescription>Это действие нельзя отменить. Изделие &laquo;{selectedProduct?.name}&raquo; будет удалено навсегда.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white" onClick={() => selectedProduct && deleteMutation.mutate(selectedProduct.id)}>Удалить</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  )
-}
-
 // ============ MAIN PAGE ============
 export default function HomePage() {
   const { user, loading, logout } = useAuth()
@@ -2612,6 +2361,61 @@ export default function HomePage() {
     )
   }
 
+  // Customer: limited tabs — own plans, distribution, boxes, products (without rates)
+  if (userRole === 'customer') {
+    return (
+      <div className="min-h-screen bg-gray-50/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{user.name}</h1>
+              <p className="text-sm text-muted-foreground">Личный кабинет заказчика</p>
+            </div>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />Выйти
+            </Button>
+          </div>
+          <Tabs defaultValue="plans" className="w-full">
+            <TabsList className="w-full sm:w-auto flex flex-wrap h-auto gap-1 p-1">
+              <TabsTrigger value="plans" className="gap-1.5">
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Мой план</span>
+                <span className="sm:hidden">План</span>
+              </TabsTrigger>
+              <TabsTrigger value="distribution" className="gap-1.5">
+                <MapPin className="h-4 w-4" />
+                <span className="hidden sm:inline">Города</span>
+                <span className="sm:hidden">Города</span>
+              </TabsTrigger>
+              <TabsTrigger value="boxes" className="gap-1.5">
+                <Box className="h-4 w-4" />
+                <span className="hidden sm:inline">Короба</span>
+                <span className="sm:hidden">Короба</span>
+              </TabsTrigger>
+              <TabsTrigger value="products" className="gap-1.5">
+                <Package className="h-4 w-4" />
+                <span className="hidden sm:inline">Мои изделия</span>
+                <span className="sm:hidden">Изделия</span>
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="plans" className="mt-6">
+              <CustomerPlanTab customerId={user.customerId ?? null} />
+            </TabsContent>
+            <TabsContent value="distribution" className="mt-6">
+              <CityDistributionTab customerId={user.customerId} />
+            </TabsContent>
+            <TabsContent value="boxes" className="mt-6">
+              <BoxesTab customerId={user.customerId} />
+            </TabsContent>
+            <TabsContent value="products" className="mt-6">
+              <CustomerProductsTab customerId={user.customerId ?? null} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    )
+  }
+
   // Supervisor: all tabs including production management
   return (
     <div className="min-h-screen bg-gray-50/50">
@@ -2629,7 +2433,6 @@ export default function HomePage() {
             <TabsTrigger value="qc" className="gap-1.5"><ClipboardCheck className="h-4 w-4" /><span className="hidden sm:inline">ОТК</span><span className="sm:hidden">ОТК</span></TabsTrigger>
             <TabsTrigger value="distribution" className="gap-1.5"><MapPin className="h-4 w-4" /><span className="hidden sm:inline">Города</span><span className="sm:hidden">Города</span></TabsTrigger>
             <TabsTrigger value="boxes" className="gap-1.5"><Box className="h-4 w-4" /><span className="hidden sm:inline">Короба</span><span className="sm:hidden">Короба</span></TabsTrigger>
-            <TabsTrigger value="products" className="gap-1.5"><Package className="h-4 w-4" /><span className="hidden sm:inline">Изделия</span><span className="sm:hidden">Изделия</span></TabsTrigger>
             <TabsTrigger value="employees" className="gap-1.5"><Users className="h-4 w-4" /><span className="hidden sm:inline">Сотрудники</span><span className="sm:hidden">Сотрудники</span></TabsTrigger>
             <TabsTrigger value="references" className="gap-1.5"><BookOpen className="h-4 w-4" /><span className="hidden sm:inline">Справочники</span><span className="sm:hidden">Справ.</span></TabsTrigger>
           </TabsList>
@@ -2640,7 +2443,6 @@ export default function HomePage() {
           <TabsContent value="qc" className="mt-6"><QCTab /></TabsContent>
           <TabsContent value="distribution" className="mt-6"><CityDistributionTab /></TabsContent>
           <TabsContent value="boxes" className="mt-6"><BoxesTab /></TabsContent>
-          <TabsContent value="products" className="mt-6"><ProductsTab /></TabsContent>
           <TabsContent value="employees" className="mt-6"><EmployeesTab /></TabsContent>
           <TabsContent value="references" className="mt-6"><ReferencesTab /></TabsContent>
         </Tabs>

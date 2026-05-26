@@ -1,9 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url)
+    const customerId = url.searchParams.get('customerId')
+    const where: Record<string, unknown> = {}
+    if (customerId) {
+      where.sellerPlan = { customerId }
+    }
     const boxes = await db.box.findMany({
+      where,
       orderBy: [{ city: 'asc' }, { boxNumber: 'asc' }],
       include: {
         sellerPlan: { select: { id: true, sellerName: true } },

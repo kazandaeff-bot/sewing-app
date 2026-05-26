@@ -1,9 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const url = new URL(request.url)
+    const customerId = url.searchParams.get('customerId')
+    const where: Record<string, unknown> = {}
+    if (customerId) {
+      where.customerId = customerId
+    }
     const plans = await db.plan.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         items: {
@@ -11,6 +18,7 @@ export async function GET() {
           orderBy: { id: 'asc' },
         },
         cuttingPlan: true,
+        customer: { select: { id: true, name: true } },
       },
     })
     return NextResponse.json(plans)

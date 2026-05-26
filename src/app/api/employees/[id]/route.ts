@@ -8,13 +8,14 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, code, role, username, password } = body
+    const { name, code, role, username, password, customerId } = body
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (code !== undefined) updateData.code = code
     if (role !== undefined) updateData.role = role
     if (username !== undefined) updateData.username = username
     if (password !== undefined && password !== '') updateData.password = password
+    if (customerId !== undefined) updateData.customerId = customerId || null
     const employee = await db.employee.update({ where: { id }, data: updateData })
     return NextResponse.json(employee)
   } catch (error) {

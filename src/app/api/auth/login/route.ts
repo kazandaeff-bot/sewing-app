@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       name: employee.name,
       role: employee.role,
       code: employee.code,
+      customerId: employee.customerId || null,
     })
     const token = Buffer.from(sessionData).toString('base64')
 
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
         name: employee.name,
         role: employee.role,
         code: employee.code,
+        customerId: employee.customerId || null,
       },
     })
 

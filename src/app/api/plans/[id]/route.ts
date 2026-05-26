@@ -196,6 +196,86 @@ export async function PATCH(
       },
     })
 
+    // If plan is approved and items changed, also update cutting plan
+    if (existing.status === 'approved' && items && Array.isArray(items)) {
+      const cuttingPlan = await db.cuttingPlan.findUnique({ where: { planId: id } })
+      if (cuttingPlan) {
+        const productCache: Record<string, { product: Awaited<ReturnType<typeof db.product.findUnique>>; colors: Array<{ color: string; colorHex: string }>; kitCombo: Record<string, string[]> | null }> = {}
+        const cuttingItems: Array<{ productId: string; size: string; color: string; colorHex: string; plannedQty: number }> = []
+
+        for (const item of items) {
+          const pid = item.productId
+          if (!productCache[pid]) {
+            const product = await db.product.findUnique({ where: { id: pid } })
+            if (!product) continue
+            const colors = await db.productColor.findMany({ where: { productId: pid } })
+            let kitCombo: Record<string, string[]> | null = null
+            if (product.isKit && product.kitComboColors) {
+              try {
+                kitCombo = typeof product.kitComboColors === 'string'
+                  ? JSON.parse(product.kitComboColors)
+                  : product.kitComboColors
+              } catch { kitCombo = null }
+            }
+            productCache[pid] = { product, colors, kitCombo }
+          }
+
+          const cached = productCache[pid]
+          if (!cached.product) continue
+
+          if (cached.product.isKit && cached.kitCombo && cached.kitCombo[item.color]) {
+            const expandedColors = cached.kitCombo[item.color]
+            for (const colorName of expandedColors) {
+              const colorRecord = cached.colors.find(c =>
+                c.color.toLowerCase() === colorName.toLowerCase()
+              )
+              cuttingItems.push({
+                productId: pid,
+                size: item.size,
+                color: colorRecord?.color || colorName,
+                colorHex: colorRecord?.colorHex || '#9ca3af',
+                plannedQty: item.quantity,
+              })
+            }
+          } else {
+            cuttingItems.push({
+              productId: pid,
+              size: item.size,
+              color: item.color,
+              colorHex: item.colorHex || '#9ca3af',
+              plannedQty: item.quantity,
+            })
+          }
+        }
+
+        // Sum by productId + size + color
+        const sumMap = new Map<string, { productId: string; size: string; color: string; colorHex: string; plannedQty: number }>()
+        for (const item of cuttingItems) {
+          const key = `${item.productId}|${item.size}|${item.color}`
+          if (sumMap.has(key)) {
+            sumMap.get(key)!.plannedQty += item.plannedQty
+          } else {
+            sumMap.set(key, { ...item })
+          }
+        }
+        const summedItems = Array.from(sumMap.values())
+
+        // Delete old cutting plan items and recreate
+        await db.cuttingPlanItem.deleteMany({ where: { cuttingPlanId: cuttingPlan.id } })
+        await db.cuttingPlanItem.createMany({
+          data: summedItems.map(item => ({
+            cuttingPlanId: cuttingPlan.id,
+            productId: item.productId,
+            size: item.size,
+            color: item.color,
+            colorHex: item.colorHex,
+            plannedQty: item.plannedQty,
+            actualQty: null,
+          })),
+        })
+      }
+    }
+
     return NextResponse.json(updatedPlan)
   } catch (error) {
     console.error('Update plan error:', error)
