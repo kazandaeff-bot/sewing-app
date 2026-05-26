@@ -1,0 +1,272 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Employee {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  username  String   @unique
+  password  String
+  role      String   @default("sewer") // sewer | qc | supervisor | seller | technologist | cutter | ironing
+  tasks        Task[]
+  sewingTasks  SewingTask[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Product {
+  id             String          @id @default(cuid())
+  name           String
+  article        String          @unique
+  imageUrl       String?
+  sewerRate      Float           @default(150)
+  homeRate       Float           @default(0)   // Ставка для надомниц (0 = не задана, используется sewerRate)
+  qcRate         Float           @default(50)
+  reworkRate     Float           @default(80)
+  isKit          Boolean         @default(false) // Комплект (напр. ч/б)
+  kitComboColors  String?         // JSON: {"ч/б":["чёрный","белый"]} — расшифровка комплекта
+  reworkReasons    ReworkReason[]
+  sizes            ProductSize[]
+  colors           ProductColor[]
+  tasks            Task[]
+  planItems        PlanItem[]
+  cuttingPlanItems CuttingPlanItem[]
+  sewingTaskItems  SewingTaskItem[]
+  sellerPlanItems  SellerPlanItem[]
+  boxItems         BoxItem[]
+  boxCapacities    BoxCapacity[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model ProductSize {
+  id        String  @id @default(cuid())
+  productId String
+  size      String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([productId, size])
+}
+
+model ProductColor {
+  id        String  @id @default(cuid())
+  productId String
+  color     String
+  colorHex  String  @default("#9ca3af")
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([productId, color])
+}
+
+model ReworkReason {
+  id        String   @id @default(cuid())
+  productId String
+  text      String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id              String           @id @default(cuid())
+  employeeId      String
+  productId       String
+  size            String
+  color           String
+  colorHex        String           @default("#9ca3af")
+  quantity        Int
+  status          String           @default("new")
+  actualQuantity  Int?
+  fabricDefect    Int              @default(0)
+  defectNote      String?
+  completedAt     DateTime?
+  reworks         Rework[]
+  employee        Employee         @relation(fields: [employeeId], references: [id])
+  product         Product          @relation(fields: [productId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Rework {
+  id          String   @id @default(cuid())
+  taskId      String
+  quantity    Int
+  reason      String
+  status      String   @default("pending")
+  task        Task     @relation(fields: [taskId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============ СПРАВОЧНИК: Города ============
+model City {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+// ============ СПРАВОЧНИК: Типы коробов ============
+model BoxType {
+  id          String         @id @default(cuid())
+  name        String         // напр. "Стандартный", "Большой"
+  dimensions  String?        // напр. "60x40x40 см"
+  capacities  BoxCapacity[]
+  boxes       Box[]
+  createdAt   DateTime       @default(now())
+}
+
+model BoxCapacity {
+  id         String   @id @default(cuid())
+  boxTypeId  String
+  productId  String
+  size       String   // Размер изделия
+  maxQty     Int      // Макс. кол-во данного изделия данного размера в этом коробе
+  boxType    BoxType  @relation(fields: [boxTypeId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([boxTypeId, productId, size])
+}
+
+// ============ МОДУЛЬ 1: План пошива ============
+model Plan {
+  id           String        @id @default(cuid())
+  name         String
+  status       String        @default("draft") // draft | approved | in_work | shipped | shipped_paid
+  items        PlanItem[]
+  cuttingPlan  CuttingPlan?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model PlanItem {
+  id       String  @id @default(cuid())
+  planId   String
+  productId String
+  size     String
+  color    String
+  colorHex String  @default("#9ca3af")
+  quantity Int
+  plan     Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  product  Product @relation(fields: [productId], references: [id])
+}
+
+// ============ МОДУЛЬ 2: План раскроя ============
+model CuttingPlan {
+  id           String           @id @default(cuid())
+  planId       String           @unique
+  status       String           @default("in_work") // in_work | cut
+  items        CuttingPlanItem[]
+  sewingTasks  SewingTask[]
+  plan         Plan             @relation(fields: [planId], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model CuttingPlanItem {
+  id             String       @id @default(cuid())
+  cuttingPlanId  String
+  productId      String
+  size           String
+  color          String
+  colorHex       String       @default("#9ca3af")
+  plannedQty     Int
+  actualQty      Int?
+  cuttingPlan    CuttingPlan  @relation(fields: [cuttingPlanId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id])
+}
+
+// ============ МОДУЛЬ 3: Задания для швей ============
+model SewingTask {
+  id              String           @id @default(cuid())
+  cuttingPlanId   String
+  employeeId      String
+  status          String           @default("issued") // issued | in_work | pending_qc | completed
+  items           SewingTaskItem[]
+  cuttingPlan     CuttingPlan      @relation(fields: [cuttingPlanId], references: [id])
+  employee        Employee         @relation(fields: [employeeId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model SewingTaskItem {
+  id              String      @id @default(cuid())
+  sewingTaskId    String
+  productId       String
+  size            String
+  color           String
+  colorHex        String      @default("#9ca3af")
+  quantity        Int
+  actualQuantity  Int?
+  fabricDefect    Int         @default(0)
+  defectNote      String?
+  sewingTask      SewingTask  @relation(fields: [sewingTaskId], references: [id], onDelete: Cascade)
+  product         Product     @relation(fields: [productId], references: [id])
+}
+
+// ============ МОДУЛЬ 4: Распределение по городам (бывш. План селлеров) ============
+model SellerPlan {
+  id          String           @id @default(cuid())
+  sellerName  String
+  status      String           @default("draft") // draft | approved
+  items       SellerPlanItem[]
+  boxes       Box[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+}
+
+model SellerPlanItem {
+  id           String            @id @default(cuid())
+  sellerPlanId String
+  productId    String
+  size         String
+  color        String
+  colorHex     String            @default("#9ca3af")
+  quantity     Int
+  cities       SellerPlanCity[]
+  sellerPlan   SellerPlan        @relation(fields: [sellerPlanId], references: [id], onDelete: Cascade)
+  product      Product           @relation(fields: [productId], references: [id])
+}
+
+model SellerPlanCity {
+  id               String          @id @default(cuid())
+  sellerPlanItemId String
+  city             String
+  quantity         Int
+  sellerPlanItem   SellerPlanItem  @relation(fields: [sellerPlanItemId], references: [id], onDelete: Cascade)
+}
+
+// ============ МОДУЛЬ 5: Автоматическое распределение по коробам ============
+model Box {
+  id            String     @id @default(cuid())
+  sellerPlanId  String
+  boxNumber     Int
+  city          String
+  boxTypeId     String?    // Тип короба из справочника
+  status        String     @default("forming") // forming | assembled | checked | shipped
+  items         BoxItem[]
+  sellerPlan    SellerPlan @relation(fields: [sellerPlanId], references: [id])
+  boxType       BoxType?   @relation(fields: [boxTypeId], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model BoxItem {
+  id          String  @id @default(cuid())
+  boxId       String
+  productId   String
+  size        String
+  color       String
+  colorHex    String  @default("#9ca3af")
+  plannedQty  Int
+  actualQty   Int?
+  box         Box     @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  product     Product @relation(fields: [productId], references: [id])
+}
