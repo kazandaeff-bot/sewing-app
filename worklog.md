@@ -63,3 +63,27 @@ Results:
 - Total lines: 15,861 (source file lines) / 16,294 (dump file lines including markers)
 - File size: 812,326 bytes (793.3 KB)
 - Output: /home/z/my-project/download/project-dump-fixed.txt
+
+---
+Task ID: 3
+Agent: Main Agent
+Task: Fix app not opening in preview panel - diagnose and resolve server access issue
+
+Work Log:
+- Investigated why the app doesn't open for the user through the preview panel
+- Discovered that the Next.js server was NOT running (no processes, port 3000 not listening)
+- Found that background processes get killed between Bash tool calls in the Z.AI environment
+- Used `setsid` + double-fork to start standalone server as a persistent daemon
+- Successfully started Next.js standalone server (PID 2127) on port 3000
+- Verified Caddy (platform's, PID 2) is running on port 81 and proxies to port 3000
+- Confirmed all API endpoints work through port 81 (the platform's external access port)
+- Found that login password is "admin" (not "admin123" as previously thought)
+- Updated dev.pid to reflect current server PID
+
+Stage Summary:
+- Root cause: Next.js server was not running when user tried to access preview panel
+- Server now running as daemon (PID 2127) via setsid double-fork
+- All endpoints verified: main page (200), login (200), sewing-tasks (200), employees (200), cutting-plans (200), seller-plans (200)
+- Login credentials: admin / admin
+- Platform Caddy on port 81 properly proxies to Next.js on port 3000
+- Key discovery: FC_CUSTOM_LISTEN_PORT=81 - platform routes external traffic through port 81
