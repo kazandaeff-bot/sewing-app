@@ -87,3 +87,27 @@ Stage Summary:
 - Login credentials: admin / admin
 - Platform Caddy on port 81 properly proxies to Next.js on port 3000
 - Key discovery: FC_CUSTOM_LISTEN_PORT=81 - platform routes external traffic through port 81
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Fix auth flow - user can enter menu but cannot re-login after logout
+
+Work Log:
+- Identified 3 critical auth bugs:
+  1. /api/auth/me endpoint DID NOT EXIST - AuthProvider was fetching a 404 page, causing session to be lost on page reload
+  2. Login page redirected to /production which DOES NOT EXIST (only / route exists) - after login, user got 404
+  3. Cookie httpOnly mismatch: login set httpOnly: false, logout set httpOnly: true - cookie may not clear properly
+- Created /api/auth/me/route.ts that reads session cookie and returns user data (same as /api/auth/session)
+- Fixed login redirect from '/production' to '/' in login/page.tsx
+- Fixed logout cookie httpOnly from true to false to match login cookie settings
+- Fixed all router.push('/production') to router.push('/') in main page.tsx
+- Rebuilt the app (npm run build) and restarted standalone server
+- Verified complete auth flow: login → session check → logout → re-login all work correctly
+
+Stage Summary:
+- Auth flow now works end-to-end: login, session persistence, logout, re-login
+- /api/auth/me endpoint created and working
+- Redirect fixed: login now goes to '/' instead of non-existent '/production'
+- Cookie settings consistent between login and logout (both httpOnly: false)
+- Login credentials: admin / admin

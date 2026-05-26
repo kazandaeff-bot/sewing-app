@@ -28,7 +28,7 @@ export default function LoginPage() {
 
     if (result.success) {
       // Go to production page after login, or returnUrl if specified
-      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/production'
+      const returnUrl = new URLSearchParams(window.location.search).get('returnUrl') || '/'
       router.push(returnUrl)
     } else {
       setError(result.error || 'Неверный логин или пароль')

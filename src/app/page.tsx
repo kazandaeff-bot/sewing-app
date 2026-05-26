@@ -2366,7 +2366,7 @@ export default function HomePage() {
           <CardContent className="space-y-3">
             <Button
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white min-h-[48px] text-base"
-              onClick={() => router.push('/production')}
+              onClick={() => router.push('/')}
             >
               <Factory className="h-5 w-5 mr-2" />
               Производство
@@ -2396,7 +2396,7 @@ export default function HomePage() {
             <div><h1 className="text-2xl font-bold text-gray-900">{user.name}</h1><p className="text-sm text-muted-foreground">{getRoleLabel(userRole)}</p></div>
             <Button variant="outline" onClick={handleLogout}><LogOut className="h-4 w-4 mr-2" />Выйти</Button>
           </div>
-          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Store className="h-16 w-16 mb-4 opacity-20" /><p className="text-lg font-medium">Ваш раздел — Производство</p><p className="text-sm mt-1 mb-4">Перейдите в раздел Производство для работы</p><Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { router.push('/production') }}><Factory className="h-4 w-4 mr-2" />Производство →</Button></CardContent></Card>
+          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Store className="h-16 w-16 mb-4 opacity-20" /><p className="text-lg font-medium">Ваш раздел — Производство</p><p className="text-sm mt-1 mb-4">Перейдите в раздел Производство для работы</p><Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { router.push('/') }}><Factory className="h-4 w-4 mr-2" />Производство →</Button></CardContent></Card>
         </div>
       </div>
     )
