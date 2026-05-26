@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast'
 import {
   Scissors,
   ClipboardCheck,
+  ClipboardList,
   ListTodo,
   BarChart3,
   Play,

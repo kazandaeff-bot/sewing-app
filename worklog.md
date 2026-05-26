@@ -111,3 +111,24 @@ Stage Summary:
 - Redirect fixed: login now goes to '/' instead of non-existent '/production'
 - Cookie settings consistent between login and logout (both httpOnly: false)
 - Login credentials: admin / admin
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Fix page crash when selecting a sewer - "This page couldn't load" error
+
+Work Log:
+- User reported that when selecting a sewer, the page crashes with "This page couldn't load"
+- Analyzed the screenshot: browser-level page load failure, not an in-app error
+- Investigated the SewerTab component code in page.tsx
+- Found root cause: ClipboardList icon is used on line 460 but was NOT imported from lucide-react
+- When React tries to render the SewerTab after a sewer is selected (showing issued tasks), it encounters undefined ClipboardList and crashes the entire page
+- Added ClipboardList to the lucide-react import statement
+- Rebuilt the app and restarted the standalone server
+- Verified all APIs still work correctly through port 81
+
+Stage Summary:
+- Root cause: Missing ClipboardList import from lucide-react caused React crash when rendering SewerTab
+- Fixed by adding ClipboardList to imports
+- App rebuilt and server restarted on port 3000 (Caddy proxy on port 81)
+- All endpoints verified working
