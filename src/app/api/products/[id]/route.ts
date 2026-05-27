@@ -25,7 +25,7 @@ export async function PATCH(
       await db.productSize.deleteMany({ where: { productId: id } })
       if (sizes.length > 0) {
         updateData.sizes = {
-          create: sizes.map((s: string) => ({ size: s }))
+          create: sizes.map((s: string, i: number) => ({ size: s, order: i }))
         }
       }
     }
@@ -48,7 +48,7 @@ export async function PATCH(
       data: updateData,
       include: {
         reworkReasons: true,
-        sizes: { orderBy: { size: 'asc' } },
+        sizes: { orderBy: { order: 'asc' } },
         colors: { orderBy: { color: 'asc' } },
       },
     })

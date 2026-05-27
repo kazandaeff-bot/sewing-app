@@ -3455,7 +3455,7 @@ export function ReferencesTab() {
       } catch { parsedKitComboColors = {} }
     }
     setProductForm({ name: p.name, article: p.article, sewerRate: p.sewerRate, homeRate: p.homeRate, qcRate: p.qcRate, reworkRate: p.reworkRate, isKit: p.isKit, kitComboColors: parsedKitComboColors })
-    setProductSizes(p.sizes.map(s => s.size))
+    setProductSizes(sortSizes(p.sizes.map(s => s.size)))
     setProductColors(p.colors.map(c => ({ color: c.color, colorHex: c.colorHex })))
     setNewSize('')
     setNewColor('')
@@ -3510,6 +3510,24 @@ export function ReferencesTab() {
 
   const removeProductSize = useCallback((size: string) => {
     setProductSizes(prev => prev.filter(s => s !== size))
+  }, [])
+
+  const moveSizeUp = useCallback((index: number) => {
+    if (index <= 0) return
+    setProductSizes(prev => {
+      const next = [...prev]
+      ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
+      return next
+    })
+  }, [])
+
+  const moveSizeDown = useCallback((index: number) => {
+    setProductSizes(prev => {
+      if (index >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[index], next[index + 1]] = [next[index + 1], next[index]]
+      return next
+    })
   }, [])
 
   const applyStandardColor = useCallback((colorName: string, hex: string) => {
@@ -4344,26 +4362,49 @@ export function ReferencesTab() {
                   </Select>
                   {productSizes.length > 0 && (
                     <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs h-7 ml-auto" onClick={() => setProductSizes([])}>
-                      <Trash2 className="h-3 w-3 mr-1" />Очистить все
+                      <Trash2 className="h-3 w-3 mr-1" />Удалить все
                     </Button>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {productSizes.map(size => (
-                    <Badge key={size} variant="secondary" className="gap-1 py-1 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 group">
-                      {size}
-                      <button
-                        type="button"
-                        className="inline-flex items-center justify-center rounded-sm p-0.5 -mr-1 hover:bg-red-100 hover:text-red-600 transition-colors"
-                        title={`Удалить размер ${size}`}
-                        onClick={() => removeProductSize(size)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {productSizes.length === 0 && <span className="text-xs text-muted-foreground">Размеры не добавлены — выберите сетку или введите вручную</span>}
-                </div>
+                {productSizes.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {productSizes.map((size, idx) => (
+                      <div key={size} className="flex items-center gap-0.5 bg-emerald-50 rounded-md border border-emerald-200 pr-1">
+                        <div className="flex flex-col">
+                          <button
+                            type="button"
+                            className={`p-0 leading-none ${idx === 0 ? 'text-gray-300 cursor-default' : 'text-emerald-500 hover:text-emerald-700'}`}
+                            onClick={() => moveSizeUp(idx)}
+                            disabled={idx === 0}
+                            title="Переместить вверх"
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            className={`p-0 leading-none ${idx === productSizes.length - 1 ? 'text-gray-300 cursor-default' : 'text-emerald-500 hover:text-emerald-700'}`}
+                            onClick={() => moveSizeDown(idx)}
+                            disabled={idx === productSizes.length - 1}
+                            title="Переместить вниз"
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-medium text-emerald-700 px-1">{size}</span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-sm p-0.5 hover:bg-red-100 hover:text-red-600 text-gray-400 transition-colors"
+                          title={`Удалить размер ${size}`}
+                          onClick={() => removeProductSize(size)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Размеры не добавлены — выберите сетку или введите вручную</span>
+                )}
                 <div className="flex gap-2">
                   <Input value={newSize} onChange={(e) => setNewSize(e.target.value)} placeholder="Новый размер" className="w-36" onKeyDown={(e) => { if (e.key === 'Enter') addProductSize() }} />
                   <Button size="sm" variant="outline" onClick={addProductSize}><Plus className="h-4 w-4" /></Button>
@@ -4378,7 +4419,7 @@ export function ReferencesTab() {
                   <Label className="text-sm font-medium">Цвета</Label>
                   {productColors.length > 0 && (
                     <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs h-7 ml-auto" onClick={() => setProductColors([])}>
-                      <Trash2 className="h-3 w-3 mr-1" />Очистить все
+                      <Trash2 className="h-3 w-3 mr-1" />Удалить все
                     </Button>
                   )}
                 </div>
@@ -4400,23 +4441,26 @@ export function ReferencesTab() {
                   </div>
                 </div>
                 {/* Current colors */}
-                <div className="flex flex-wrap gap-1.5">
-                  {productColors.map(c => (
-                    <Badge key={c.color} variant="secondary" className="gap-1 py-1 px-2.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-50 group">
-                      <span className="inline-block w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.colorHex }} />
-                      {c.color}
-                      <button
-                        type="button"
-                        className="inline-flex items-center justify-center rounded-sm p-0.5 -mr-1 hover:bg-red-100 hover:text-red-600 transition-colors"
-                        title={`Удалить цвет ${c.color}`}
-                        onClick={() => removeProductColor(c.color)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {productColors.length === 0 && <span className="text-xs text-muted-foreground">Цвета не добавлены — выберите из списка или введите свой</span>}
-                </div>
+                {productColors.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {productColors.map(c => (
+                      <div key={c.color} className="flex items-center gap-1 bg-emerald-50 rounded-md border border-emerald-200 py-1 px-2">
+                        <span className="inline-block w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.colorHex }} />
+                        <span className="text-sm font-medium text-emerald-700">{c.color}</span>
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center rounded-sm p-0.5 hover:bg-red-100 hover:text-red-600 text-gray-400 transition-colors"
+                          title={`Удалить цвет ${c.color}`}
+                          onClick={() => removeProductColor(c.color)}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Цвета не добавлены — выберите из списка или введите свой</span>
+                )}
                 {/* Custom color input */}
                 <div className="flex gap-2 items-end">
                   <div className="flex-1 max-w-[200px]"><Input value={newColor} onChange={(e) => setNewColor(e.target.value)} placeholder="Свой цвет" onKeyDown={(e) => { if (e.key === 'Enter') addProductColor() }} /></div>

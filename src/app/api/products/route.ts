@@ -7,7 +7,7 @@ export async function GET() {
       orderBy: { article: 'asc' },
       include: {
         reworkReasons: true,
-        sizes: { orderBy: { size: 'asc' } },
+        sizes: { orderBy: { order: 'asc' } },
         colors: { orderBy: { color: 'asc' } },
       },
     })
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         isKit: isKit ?? false,
         kitComboColors: kitComboColors ? JSON.stringify(kitComboColors) : null,
         sizes: sizes && sizes.length > 0 ? {
-          create: sizes.map((s: string) => ({ size: s }))
+          create: sizes.map((s: string, i: number) => ({ size: s, order: i }))
         } : undefined,
         colors: colors && colors.length > 0 ? {
           create: colors.map((c: { color: string; colorHex?: string }) => ({
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       },
       include: {
         reworkReasons: true,
-        sizes: { orderBy: { size: 'asc' } },
+        sizes: { orderBy: { order: 'asc' } },
         colors: { orderBy: { color: 'asc' } },
       },
     })
