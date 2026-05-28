@@ -221,3 +221,20 @@ Work Log:
 Stage Summary:
 - Приложение запущено и работает корректно
 - Проблема была в кешировании Turbopack, не в коде
+
+---
+Task ID: 4
+Agent: main
+Task: Исправление проблемы запуска приложения
+
+Work Log:
+- Проблема: сервер запускался, но падал через ~15-60 секунд
+- Причина: при запуске из bash-сессии, дочерние процессы убивались при закрытии сессии (tool timeout)
+- Решение: double-fork подход `(nohup node .next/standalone/server.js >> server-start.log 2>&1 &)` полностью отсоединяет процесс
+- Также включён `output: "standalone"` в next.config.ts для корректной работы production-билда
+- Сервер стабильно работает на порту 3000, доступен через https://w1cem4d5ak91-d.space-z.ai/
+
+Stage Summary:
+- Приложение запущено и стабильно работает
+- Используется production standalone-режим через `node .next/standalone/server.js`
+- Все API возвращают 200: /, /api/plans, /api/products
