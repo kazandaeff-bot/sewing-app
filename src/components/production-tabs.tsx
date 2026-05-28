@@ -44,6 +44,9 @@ import {
   Flame,
   AlertCircle,
   CalendarClock,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  History,
 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -3388,6 +3391,14 @@ export function ReferencesTab() {
   // ---- Material norms state ----
   const [newNormProductId, setNewNormProductId] = useState('')
   const [newNormMaterialId, setNewNormMaterialId] = useState('')
+  // ---- Material entries state ----
+  const [entryDialogOpen, setEntryDialogOpen] = useState(false)
+  const [entryMaterialId, setEntryMaterialId] = useState('')
+  const [entryType, setEntryType] = useState<'incoming' | 'consumed'>('incoming')
+  const [entryQty, setEntryQty] = useState('')
+  const [entryNote, setEntryNote] = useState('')
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [historyMaterialId, setHistoryMaterialId] = useState('')
   const [newNormConsumption, setNewNormConsumption] = useState('')
   const [newNormUnit, setNewNormUnit] = useState('гр')
 
@@ -3531,6 +3542,19 @@ export function ReferencesTab() {
     mutationFn: (id: string) => fetch(`/api/material-norms?id=${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-norms'] }); toast({ title: 'Норма расхода удалена' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить норму расхода', variant: 'destructive' }) },
+  })
+
+  // ---- Material entry mutations ----
+  const createEntryMutation = useMutation({
+    mutationFn: (data: { materialId: string; type: 'incoming' | 'consumed'; qty: number; note?: string }) => fetch('/api/material-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-entries'] }); setEntryDialogOpen(false); setEntryQty(''); setEntryNote(''); toast({ title: entryType === 'incoming' ? 'Приход добавлен' : 'Расход списан' }) },
+    onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
+  })
+
+  const { data: materialEntries = [] } = useQuery({
+    queryKey: ['material-entries', historyMaterialId],
+    queryFn: () => fetch(`/api/material-entries?materialId=${historyMaterialId}`).then((r) => r.json()),
+    enabled: !!historyMaterialId && historyDialogOpen,
   })
 
   // ---- Product dialog helpers ----
@@ -4098,9 +4122,14 @@ export function ReferencesTab() {
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{m.name}</span>
                             <Badge variant="outline" className="text-xs">{m.unit}</Badge>
-                            <span className="text-xs text-muted-foreground">Остаток: {m.totalQty} {m.unit}</span>
+                            <Badge className={`text-xs ${m.totalQty > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>{m.totalQty} {m.unit}</Badge>
                           </div>
-                          <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6" onClick={() => deleteMaterialMutation.mutate(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-6 px-1.5" title="Приход" onClick={() => { setEntryMaterialId(m.id); setEntryType('incoming'); setEntryDialogOpen(true) }}><ArrowDownCircle className="h-3.5 w-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-6 px-1.5" title="Расход" onClick={() => { setEntryMaterialId(m.id); setEntryType('consumed'); setEntryDialogOpen(true) }}><ArrowUpCircle className="h-3.5 w-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-6 px-1.5" title="История" onClick={() => { setHistoryMaterialId(m.id); setHistoryDialogOpen(true) }}><History className="h-3.5 w-3.5" /></Button>
+                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6 px-1.5" onClick={() => deleteMaterialMutation.mutate(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -4693,6 +4722,122 @@ export function CuttingLeftoversTab() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MATERIAL ENTRY DIALOG (Приход/Расход) ===== */}
+      <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {entryType === 'incoming' ? <ArrowDownCircle className="h-5 w-5 text-emerald-600" /> : <ArrowUpCircle className="h-5 w-5 text-orange-600" />}
+              {entryType === 'incoming' ? 'Приход материала' : 'Расход материала'}
+            </DialogTitle>
+            <DialogDescription>
+              {entryType === 'incoming' ? 'Добавить остаток ткани или фурнитуры на склад' : 'Списать материал со склада'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Тип операции</Label>
+              <Select value={entryType} onValueChange={(v) => setEntryType(v as 'incoming' | 'consumed')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="incoming">Приход (поступление)</SelectItem>
+                  <SelectItem value="consumed">Расход (списание)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Количество *</Label>
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={entryQty}
+                onChange={(e) => setEntryQty(e.target.value)}
+                placeholder="Введите количество"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Комментарий</Label>
+              <Input
+                value={entryNote}
+                onChange={(e) => setEntryNote(e.target.value)}
+                placeholder={entryType === 'incoming' ? 'От поставщика, инвентаризация...' : 'Брак, потеря, корректировка...'}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>Отмена</Button>
+            <Button
+              className={entryType === 'incoming' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white'}
+              disabled={createEntryMutation.isPending || !entryQty || parseFloat(entryQty) <= 0}
+              onClick={() => {
+                createEntryMutation.mutate({
+                  materialId: entryMaterialId,
+                  type: entryType,
+                  qty: parseFloat(entryQty),
+                  note: entryNote || undefined,
+                })
+              }}
+            >
+              {createEntryMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {entryType === 'incoming' ? 'Добавить приход' : 'Списать расход'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MATERIAL HISTORY DIALOG ===== */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-blue-600" />
+              История операций
+            </DialogTitle>
+            <DialogDescription>Все приходы и расходы выбранного материала</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[400px]">
+            {materialEntries.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground text-sm">Нет операций</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Дата</TableHead>
+                    <TableHead>Тип</TableHead>
+                    <TableHead className="text-right">Кол-во</TableHead>
+                    <TableHead>Комментарий</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(materialEntries as Array<{ id: string; type: string; qty: number; date: string; note: string | null }>).map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {new Date(entry.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      </TableCell>
+                      <TableCell>
+                        {entry.type === 'incoming' ? (
+                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Приход</Badge>
+                        ) : (
+                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">Расход</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        <span className={entry.type === 'incoming' ? 'text-emerald-700' : 'text-orange-700'}>
+                          {entry.type === 'incoming' ? '+' : '-'}{entry.qty}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{entry.note || '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
