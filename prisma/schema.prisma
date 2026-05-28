@@ -30,6 +30,8 @@ model Product {
   sewerRate      Float           @default(150)
   homeRate       Float           @default(0)   // Ставка для надомниц (0 = не задана, используется sewerRate)
   qcRate         Float           @default(50)
+  ironingRate    Float           @default(10)  // Ставка за утюжку
+  cuttingRate    Float           @default(30)  // Ставка за раскрой
   reworkRate     Float           @default(80)
   isKit          Boolean         @default(false) // Комплект (напр. ч/б)
   kitComboColors  String?         // JSON: {"ч/б":["чёрный","белый"]} — расшифровка комплекта
@@ -45,6 +47,8 @@ model Product {
   boxCapacities    BoxCapacity[]
   customerProducts CustomerProduct[]
   materialNorms   MaterialNorm[]
+  cuttingLeftovers CuttingLeftover[]
+  sizeRates        ProductSizeRate[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -53,9 +57,24 @@ model ProductSize {
   id        String  @id @default(cuid())
   productId String
   size      String
-  order     Int     @default(0)  // Порядок сортировки размеров
+  order     Int     @default(0)
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+
+  @@unique([productId, size])
+}
+
+// Нормы ставок по размерам (P2)
+model ProductSizeRate {
+  id         String  @id @default(cuid())
+  productId  String
+  size       String
+  sewerRate  Float?  // NULL = использовать базовую ставку изделия
+  homeRate   Float?
+  qcRate     Float?
+  ironingRate Float?
+  cuttingRate Float?
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([productId, size])
 }
@@ -94,7 +113,7 @@ model Task {
   completedAt     DateTime?
   reworks         Rework[]
   employee        Employee         @relation(fields: [employeeId], references: [id])
-  product         Product          @relation(fields: [productId], references: [id])
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -148,7 +167,7 @@ model BoxCapacity {
   size       String   // Размер изделия
   maxQty     Int      // Макс. кол-во данного изделия данного размера в этом коробе
   boxType    BoxType  @relation(fields: [boxTypeId], references: [id], onDelete: Cascade)
-  product    Product  @relation(fields: [productId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
 
   @@unique([boxTypeId, productId, size])
@@ -156,26 +175,27 @@ model BoxCapacity {
 
 // ============ СПРАВОЧНИК: Заказчики ============
 model Customer {
-  id            String           @id @default(cuid())
-  name          String           @unique  // Название компании-заказчика
-  contactInfo   String?          // Контактная информация
-  employees     Employee[]
-  customerProducts CustomerProduct[]
-  plans         Plan[]
-  sellerPlans   SellerPlan[]
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  id                  String           @id @default(cuid())
+  name                String           @unique
+  contactInfo         String?
+  showMaterialBalance Boolean          @default(false)
+  employees           Employee[]
+  customerProducts    CustomerProduct[]
+  plans               Plan[]
+  sellerPlans         SellerPlan[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
 }
 
 model CustomerProduct {
   id              String    @id @default(cuid())
   customerId      String
   productId       String
-  customBoxCapacity Int?    // Вместимость в короб — своя для этого заказчика (override)
-  customWeight    Float?    // Вес в упаковке, гр (override)
-  customDimensions String?  // Габариты упаковки (override), напр. "40x30x20"
-  customWidth     Float?    // Ширина, см (override)
-  customHeight    Float?    // Высота, см (override)
+  customBoxCapacity Int?
+  customWeight    Float?
+  customDimensions String?
+  customWidth     Float?
+  customHeight    Float?
   customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
@@ -187,10 +207,12 @@ model Plan {
   id           String        @id @default(cuid())
   name         String
   status       String        @default("draft") // draft | approved | in_work | shipped | shipped_paid
+  priority     String        @default("normal") // urgent | normal | low
+  deadline     DateTime?     // Дедлайн плана
   customerId   String?
   customer     Customer?     @relation(fields: [customerId], references: [id])
   items        PlanItem[]
-  cuttingPlan  CuttingPlan?
+  cuttingPlans CuttingPlan[] // Один план может иметь несколько раскроев (основной + дополнительные)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -204,16 +226,18 @@ model PlanItem {
   colorHex String  @default("#9ca3af")
   quantity Int
   plan     Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
-  product  Product @relation(fields: [productId], references: [id])
+  product  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 // ============ МОДУЛЬ 2: План раскроя ============
 model CuttingPlan {
   id           String           @id @default(cuid())
-  planId       String           @unique
+  planId       String           // Не уникально — план может иметь несколько раскроев
+  label        String?          // "Основной", "Дополнение 1" и т.д.
   status       String           @default("in_work") // in_work | cut
   items        CuttingPlanItem[]
   sewingTasks  SewingTask[]
+  leftovers    CuttingLeftover[]
   plan         Plan             @relation(fields: [planId], references: [id])
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
@@ -229,7 +253,27 @@ model CuttingPlanItem {
   plannedQty     Int
   actualQty      Int?
   cuttingPlan    CuttingPlan  @relation(fields: [cuttingPlanId], references: [id], onDelete: Cascade)
-  product        Product      @relation(fields: [productId], references: [id])
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+// ============ Остатки кроя ============
+model CuttingLeftover {
+  id             String   @id @default(cuid())
+  cuttingPlanId  String
+  cuttingPlanItemId String?
+  productId      String
+  size           String
+  color          String
+  colorHex       String   @default("#9ca3af")
+  quantity       Int             // Всего лишних единиц кроя
+  sewnQty        Int      @default(0) // Сколько уже пошито из остатка
+  status         String   @default("free") // free | assigned | partially_sewn | fully_sewn
+  source         String   @default("cutting") // cutting — из раскроя, manual — добавлено вручную
+  note           String?         // Комментарий (напр. "зарисовка на пустом участке")
+  cuttingPlan    CuttingPlan @relation(fields: [cuttingPlanId], references: [id])
+  product        Product  @relation(fields: [productId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 // ============ МОДУЛЬ 3: Задания для швей ============
@@ -237,7 +281,7 @@ model SewingTask {
   id              String           @id @default(cuid())
   cuttingPlanId   String
   employeeId      String
-  status          String           @default("issued") // issued | in_work | pending_qc | completed
+  status          String           @default("issued") // issued | in_work | pending_ironing | pending_qc | completed
   items           SewingTaskItem[]
   reworks         SewingRework[]
   cuttingPlan     CuttingPlan      @relation(fields: [cuttingPlanId], references: [id])
@@ -257,8 +301,13 @@ model SewingTaskItem {
   actualQuantity  Int?
   fabricDefect    Int         @default(0)
   defectNote      String?
+  status          String      @default("issued") // issued | in_work | pending_ironing | pending_qc | completed
+  startedAt       DateTime?   // Когда взято в работу
+  ironedAt        DateTime?   // Когда отглажено
+  qcAt            DateTime?   // Когда прошло ОТК
+  completedAt     DateTime?   // Когда завершено
   sewingTask      SewingTask  @relation(fields: [sewingTaskId], references: [id], onDelete: Cascade)
-  product         Product     @relation(fields: [productId], references: [id])
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
   reworks         SewingRework[]
 }
 
@@ -266,7 +315,7 @@ model SewingTaskItem {
 model SellerPlan {
   id          String           @id @default(cuid())
   sellerName  String
-  status      String           @default("draft") // draft | approved
+  status      String           @default("draft") // draft | approved | distributed
   customerId  String?
   customer    Customer?        @relation(fields: [customerId], references: [id])
   items       SellerPlanItem[]
@@ -285,7 +334,7 @@ model SellerPlanItem {
   quantity     Int
   cities       SellerPlanCity[]
   sellerPlan   SellerPlan        @relation(fields: [sellerPlanId], references: [id], onDelete: Cascade)
-  product      Product           @relation(fields: [productId], references: [id])
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model SellerPlanCity {
@@ -321,14 +370,14 @@ model BoxItem {
   plannedQty  Int
   actualQty   Int?
   box         Box     @relation(fields: [boxId], references: [id], onDelete: Cascade)
-  product     Product @relation(fields: [productId], references: [id])
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 // ============ МОДУЛЬ 6: Учёт материалов ============
 model MaterialType {
   id        String         @id @default(cuid())
-  name      String         @unique  // ткань, фурнитура, размерник, нитки, etc.
-  unit      String         @default("шт")  // кг, м, шт, гр, см
+  name      String         @unique
+  unit      String         @default("шт")
   materials Material[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
@@ -337,9 +386,9 @@ model MaterialType {
 model Material {
   id             String         @id @default(cuid())
   materialTypeId String
-  name           String         // e.g. "Кулирка хлопок 100%", "Нитки чёрные"
-  totalQty       Float          @default(0)  // Current stock quantity
-  unit           String         @default("шт")  // Unit of measurement
+  name           String
+  totalQty       Float          @default(0)
+  unit           String         @default("шт")
   entries        MaterialEntry[]
   norms          MaterialNorm[]
   materialType   MaterialType   @relation(fields: [materialTypeId], references: [id], onDelete: Cascade)
@@ -351,10 +400,10 @@ model MaterialEntry {
   id             String     @id @default(cuid())
   materialId     String
   type           String     // incoming | consumed
-  qty            Float      // positive number
+  qty            Float
   date           DateTime   @default(now())
-  cuttingPlanId  String?    // If consumed during cutting
-  note           String?    // Optional note
+  cuttingPlanId  String?
+  note           String?
   material       Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
   createdAt      DateTime   @default(now())
 }
@@ -363,9 +412,9 @@ model MaterialNorm {
   id                   String   @id @default(cuid())
   materialId           String
   productId            String
-  consumptionPerUnit   Float    // Consumption per 1 unit of product
-  unit                 String   @default("гр")  // гр, см, шт
-  autoCalculated       Boolean  @default(false)  // Whether this was auto-calculated
+  consumptionPerUnit   Float
+  unit                 String   @default("гр")
+  autoCalculated       Boolean  @default(false)
   material             Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
   product              Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 

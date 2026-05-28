@@ -1,28 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const materialId = searchParams.get('materialId')
-    const productId = searchParams.get('productId')
-
-    const where: Record<string, unknown> = {}
-    if (materialId) where.materialId = materialId
-    if (productId) where.productId = productId
-
     const norms = await db.materialNorm.findMany({
-      where,
-      include: {
-        material: { include: { materialType: true } },
-        product: true,
-      },
-      orderBy: { id: 'asc' },
+      orderBy: { productId: 'asc' },
+      include: { material: true, product: true },
     })
-    return NextResponse.json(norms)
+    return NextResponse.json(norms, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Get material norms error:', error)
-    return NextResponse.json({ error: 'Ошибка получения норм расхода' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка получения норм расходов' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
@@ -30,56 +18,40 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { materialId, productId, consumptionPerUnit, unit, autoCalculated } = body
-
-    if (!materialId || !productId) {
-      return NextResponse.json({ error: 'Укажите материал и изделие' }, { status: 400 })
+    if (!materialId || !productId || consumptionPerUnit === undefined) {
+      return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
     }
-    if (consumptionPerUnit === undefined || consumptionPerUnit < 0) {
-      return NextResponse.json({ error: 'Укажите корректную норму расхода' }, { status: 400 })
-    }
-
-    // Verify material and product exist
-    const [material, product] = await Promise.all([
-      db.material.findUnique({ where: { id: materialId } }),
-      db.product.findUnique({ where: { id: productId } }),
-    ])
-    if (!material) {
-      return NextResponse.json({ error: 'Материал не найден' }, { status: 404 })
-    }
-    if (!product) {
-      return NextResponse.json({ error: 'Изделие не найдено' }, { status: 404 })
-    }
-
-    // Upsert: create or update
-    const norm = await db.materialNorm.upsert({
-      where: {
-        materialId_productId: { materialId, productId },
-      },
-      update: {
-        consumptionPerUnit,
-        unit: unit || material.unit,
-        autoCalculated: autoCalculated ?? false,
-      },
-      create: {
+    const norm = await db.materialNorm.create({
+      data: {
         materialId,
         productId,
-        consumptionPerUnit,
-        unit: unit || material.unit,
+        consumptionPerUnit: parseFloat(consumptionPerUnit) || 0,
+        unit: unit?.trim() || 'гр',
         autoCalculated: autoCalculated ?? false,
       },
-      include: {
-        material: { include: { materialType: true } },
-        product: true,
-      },
+      include: { material: true, product: true },
     })
-
-    return NextResponse.json(norm, { status: 201 })
-  } catch (error: unknown) {
-    console.error('Create/update material norm error:', error)
-    const prismaError = error as { code?: string }
-    if (prismaError.code === 'P2002') {
-      return NextResponse.json({ error: 'Норма расхода для этого материала и изделия уже существует' }, { status: 409 })
+    return NextResponse.json(norm, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return NextResponse.json({ error: 'Норма расхода для этого материала и изделия уже существует' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
     }
-    return NextResponse.json({ error: 'Ошибка создания нормы расхода' }, { status: 500 })
+    console.error('Create material norm error:', error)
+    return NextResponse.json({ error: 'Ошибка создания нормы расхода' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ error: 'Укажите ID нормы' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
+    }
+    await db.materialNorm.delete({ where: { id } })
+    return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (error) {
+    console.error('Delete material norm error:', error)
+    return NextResponse.json({ error: 'Ошибка удаления нормы расхода' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

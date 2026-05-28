@@ -1,34 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params
-    const material = await db.material.findUnique({
-      where: { id },
-      include: {
-        materialType: true,
-        entries: {
-          orderBy: { date: 'desc' },
-        },
-        norms: {
-          include: { product: true },
-        },
-      },
-    })
-    if (!material) {
-      return NextResponse.json({ error: 'Материал не найден' }, { status: 404 })
-    }
-    return NextResponse.json(material)
-  } catch (error) {
-    console.error('Get material error:', error)
-    return NextResponse.json({ error: 'Ошибка получения материала' }, { status: 500 })
-  }
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -36,21 +8,22 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, totalQty } = body
-
-    const data: Record<string, unknown> = {}
-    if (name !== undefined) data.name = name.trim()
-    if (totalQty !== undefined) data.totalQty = totalQty
+    const { name, unit, totalQty, materialTypeId } = body
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (unit !== undefined) updateData.unit = unit
+    if (totalQty !== undefined) updateData.totalQty = totalQty
+    if (materialTypeId !== undefined) updateData.materialTypeId = materialTypeId
 
     const material = await db.material.update({
       where: { id },
-      data,
-      include: { materialType: true },
+      data: updateData,
+      include: { materialType: true, norms: true },
     })
-    return NextResponse.json(material)
+    return NextResponse.json(material, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Update material error:', error)
-    return NextResponse.json({ error: 'Ошибка обновления материала' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка обновления материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
@@ -61,9 +34,9 @@ export async function DELETE(
   try {
     const { id } = await params
     await db.material.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Delete material error:', error)
-    return NextResponse.json({ error: 'Ошибка удаления материала' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка удаления материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

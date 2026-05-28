@@ -9,6 +9,8 @@ export async function GET() {
         reworkReasons: true,
         sizes: { orderBy: { order: 'asc' } },
         colors: { orderBy: { color: 'asc' } },
+        materialNorms: { include: { material: true } },
+        customerProducts: { include: { customer: true } },
       },
     })
     return NextResponse.json(products)
@@ -21,7 +23,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
     if (!name || !article) {
       return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400 })
     }
@@ -34,6 +36,8 @@ export async function POST(request: NextRequest) {
         sewerRate: sewerRate ?? 150,
         homeRate: homeRate ?? 0,
         qcRate: qcRate ?? 50,
+        ironingRate: ironingRate ?? 10,
+        cuttingRate: cuttingRate ?? 30,
         reworkRate: reworkRate ?? 80,
         isKit: isKit ?? false,
         kitComboColors: kitComboColors ? JSON.stringify(kitComboColors) : null,

@@ -5,7 +5,6 @@ export async function GET() {
   try {
     const employees = await db.employee.findMany({
       orderBy: { code: 'asc' },
-      include: { customer: true },
     })
     return NextResponse.json(employees)
   } catch (error) {
@@ -22,7 +21,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Заполните обязательные поля (ФИО, код, логин, пароль)' }, { status: 400 })
     }
     const employee = await db.employee.create({
-      data: { name, code, username, password, role: role || 'sewer', customerId: customerId || null },
+      data: {
+        name,
+        code,
+        username,
+        password,
+        role: role || 'sewer',
+        ...(customerId ? { customerId } : {}),
+      },
     })
     return NextResponse.json(employee, { status: 201 })
   } catch (error) {

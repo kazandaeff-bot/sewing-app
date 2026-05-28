@@ -3,16 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const materialTypes = await db.materialType.findMany({
+    const types = await db.materialType.findMany({
       orderBy: { name: 'asc' },
-      include: {
-        _count: { select: { materials: true } },
-      },
+      include: { materials: { orderBy: { name: 'asc' }, include: { norms: true, entries: { orderBy: { date: 'desc' }, take: 1 } } } },
     })
-    return NextResponse.json(materialTypes)
+    return NextResponse.json(types, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Get material types error:', error)
-    return NextResponse.json({ error: 'Ошибка получения типов материалов' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка получения типов материалов' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
@@ -21,21 +19,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { name, unit } = body
     if (!name?.trim()) {
-      return NextResponse.json({ error: 'Укажите название типа материала' }, { status: 400 })
+      return NextResponse.json({ error: 'Укажите название типа' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
     }
-    const materialType = await db.materialType.create({
-      data: {
-        name: name.trim(),
-        unit: unit || 'шт',
-      },
+    const type = await db.materialType.create({
+      data: { name: name.trim(), unit: unit?.trim() || 'шт' },
+      include: { materials: true },
     })
-    return NextResponse.json(materialType, { status: 201 })
-  } catch (error: unknown) {
-    console.error('Create material type error:', error)
-    const prismaError = error as { code?: string }
-    if (prismaError.code === 'P2002') {
-      return NextResponse.json({ error: 'Тип материала с таким названием уже существует' }, { status: 409 })
+    return NextResponse.json(type, { status: 201, headers: { 'Cache-Control': 'no-store' } })
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return NextResponse.json({ error: 'Тип материала с таким названием уже существует' }, { status: 409, headers: { 'Cache-Control': 'no-store' } })
     }
-    return NextResponse.json({ error: 'Ошибка создания типа материала' }, { status: 500 })
+    console.error('Create material type error:', error)
+    return NextResponse.json({ error: 'Ошибка создания типа материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }

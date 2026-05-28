@@ -14,6 +14,9 @@ export async function GET() {
         sewingTasks: {
           include: { employee: true },
         },
+        leftovers: {
+          include: { product: true },
+        },
       },
     })
     return NextResponse.json(cuttingPlans)

@@ -5,6 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { Providers } from "@/components/providers";
 import { AuthProvider } from "@/components/auth-provider";
 
+// Force dynamic rendering - prevent CDN from caching stale page shells
+export const dynamic = 'force-dynamic'
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

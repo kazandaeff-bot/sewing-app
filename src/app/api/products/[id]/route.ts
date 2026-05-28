@@ -8,7 +8,7 @@ export async function PATCH(
   try {
     const { id } = await params
     const body = await request.json()
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (article !== undefined) updateData.article = article
@@ -16,6 +16,8 @@ export async function PATCH(
     if (sewerRate !== undefined) updateData.sewerRate = sewerRate
     if (homeRate !== undefined) updateData.homeRate = homeRate
     if (qcRate !== undefined) updateData.qcRate = qcRate
+    if (ironingRate !== undefined) updateData.ironingRate = ironingRate
+    if (cuttingRate !== undefined) updateData.cuttingRate = cuttingRate
     if (reworkRate !== undefined) updateData.reworkRate = reworkRate
     if (isKit !== undefined) updateData.isKit = isKit
     if (kitComboColors !== undefined) updateData.kitComboColors = kitComboColors ? JSON.stringify(kitComboColors) : null

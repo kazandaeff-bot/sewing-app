@@ -9,23 +9,15 @@ export async function PATCH(
     const { id } = await params
     const body = await request.json()
     const { name, unit } = body
+    const updateData: Record<string, unknown> = {}
+    if (name !== undefined) updateData.name = name
+    if (unit !== undefined) updateData.unit = unit
 
-    const data: Record<string, unknown> = {}
-    if (name !== undefined) data.name = name.trim()
-    if (unit !== undefined) data.unit = unit
-
-    const materialType = await db.materialType.update({
-      where: { id },
-      data,
-    })
-    return NextResponse.json(materialType)
-  } catch (error: unknown) {
+    const type = await db.materialType.update({ where: { id }, data: updateData, include: { materials: true } })
+    return NextResponse.json(type, { headers: { 'Cache-Control': 'no-store' } })
+  } catch (error) {
     console.error('Update material type error:', error)
-    const prismaError = error as { code?: string }
-    if (prismaError.code === 'P2002') {
-      return NextResponse.json({ error: 'Тип материала с таким названием уже существует' }, { status: 409 })
-    }
-    return NextResponse.json({ error: 'Ошибка обновления типа материала' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка обновления типа материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
@@ -36,9 +28,9 @@ export async function DELETE(
   try {
     const { id } = await params
     await db.materialType.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Delete material type error:', error)
-    return NextResponse.json({ error: 'Ошибка удаления типа материала' }, { status: 500 })
+    return NextResponse.json({ error: 'Ошибка удаления типа материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
 }
