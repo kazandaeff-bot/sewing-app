@@ -1351,20 +1351,16 @@ function QCTab() {
         }))
     )
 
-  // Переделки, проверенные ОТК (status = completed)
+  // Переделки — показываем для информации, но НЕ оплачиваем дополнительно
+  // Переделки входят в нормальную нагрузку ОТК (оплата по плану)
   const qcReworksChecked = reworks.filter((r: SewingReworkResponse) => r.status === 'completed' && filterByPeriod(r.updatedAt))
-  // Количество проверенных единиц
+  // Количество проверенных единиц (только основные изделия, без переделок)
   const qcTotalUnitsChecked = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => sum + (item.actualQuantity || item.quantity), 0)
   const qcTotalReworksChecked = qcReworksChecked.reduce((sum: number, r: SewingReworkResponse) => sum + r.quantity, 0)
-  const qcTotalInspected = qcTotalUnitsChecked + qcTotalReworksChecked
-  // Зарплата с учётом ставок по каждому изделию
-  const qcSalaryMain = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => {
+  // Зарплата: только по принятым изделиям из плана (переделки не оплачиваются дополнительно)
+  const qcSalary = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => {
     return sum + (item.actualQuantity || item.quantity) * (item.product.qcRate || 50)
   }, 0)
-  const qcSalaryReworks = qcReworksChecked.reduce((sum: number, r: SewingReworkResponse) => {
-    return sum + r.quantity * (r.sewingTaskItem?.product?.qcRate || 50)
-  }, 0)
-  const qcSalary = qcSalaryMain + qcSalaryReworks
   const qcPeriodLabel = qcSalaryPeriod === 'week' ? 'за неделю' : qcSalaryPeriod === 'month' ? 'за месяц' : 'за всё время'
 
   // Item-level status badge for QC view
@@ -1410,7 +1406,7 @@ function QCTab() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Принято изделий</div>
               <div className="text-2xl font-bold text-sky-700">{qcTotalUnitsChecked} шт</div>
@@ -1418,17 +1414,12 @@ function QCTab() {
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Переделок проверено</div>
               <div className="text-2xl font-bold text-purple-700">{qcTotalReworksChecked} шт</div>
+              <div className="text-xs text-muted-foreground">(входит в базовую нагрузку)</div>
             </div>
-            <div className="text-center p-3 bg-white/70 rounded-lg">
-              <div className="text-xs text-muted-foreground mb-1">Всего проверено</div>
-              <div className="text-2xl font-bold text-blue-700">{qcTotalInspected} шт</div>
-            </div>
-            <div className="text-center p-3 bg-sky-100 rounded-lg border-2 border-sky-300">
+            <div className="text-center p-3 bg-sky-100 rounded-lg border-2 border-sky-300 col-span-2 sm:col-span-1">
               <div className="text-xs text-sky-700 mb-1 font-medium">Итого зарплата</div>
               <div className="text-2xl font-bold text-sky-800">{qcSalary.toLocaleString('ru-RU')} ₽</div>
-              <div className="text-xs text-sky-600">
-                {qcSalaryMain.toLocaleString('ru-RU')} + {qcSalaryReworks.toLocaleString('ru-RU')}
-              </div>
+              <div className="text-xs text-sky-600">по плану, без доплаты за переделки</div>
             </div>
           </div>
           {/* Расшифровка по изделиям */}
@@ -1439,24 +1430,17 @@ function QCTab() {
               </div>
               <div className="space-y-1">
                 {(() => {
-                  const byProduct: Record<string, { name: string; units: number; rate: number; reworkUnits: number }> = {}
+                  const byProduct: Record<string, { name: string; units: number; rate: number }> = {}
                   qcCompletedItems.forEach((item: SewingTaskItemResponse) => {
                     const key = item.productId
-                    if (!byProduct[key]) byProduct[key] = { name: item.product?.name || 'Изделие', units: 0, rate: item.product?.qcRate || 50, reworkUnits: 0 }
+                    if (!byProduct[key]) byProduct[key] = { name: item.product?.name || 'Изделие', units: 0, rate: item.product?.qcRate || 50 }
                     byProduct[key].units += (item.actualQuantity || item.quantity)
-                  })
-                  qcReworksChecked.forEach((r: SewingReworkResponse) => {
-                    const key = r.sewingTaskItemId
-                    const productName = r.sewingTaskItem?.product?.name || 'Изделие'
-                    const rate = r.sewingTaskItem?.product?.qcRate || 50
-                    if (!byProduct[key]) byProduct[key] = { name: productName, units: 0, rate, reworkUnits: 0 }
-                    byProduct[key].reworkUnits += r.quantity
                   })
                   return Object.values(byProduct).map((p, i) => (
                     <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-sky-100 last:border-0">
                       <span className="font-medium">{p.name}</span>
                       <span className="text-muted-foreground">
-                        {p.units} шт x {p.rate} ₽{p.reworkUnits > 0 ? ` + ${p.reworkUnits} перед. x ${p.rate} ₽` : ''} = <span className="font-semibold text-sky-700">{(p.units * p.rate + p.reworkUnits * p.rate).toLocaleString('ru-RU')} ₽</span>
+                        {p.units} шт x {p.rate} ₽ = <span className="font-semibold text-sky-700">{(p.units * p.rate).toLocaleString('ru-RU')} ₽</span>
                       </span>
                     </div>
                   ))

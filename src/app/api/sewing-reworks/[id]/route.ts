@@ -25,29 +25,18 @@ export async function PATCH(
       return NextResponse.json({ error: 'Переделка не найдена' }, { status: 404 })
     }
 
-    // When seamstress marks rework as done → goes back to QC
+    // When seamstress marks rework as done → goes back to QC for re-check
     if (status === 'pending_qc') {
-      // Create a new SewingTask in pending_qc for the rework items
-      // or update the existing one
-      // For simplicity, update the rework status and mark the parent task
-      const parentTaskId = existingRework.sewingTaskId
-      // Ensure the parent task is also visible to QC
-      const parentTask = await db.sewingTask.findUnique({ where: { id: parentTaskId } })
-      if (parentTask && parentTask.status !== 'pending_qc') {
-        // Don't change the parent task status — just update the rework
-      }
+      // Just update the rework status — QC will see it in the reworks list
+      // The parent task status is not changed; reworks are tracked independently
     }
 
     // When QC approves the rework → mark completed
+    // NOTE: We do NOT add rework quantity to actualQuantity.
+    // Rework verification is part of normal QC duties (paid by plan quantity).
+    // actualQuantity stays as the first-pass accepted count.
     if (status === 'completed') {
-      // Update the SewingTaskItem actualQuantity if needed
-      if (existingRework.sewingTaskItem) {
-        const newActual = (existingRework.sewingTaskItem.actualQuantity || 0) + existingRework.quantity
-        await db.sewingTaskItem.update({
-          where: { id: existingRework.sewingTaskItemId },
-          data: { actualQuantity: newActual },
-        })
-      }
+      // No actualQuantity update — rework check is included in base pay
     }
 
     const rework = await db.sewingRework.update({
