@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateCustomerSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -16,13 +18,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, contactInfo } = body
-    if (!name?.trim()) {
-      return NextResponse.json({ error: 'Укажите название заказчика' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
-    }
+    const result = await validateBody(request, CreateCustomerSchema)
+    if ('error' in result) return result.error
+    const { name, contactInfo } = result.data
     const customer = await db.customer.create({
-      data: { name: name.trim(), contactInfo: contactInfo?.trim() || null },
+      data: { name, contactInfo: contactInfo || null },
       include: { customerProducts: true, employees: true },
     })
     return NextResponse.json(customer, { status: 201, headers: { 'Cache-Control': 'no-store' } })

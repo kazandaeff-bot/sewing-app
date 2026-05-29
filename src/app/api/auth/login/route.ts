@@ -1,32 +1,35 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { comparePassword, signToken } from '@/lib/auth'
+import { validateBody } from '@/lib/api-auth'
+import { LoginSchema } from '@/lib/schemas'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { username, password } = body
-
-    if (!username || !password) {
-      return NextResponse.json({ error: 'Введите логин и пароль' }, { status: 400 })
-    }
+    const result = await validateBody(request, LoginSchema)
+    if ('error' in result) return result.error
+    const { username, password } = result.data
 
     const employee = await db.employee.findUnique({
       where: { username },
     })
 
-    if (!employee || employee.password !== password) {
+    if (!employee) {
       return NextResponse.json({ error: 'Неверный логин или пароль' }, { status: 401 })
     }
 
-    // Create a simple session token (base64 encoded JSON)
-    const sessionData = JSON.stringify({
+    const isValid = await comparePassword(password, employee.password)
+    if (!isValid) {
+      return NextResponse.json({ error: 'Неверный логин или пароль' }, { status: 401 })
+    }
+
+    const token = signToken({
       id: employee.id,
       name: employee.name,
       role: employee.role,
       code: employee.code,
       customerId: employee.customerId || null,
     })
-    const token = Buffer.from(sessionData).toString('base64')
 
     const response = NextResponse.json({
       user: {
@@ -38,10 +41,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Set cookie with session token
-    response.cookies.set('session', token, {
-      httpOnly: false,
-      secure: false,
+    response.cookies.set('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
       path: '/',

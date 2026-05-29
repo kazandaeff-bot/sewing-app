@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateTaskSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -30,12 +32,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { employeeId, productId, size, color, colorHex, quantity } = body
-
-    if (!employeeId || !productId || !size || !color || !quantity) {
-      return NextResponse.json({ error: 'Заполните все обязательные поля' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateTaskSchema)
+    if ('error' in result) return result.error
+    const { employeeId, productId, size, color, colorHex, quantity } = result.data
 
     const task = await db.task.create({
       data: {
@@ -43,8 +42,8 @@ export async function POST(request: NextRequest) {
         productId,
         size,
         color,
-        colorHex: colorHex || '#9ca3af',
-        quantity: parseInt(quantity),
+        colorHex,
+        quantity,
       },
       include: {
         employee: true,

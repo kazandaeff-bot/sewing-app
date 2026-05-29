@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { IroningUpdateSchema } from '@/lib/schemas'
 
 export async function GET() {
   try {
@@ -41,12 +43,9 @@ export async function GET() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { itemIds } = body as { itemIds: string[] }
-
-    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
-      return NextResponse.json({ error: 'Укажите элементы для отметки' }, { status: 400 })
-    }
+    const result = await validateBody(request, IroningUpdateSchema)
+    if ('error' in result) return result.error
+    const { itemIds } = result.data
 
     // Verify items exist and are in pending_ironing status
     const pendingItems = await db.sewingTaskItem.findMany({

@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateMaterialTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,13 +9,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { name, unit } = body
-    const updateData: Record<string, unknown> = {}
-    if (name !== undefined) updateData.name = name
-    if (unit !== undefined) updateData.unit = unit
+    const result = await validateBody(request, UpdateMaterialTypeSchema)
+    if ('error' in result) return result.error
 
-    const type = await db.materialType.update({ where: { id }, data: updateData, include: { materials: true } })
+    const type = await db.materialType.update({ where: { id }, data: result.data, include: { materials: true } })
     return NextResponse.json(type, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Update material type error:', error)

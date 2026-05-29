@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateCuttingPlanSchema } from '@/lib/schemas'
 
 export async function GET(
   _request: NextRequest,
@@ -41,8 +43,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { status, items } = body
+    const result = await validateBody(request, UpdateCuttingPlanSchema)
+    if ('error' in result) return result.error
+    const { status, label, items } = result.data
 
     const existing = await db.cuttingPlan.findUnique({
       where: { id },
@@ -54,11 +57,12 @@ export async function PATCH(
 
     const updateData: Record<string, unknown> = {}
     if (status) updateData.status = status
+    if (label !== undefined) updateData.label = label
 
     // Process items sequentially to avoid race conditions
     if (items && Array.isArray(items)) {
       for (const item of items) {
-        if (item.id && item.actualQty !== undefined) {
+        if (item.actualQty !== undefined) {
           await db.cuttingPlanItem.update({
             where: { id: item.id },
             data: { actualQty: item.actualQty },

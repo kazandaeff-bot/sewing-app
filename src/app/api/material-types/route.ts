@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateMaterialTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -16,13 +18,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, unit } = body
-    if (!name?.trim()) {
-      return NextResponse.json({ error: 'Укажите название типа' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
-    }
+    const result = await validateBody(request, CreateMaterialTypeSchema)
+    if ('error' in result) return result.error
+    const { name, unit } = result.data
     const type = await db.materialType.create({
-      data: { name: name.trim(), unit: unit?.trim() || 'шт' },
+      data: { name, unit },
       include: { materials: true },
     })
     return NextResponse.json(type, { status: 201, headers: { 'Cache-Control': 'no-store' } })

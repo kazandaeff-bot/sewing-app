@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { CreateProductSchema } from '@/lib/schemas'
 
 export async function GET() {
   try {
@@ -22,24 +24,22 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
-    if (!name || !article) {
-      return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateProductSchema)
+    if ('error' in result) return result.error
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
 
     const product = await db.product.create({
       data: {
         name,
         article,
         imageUrl: imageUrl || null,
-        sewerRate: sewerRate ?? 150,
-        homeRate: homeRate ?? 0,
-        qcRate: qcRate ?? 50,
-        ironingRate: ironingRate ?? 10,
-        cuttingRate: cuttingRate ?? 30,
-        reworkRate: reworkRate ?? 80,
-        isKit: isKit ?? false,
+        sewerRate,
+        homeRate,
+        qcRate,
+        ironingRate,
+        cuttingRate,
+        reworkRate,
+        isKit,
         kitComboColors: kitComboColors ? JSON.stringify(kitComboColors) : null,
         sizes: sizes && sizes.length > 0 ? {
           create: sizes.map((s: string, i: number) => ({ size: s, order: i }))

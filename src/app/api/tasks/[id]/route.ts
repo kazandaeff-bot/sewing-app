@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateTaskSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,20 +9,21 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
+    const result = await validateBody(request, UpdateTaskSchema)
+    if ('error' in result) return result.error
     const {
       actualQuantity, fabricDefect, defectNote, status,
       colorHex, size, color, quantity, employeeId, productId,
-    } = body
+    } = result.data
 
     const updateData: Record<string, unknown> = {}
-    if (actualQuantity !== undefined) updateData.actualQuantity = parseInt(actualQuantity)
-    if (fabricDefect !== undefined) updateData.fabricDefect = parseInt(fabricDefect)
+    if (actualQuantity !== undefined) updateData.actualQuantity = actualQuantity
+    if (fabricDefect !== undefined) updateData.fabricDefect = fabricDefect
     if (defectNote !== undefined) updateData.defectNote = defectNote
     if (colorHex !== undefined) updateData.colorHex = colorHex
     if (size !== undefined) updateData.size = size
     if (color !== undefined) updateData.color = color
-    if (quantity !== undefined) updateData.quantity = parseInt(quantity)
+    if (quantity !== undefined) updateData.quantity = quantity
     if (employeeId !== undefined) updateData.employeeId = employeeId
     if (productId !== undefined) updateData.productId = productId
     if (status !== undefined) {

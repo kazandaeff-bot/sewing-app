@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateBoxTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,8 +9,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { name, dimensions, capacities } = body
+    const result = await validateBody(request, UpdateBoxTypeSchema)
+    if ('error' in result) return result.error
+    const { name, dimensions, capacities } = result.data
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (dimensions !== undefined) updateData.dimensions = dimensions
@@ -18,7 +21,7 @@ export async function PATCH(
       await db.boxCapacity.deleteMany({ where: { boxTypeId: id } })
       if (capacities.length > 0) {
         updateData.capacities = {
-          create: capacities.map((c: { productId: string; size: string; maxQty: number }) => ({
+          create: capacities.map((c) => ({
             productId: c.productId,
             size: c.size,
             maxQty: c.maxQty,

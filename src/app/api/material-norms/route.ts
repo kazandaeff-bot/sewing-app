@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateMaterialNormSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -16,18 +18,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { materialId, productId, consumptionPerUnit, unit, autoCalculated } = body
-    if (!materialId || !productId || consumptionPerUnit === undefined) {
-      return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
-    }
+    const result = await validateBody(request, CreateMaterialNormSchema)
+    if ('error' in result) return result.error
+    const { materialId, productId, consumptionPerUnit, unit, autoCalculated } = result.data
     const norm = await db.materialNorm.create({
       data: {
         materialId,
         productId,
-        consumptionPerUnit: parseFloat(consumptionPerUnit) || 0,
-        unit: unit?.trim() || 'гр',
-        autoCalculated: autoCalculated ?? false,
+        consumptionPerUnit,
+        unit,
+        autoCalculated,
       },
       include: { material: true, product: true },
     })

@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateCustomerSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,16 +9,12 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { name, contactInfo, showMaterialBalance } = body
-    const updateData: Record<string, unknown> = {}
-    if (name !== undefined) updateData.name = name
-    if (contactInfo !== undefined) updateData.contactInfo = contactInfo
-    if (showMaterialBalance !== undefined) updateData.showMaterialBalance = showMaterialBalance
+    const result = await validateBody(request, UpdateCustomerSchema)
+    if ('error' in result) return result.error
 
     const customer = await db.customer.update({
       where: { id },
-      data: updateData,
+      data: result.data,
       include: { customerProducts: { include: { product: true } }, employees: true },
     })
     return NextResponse.json(customer, { headers: { 'Cache-Control': 'no-store' } })

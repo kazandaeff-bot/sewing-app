@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateQuery } from '@/lib/api-auth'
+import { AvailableItemsQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
@@ -9,12 +11,9 @@ import { NextRequest, NextResponse } from 'next/server'
  */
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const customerId = searchParams.get('customerId')
-
-    if (!customerId) {
-      return NextResponse.json({ error: 'Укажите ID заказчика' }, { status: 400 })
-    }
+    const qResult = validateQuery(request, AvailableItemsQuerySchema)
+    if ('error' in qResult) return qResult.error
+    const { customerId } = qResult.data
 
     // 1. Find all plans for this customer
     const customerPlans = await db.plan.findMany({

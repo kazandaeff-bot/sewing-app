@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { UpdatePlanSchema } from '@/lib/schemas'
 
 /**
  * Helper: build cutting plan items with kit expansion
@@ -183,8 +185,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { name, status, items, addItems, priority, deadline } = body
+    const result = await validateBody(request, UpdatePlanSchema)
+    if ('error' in result) return result.error
+    const { name, status, items, addItems, priority, deadline } = result.data
 
     const existing = await db.plan.findUnique({
       where: { id },
@@ -227,7 +230,7 @@ export async function PATCH(
     // ========== ADD ITEMS TO EXISTING PLAN (supplementary) ==========
     if (addItems && Array.isArray(addItems) && addItems.length > 0) {
       // Add new items to the plan (works for any status)
-      const newPlanItems = addItems.map((item: { productId: string; size: string; color: string; colorHex?: string; quantity: number }) => ({
+      const newPlanItems = addItems.map((item) => ({
         productId: item.productId,
         size: item.size,
         color: item.color,
@@ -317,7 +320,7 @@ export async function PATCH(
           },
         })
 
-        const result = await db.plan.findUnique({
+        const planResult = await db.plan.findUnique({
           where: { id },
           include: {
             customer: { select: { id: true, name: true } },
@@ -325,7 +328,7 @@ export async function PATCH(
             cuttingPlans: { include: { items: { include: { product: true } } } },
           },
         })
-        return NextResponse.json(result)
+        return NextResponse.json(planResult)
       }
 
       const updatedPlan = await db.plan.update({
@@ -351,7 +354,7 @@ export async function PATCH(
     if (items && Array.isArray(items) && existing.status === 'draft') {
       await db.planItem.deleteMany({ where: { planId: id } })
       updateData.items = {
-        create: items.map((item: { productId: string; size: string; color: string; colorHex?: string; quantity: number }) => ({
+        create: items.map((item) => ({
           productId: item.productId,
           size: item.size,
           color: item.color,

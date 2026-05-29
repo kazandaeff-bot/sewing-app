@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateMaterialSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -52,17 +54,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { materialTypeId, name, unit, totalQty } = body
-    if (!name?.trim() || !materialTypeId) {
-      return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
-    }
+    const result = await validateBody(request, CreateMaterialSchema)
+    if ('error' in result) return result.error
+    const { materialTypeId, name, unit, totalQty } = result.data
     const material = await db.material.create({
       data: {
         materialTypeId,
-        name: name.trim(),
-        unit: unit?.trim() || 'шт',
-        totalQty: totalQty ?? 0,
+        name,
+        unit,
+        totalQty,
       },
       include: { materialType: true, norms: true },
     })

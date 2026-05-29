@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateQuery } from '@/lib/api-auth'
+import { PrintQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 // ─── Shared HTML wrapper ────────────────────────────────────────────────────
@@ -606,16 +608,9 @@ function generatePackingListForSellerPlan(
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')
-    const id = searchParams.get('id')
-
-    if (!type || !id) {
-      return NextResponse.json(
-        { error: 'Параметры type и id обязательны' },
-        { status: 400 }
-      )
-    }
+    const qResult = validateQuery(request, PrintQuerySchema)
+    if ('error' in qResult) return qResult.error
+    const { type, id } = qResult.data
 
     let html: string
 

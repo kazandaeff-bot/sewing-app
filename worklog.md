@@ -44,3 +44,26 @@ Stage Summary:
 - Added proper error handling to API calls via shared api-client
 - Removed ~70 lines of duplicated constants
 - Build: ✅ | Dev server: ✅ (HTTP 200)
+
+---
+Task ID: 8
+Agent: Main
+Task: Zod validation on all API routes + Auth middleware
+
+Work Log:
+- Created `/home/z/my-project/src/lib/schemas.ts` — 30+ Zod schemas covering all API routes (login, employees, products, plans, cutting-plans, sewing-tasks, sewing-reworks, rework-reasons, ironing, boxes, seller-plans, cities, box-types, customers, material-types, material-norms, material-entries, cutting-leftovers, materials, product-size-rates, tasks, reworks, print)
+- Created `/home/z/my-project/src/lib/api-auth.ts` — validateBody(), validateQuery(), getSessionUser(), withAuth() wrapper
+- Added Zod validation to 30 API route handlers across 24 files
+- Replaced all manual validation (field checks, parseInt/parseFloat, Array.isArray) with Zod schemas
+- Updated login route to use bcrypt+JWT+httpOnly cookies (was plaintext base64)
+- Updated employees routes to hash passwords with bcrypt and exclude passwords from GET responses
+- Fixed kitComboColors schema for Zod v4 (z.record needs key type arg)
+- Build passes, dev server returns 200
+
+Stage Summary:
+- 30+ Zod schemas created covering all mutation/query endpoints
+- 24 route files updated with validateBody/validateQuery
+- Eliminated all parseInt/parseFloat on unvalidated input (NaN risk)
+- Added enum validation for all status fields
+- Auth infrastructure created (withAuth, getSessionUser) — ready for per-route auth gating
+- Build: ✅ | Dev server: ✅ (HTTP 200)

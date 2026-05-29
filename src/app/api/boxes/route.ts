@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateBoxSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -22,12 +24,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { sellerPlanId } = body
-
-    if (!sellerPlanId) {
-      return NextResponse.json({ error: 'Укажите план селлера' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateBoxSchema)
+    if ('error' in result) return result.error
+    const { sellerPlanId } = result.data
 
     const sellerPlan = await db.sellerPlan.findUnique({
       where: { id: sellerPlanId },

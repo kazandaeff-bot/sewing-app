@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateReworkReasonSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -17,11 +19,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { productId, text } = body
-    if (!productId || !text) {
-      return NextResponse.json({ error: 'Заполните обязательные поля' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateReworkReasonSchema)
+    if ('error' in result) return result.error
+    const { productId, text } = result.data
     const reason = await db.reworkReason.create({ data: { productId, text } })
     return NextResponse.json(reason, { status: 201 })
   } catch (error) {

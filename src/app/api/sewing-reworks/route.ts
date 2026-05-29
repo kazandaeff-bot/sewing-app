@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { CreateSewingReworkSchema, SewingReworkStatus } from '@/lib/schemas'
 
 export async function GET(request: NextRequest) {
   try {
@@ -8,7 +10,12 @@ export async function GET(request: NextRequest) {
     const sewingTaskId = searchParams.get('sewingTaskId')
 
     const where: Record<string, unknown> = {}
-    if (status) where.status = status
+    if (status) {
+      if (!SewingReworkStatus.options.includes(status as any)) {
+        return NextResponse.json({ error: 'Неверный статус фильтра' }, { status: 400 })
+      }
+      where.status = status
+    }
     if (sewingTaskId) where.sewingTaskId = sewingTaskId
 
     const reworks = await db.sewingRework.findMany({
@@ -38,12 +45,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { sewingTaskItemId, sewingTaskId, quantity, reason } = body
-
-    if (!sewingTaskItemId || !sewingTaskId || !quantity || !reason) {
-      return NextResponse.json({ error: 'Заполните все обязательные поля' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateSewingReworkSchema)
+    if ('error' in result) return result.error
+    const { sewingTaskItemId, sewingTaskId, quantity, reason } = result.data
 
     // Validate item exists
     const item = await db.sewingTaskItem.findUnique({
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
       data: {
         sewingTaskItemId,
         sewingTaskId,
-        quantity: parseInt(quantity),
+        quantity,  // Already a proper integer from Zod coercion
         reason,
       },
       include: {

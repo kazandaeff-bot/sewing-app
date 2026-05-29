@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { CreateCuttingLeftoverSchema } from '@/lib/schemas'
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,16 +42,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { cuttingPlanId, cuttingPlanItemId, productId, size, color, colorHex, quantity, source, note } = body
-
-    if (!cuttingPlanId || !productId || !size || !color || !quantity) {
-      return NextResponse.json({ error: 'Заполните все обязательные поля' }, { status: 400 })
-    }
-
-    if (quantity <= 0) {
-      return NextResponse.json({ error: 'Количество должно быть больше 0' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateCuttingLeftoverSchema)
+    if ('error' in result) return result.error
+    const { cuttingPlanId, cuttingPlanItemId, productId, size, color, colorHex, quantity, source, note } = result.data
 
     const leftover = await db.cuttingLeftover.create({
       data: {

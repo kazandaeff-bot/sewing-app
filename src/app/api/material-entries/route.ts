@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateMaterialEntrySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -31,18 +33,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { materialId, type, qty, date, cuttingPlanId, note } = body
-
-    if (!materialId) {
-      return NextResponse.json({ error: 'Укажите материал' }, { status: 400 })
-    }
-    if (!type || !['incoming', 'consumed'].includes(type)) {
-      return NextResponse.json({ error: 'Тип записи должен быть incoming или consumed' }, { status: 400 })
-    }
-    if (!qty || qty <= 0) {
-      return NextResponse.json({ error: 'Количество должно быть больше 0' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateMaterialEntrySchema)
+    if ('error' in result) return result.error
+    const { materialId, type, qty, date, cuttingPlanId, note } = result.data
 
     // Verify material exists
     const material = await db.material.findUnique({ where: { id: materialId } })

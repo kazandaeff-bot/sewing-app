@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateSellerPlanSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
@@ -40,8 +42,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { status, items, sellerName, customerId } = body
+    const result = await validateBody(request, UpdateSellerPlanSchema)
+    if ('error' in result) return result.error
+    const { status, items, sellerName, customerId } = result.data
 
     const existing = await db.sellerPlan.findUnique({ where: { id } })
     if (!existing) {

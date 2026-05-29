@@ -1,10 +1,24 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody, withAuth } from '@/lib/api-auth'
+import { CreateEmployeeSchema, UpdateEmployeeSchema } from '@/lib/schemas'
+import { hashPassword } from '@/lib/auth'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const employees = await db.employee.findMany({
       orderBy: { code: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        role: true,
+        username: true,
+        customerId: true,
+        createdAt: true,
+        updatedAt: true,
+        // password is excluded for security
+      },
     })
     return NextResponse.json(employees)
   } catch (error) {
@@ -15,19 +29,30 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, code, role, username, password, customerId } = body
-    if (!name || !code || !username || !password) {
-      return NextResponse.json({ error: 'Заполните обязательные поля (ФИО, код, логин, пароль)' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateEmployeeSchema)
+    if ('error' in result) return result.error
+    const { name, code, role, username, password, customerId } = result.data
+
+    const hashedPassword = await hashPassword(password)
+
     const employee = await db.employee.create({
       data: {
         name,
         code,
         username,
-        password,
-        role: role || 'sewer',
+        password: hashedPassword,
+        role,
         ...(customerId ? { customerId } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        role: true,
+        username: true,
+        customerId: true,
+        createdAt: true,
+        updatedAt: true,
       },
     })
     return NextResponse.json(employee, { status: 201 })

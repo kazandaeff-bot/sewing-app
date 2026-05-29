@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateProductSchema } from '@/lib/schemas'
 
 export async function PATCH(
   request: NextRequest,
@@ -7,8 +9,10 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = body
+    const result = await validateBody(request, UpdateProductSchema)
+    if ('error' in result) return result.error
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
+
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
     if (article !== undefined) updateData.article = article

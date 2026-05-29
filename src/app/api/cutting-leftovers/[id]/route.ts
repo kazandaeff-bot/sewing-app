@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateCuttingLeftoverSchema } from '@/lib/schemas'
 
 export async function GET(
   _request: NextRequest,
@@ -36,8 +38,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { sewnQty, status, note, quantity } = body
+    const result = await validateBody(request, UpdateCuttingLeftoverSchema)
+    if ('error' in result) return result.error
+    const { sewnQty, status, note, quantity } = result.data
 
     const existing = await db.cuttingLeftover.findUnique({ where: { id } })
     if (!existing) {

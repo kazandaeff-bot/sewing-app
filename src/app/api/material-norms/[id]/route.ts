@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateMaterialNormSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,17 +9,12 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { consumptionPerUnit, unit, autoCalculated } = body
-
-    const data: Record<string, unknown> = {}
-    if (consumptionPerUnit !== undefined) data.consumptionPerUnit = consumptionPerUnit
-    if (unit !== undefined) data.unit = unit
-    if (autoCalculated !== undefined) data.autoCalculated = autoCalculated
+    const result = await validateBody(request, UpdateMaterialNormSchema)
+    if ('error' in result) return result.error
 
     const norm = await db.materialNorm.update({
       where: { id },
-      data,
+      data: result.data,
       include: {
         material: { include: { materialType: true } },
         product: true,

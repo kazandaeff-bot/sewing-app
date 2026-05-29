@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateProductSizeRateSchema, UpdateProductSizeRateSchema, DeleteProductSizeRateSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 const HEADERS = { 'Cache-Control': 'no-store' }
@@ -33,15 +35,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { productId, size, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = body
-
-    if (!productId || !size) {
-      return NextResponse.json(
-        { error: 'Заполните обязательные поля: productId, size' },
-        { status: 400, headers: HEADERS }
-      )
-    }
+    const result = await validateBody(request, CreateProductSizeRateSchema)
+    if ('error' in result) return result.error
+    const { productId, size, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
 
     const sizeRate = await db.productSizeRate.upsert({
       where: {
@@ -78,15 +74,9 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { id, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = body
-
-    if (!id) {
-      return NextResponse.json(
-        { error: 'Укажите ID ставки' },
-        { status: 400, headers: HEADERS }
-      )
-    }
+    const result = await validateBody(request, UpdateProductSizeRateSchema)
+    if ('error' in result) return result.error
+    const { id, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
 
     const data: Record<string, any> = {}
     if (sewerRate !== undefined) data.sewerRate = sewerRate
@@ -94,13 +84,6 @@ export async function PATCH(request: NextRequest) {
     if (qcRate !== undefined) data.qcRate = qcRate
     if (ironingRate !== undefined) data.ironingRate = ironingRate
     if (cuttingRate !== undefined) data.cuttingRate = cuttingRate
-
-    if (Object.keys(data).length === 0) {
-      return NextResponse.json(
-        { error: 'Укажите хотя бы одно поле для обновления' },
-        { status: 400, headers: HEADERS }
-      )
-    }
 
     const sizeRate = await db.productSizeRate.update({
       where: { id },
@@ -126,15 +109,9 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { id } = body
-
-    if (!id) {
-      return NextResponse.json(
-        { error: 'Укажите ID ставки' },
-        { status: 400, headers: HEADERS }
-      )
-    }
+    const result = await validateBody(request, DeleteProductSizeRateSchema)
+    if ('error' in result) return result.error
+    const { id } = result.data
 
     await db.productSizeRate.delete({ where: { id } })
 

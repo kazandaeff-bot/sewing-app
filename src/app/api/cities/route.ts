@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateCitySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -13,11 +15,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name } = body
-    if (!name) {
-      return NextResponse.json({ error: 'Укажите название города' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateCitySchema)
+    if ('error' in result) return result.error
+    const { name } = result.data
     const city = await db.city.create({ data: { name } })
     return NextResponse.json(city, { status: 201 })
   } catch (error) {

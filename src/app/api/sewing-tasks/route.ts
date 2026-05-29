@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateSewingTaskSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -38,16 +40,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { cuttingPlanId, employeeId, items } = body
-
-    if (!cuttingPlanId || !employeeId) {
-      return NextResponse.json({ error: 'Укажите план раскроя и швею' }, { status: 400 })
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Добавьте хотя бы одну позицию' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateSewingTaskSchema)
+    if ('error' in result) return result.error
+    const { cuttingPlanId, employeeId, items } = result.data
 
     // Verify cutting plan exists and is in "cut" status
     const cuttingPlan = await db.cuttingPlan.findUnique({ where: { id: cuttingPlanId } })
@@ -76,7 +71,7 @@ export async function POST(request: NextRequest) {
 
     // Add new items and check
     const newMap = new Map(assignedMap)
-    for (const item of items as Array<{ productId: string; size: string; color: string; quantity: number }>) {
+    for (const item of items) {
       const key = `${item.productId}|${item.size}|${item.color}`
       newMap.set(key, (newMap.get(key) || 0) + item.quantity)
     }
@@ -97,11 +92,11 @@ export async function POST(request: NextRequest) {
         employeeId,
         status: 'issued',
         items: {
-          create: items.map((item: { productId: string; size: string; color: string; colorHex?: string; quantity: number }) => ({
+          create: items.map((item) => ({
             productId: item.productId,
             size: item.size,
             color: item.color,
-            colorHex: item.colorHex || '#9ca3af',
+            colorHex: item.colorHex,
             quantity: item.quantity,
           })),
         },

@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateSellerPlanSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
@@ -50,12 +52,10 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { sellerName, customerId, planId, items } = body
-
-    if (!sellerName) {
-      return NextResponse.json({ error: 'Укажите название плана' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateSellerPlanSchema)
+    if ('error' in result) return result.error
+    const { sellerName, customerId, planId, items } = result.data
+    let resolvedCustomerId = customerId ?? null
 
     // If planId provided, auto-fill items from the sewing plan
     let finalItems = items
@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Use plan's customerId if not explicitly provided
-      if (!customerId && plan.customerId) {
-        body.customerId = plan.customerId
+      if (!resolvedCustomerId && plan.customerId) {
+        resolvedCustomerId = plan.customerId
       }
 
       // Build a map of cities from the passed items, keyed by "productId-size-color"
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Добавьте хотя бы одну позицию' }, { status: 400 })
     }
 
-    const effectiveCustomerId = customerId || body.customerId || null
+    const effectiveCustomerId = resolvedCustomerId
 
     const sellerPlan = await db.sellerPlan.create({
       data: {

@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { UpdateSewingReworkSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -7,12 +9,9 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await request.json()
-    const { status } = body
-
-    if (!status) {
-      return NextResponse.json({ error: 'Укажите статус' }, { status: 400 })
-    }
+    const result = await validateBody(request, UpdateSewingReworkSchema)
+    if ('error' in result) return result.error
+    const { status } = result.data
 
     const existingRework = await db.sewingRework.findUnique({
       where: { id },

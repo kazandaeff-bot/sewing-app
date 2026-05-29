@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { validateBody } from '@/lib/api-auth'
+import { CreatePlanSchema } from '@/lib/schemas'
 
 /**
  * Helper: get current user from session cookie
@@ -54,21 +56,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { customerId, items, priority, deadline } = body
-
-    if (!customerId) {
-      return NextResponse.json({ error: 'Выберите заказчика' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreatePlanSchema)
+    if ('error' in result) return result.error
+    const { customerId, items, priority, deadline } = result.data
 
     // Verify customer exists
     const customer = await db.customer.findUnique({ where: { id: customerId } })
     if (!customer) {
       return NextResponse.json({ error: 'Заказчик не найден' }, { status: 400 })
-    }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Добавьте хотя бы одну позицию' }, { status: 400 })
     }
 
     // Auto-generate plan name: "Заказчик #N от DD.MM.YYYY"
@@ -88,10 +83,10 @@ export async function POST(request: NextRequest) {
       data: {
         name: autoName,
         customerId,
-        priority: priority || 'normal',
+        priority,
         deadline: deadline ? new Date(deadline) : null,
         items: {
-          create: items.map((item: { productId: string; size: string; color: string; colorHex?: string; quantity: number }) => ({
+          create: items.map((item) => ({
             productId: item.productId,
             size: item.size,
             color: item.color,

@@ -1,4 +1,6 @@
 import { db } from '@/lib/db'
+import { validateBody } from '@/lib/api-auth'
+import { CreateBoxTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET() {
@@ -18,18 +20,16 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { name, dimensions, capacities } = body
-    if (!name) {
-      return NextResponse.json({ error: 'Укажите название типа короба' }, { status: 400 })
-    }
+    const result = await validateBody(request, CreateBoxTypeSchema)
+    if ('error' in result) return result.error
+    const { name, dimensions, capacities } = result.data
 
     const boxType = await db.boxType.create({
       data: {
         name,
         dimensions: dimensions || null,
         capacities: capacities && capacities.length > 0 ? {
-          create: capacities.map((c: { productId: string; size: string; maxQty: number }) => ({
+          create: capacities.map((c) => ({
             productId: c.productId,
             size: c.size,
             maxQty: c.maxQty,
