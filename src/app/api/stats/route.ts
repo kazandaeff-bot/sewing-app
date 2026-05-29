@@ -10,8 +10,8 @@ export const GET = withAuth(async (req, ctx, user) => {
       inProgressTasks,
       pendingQcTasks,
       newTasks,
-      totalReworks,
-      pendingReworks,
+      totalSewingReworks,
+      pendingSewingReworks,
       totalFabricDefects,
       employeeStats,
     ] = await Promise.all([
@@ -20,16 +20,12 @@ export const GET = withAuth(async (req, ctx, user) => {
       db.task.count({ where: { status: 'in_progress' } }),
       db.task.count({ where: { status: 'pending_qc' } }),
       db.task.count({ where: { status: 'new' } }),
-      db.rework.count(),
-      db.rework.count({ where: { status: 'pending' } }),
+      db.sewingRework.count(),
+      db.sewingRework.count({ where: { status: 'pending' } }),
       db.task.aggregate({ _sum: { fabricDefect: true } }),
       db.employee.findMany({
         include: {
-          tasks: {
-            include: {
-              reworks: true,
-            },
-          },
+          tasks: true,
         },
         orderBy: { code: 'asc' },
       }),
@@ -42,11 +38,6 @@ export const GET = withAuth(async (req, ctx, user) => {
       const pendingQc = emp.tasks.filter((t) => t.status === 'pending_qc').length
       const newCount = emp.tasks.filter((t) => t.status === 'new').length
       const totalDefects = emp.tasks.reduce((sum, t) => sum + t.fabricDefect, 0)
-      const totalReworksForEmp = emp.tasks.reduce((sum, t) => sum + t.reworks.length, 0)
-      const pendingReworksForEmp = emp.tasks.reduce(
-        (sum, t) => sum + t.reworks.filter((r) => r.status === 'pending').length,
-        0
-      )
       return {
         id: emp.id,
         name: emp.name,
@@ -58,8 +49,6 @@ export const GET = withAuth(async (req, ctx, user) => {
         pendingQc,
         new: newCount,
         totalDefects,
-        totalReworks: totalReworksForEmp,
-        pendingReworks: pendingReworksForEmp,
       }
     })
 
@@ -69,8 +58,8 @@ export const GET = withAuth(async (req, ctx, user) => {
       inProgressTasks,
       pendingQcTasks,
       newTasks,
-      totalReworks,
-      pendingReworks,
+      totalSewingReworks,
+      pendingSewingReworks,
       totalFabricDefects: totalFabricDefects._sum.fabricDefect || 0,
       perEmployee,
     })

@@ -165,13 +165,6 @@ export const UpdateSewingReworkSchema = z.object({
   status: SewingReworkStatus,
 })
 
-// --- Rework Reasons ---
-
-export const CreateReworkReasonSchema = z.object({
-  productId: cuid,
-  text: z.string().min(1, 'Укажите причину'),
-})
-
 // --- Ironing ---
 
 export const IroningUpdateSchema = z.object({
@@ -386,18 +379,6 @@ export const UpdateTaskSchema = z.object({
   productId: cuid.optional(),
 })
 
-// --- Reworks (Legacy) ---
-
-export const CreateReworkSchema = z.object({
-  taskId: cuid,
-  quantity: positiveInt,
-  reason: z.string().min(1, 'Укажите причину'),
-})
-
-export const UpdateReworkSchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'pending_qc', 'completed']),
-})
-
 // --- Param schemas (for URL [id] segments) ---
 
 export const IdParamSchema = z.object({
@@ -419,14 +400,6 @@ export const SewingTasksQuerySchema = z.object({
 export const SewingReworksQuerySchema = z.object({
   status: SewingReworkStatus.optional(),
   sewingTaskId: cuid.optional(),
-})
-
-export const ReworksQuerySchema = z.object({
-  status: z.enum(['pending', 'in_progress', 'pending_qc', 'completed']).optional(),
-})
-
-export const ReworkReasonsQuerySchema = z.object({
-  productId: cuid.optional(),
 })
 
 export const CuttingLeftoversQuerySchema = z.object({

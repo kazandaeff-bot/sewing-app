@@ -39,7 +39,6 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
       include: {
         employee: true,
         product: true,
-        reworks: true,
       },
     })
 

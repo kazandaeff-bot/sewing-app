@@ -276,7 +276,7 @@ export interface BoxType {
   capacities: BoxTypeCapacity[]
 }
 
-// Legacy task model (old system, to be removed)
+// Legacy task model (old system)
 export interface TaskWithRelations {
   id: string
   employeeId: string
@@ -294,19 +294,6 @@ export interface TaskWithRelations {
   updatedAt: string
   employee: Employee
   product: Product
-  reworks: Rework[]
-}
-
-// Legacy rework model (old system, to be removed)
-export interface Rework {
-  id: string
-  taskId: string
-  quantity: number
-  reason: string
-  status: string
-  createdAt: string
-  updatedAt: string
-  task?: TaskWithRelations
 }
 
 // Dashboard stats
@@ -316,8 +303,8 @@ export interface Stats {
   inProgressTasks: number
   pendingQcTasks: number
   newTasks: number
-  totalReworks: number
-  pendingReworks: number
+  totalSewingReworks: number
+  pendingSewingReworks: number
   totalFabricDefects: number
   perEmployee: {
     id: string
@@ -330,8 +317,6 @@ export interface Stats {
     pendingQc: number
     new: number
     totalDefects: number
-    totalReworks: number
-    pendingReworks: number
   }[]
 }
 

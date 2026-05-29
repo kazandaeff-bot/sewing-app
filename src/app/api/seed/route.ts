@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (existingEmployees > 0 && force === 'true') {
-      await db.rework.deleteMany()
       await db.reworkReason.deleteMany()
       await db.task.deleteMany()
       await db.employee.deleteMany()
@@ -82,32 +81,6 @@ export async function GET(request: NextRequest) {
       })
       tasks.push(task)
     }
-
-    // Create some reworks
-    await db.rework.create({
-      data: {
-        taskId: tasks[0].id,
-        quantity: 2,
-        reason: 'Кривой шов на рукаве',
-        status: 'completed',
-      },
-    })
-    await db.rework.create({
-      data: {
-        taskId: tasks[7].id,
-        quantity: 2,
-        reason: 'Неровный шов на подкладке',
-        status: 'pending',
-      },
-    })
-    await db.rework.create({
-      data: {
-        taskId: tasks[0].id,
-        quantity: 1,
-        reason: 'Пятно на ткани',
-        status: 'in_progress',
-      },
-    })
 
     return NextResponse.json({
       message: 'Данные успешно инициализированы',

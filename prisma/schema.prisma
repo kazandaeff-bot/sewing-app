@@ -111,22 +111,10 @@ model Task {
   fabricDefect    Int              @default(0)
   defectNote      String?
   completedAt     DateTime?
-  reworks         Rework[]
   employee        Employee         @relation(fields: [employeeId], references: [id])
   product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
-}
-
-model Rework {
-  id          String   @id @default(cuid())
-  taskId      String
-  quantity    Int
-  reason      String
-  status      String   @default("pending")
-  task        Task     @relation(fields: [taskId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
 }
 
 // Переделки для SewingTaskItem (новая модель)

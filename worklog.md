@@ -95,3 +95,33 @@ Stage Summary:
 - Role-based access: supervisor, sewer, qc, cutter, ironing, seller, customer
 - Auth routes (login, logout, me, session) intentionally left public
 - Pre-existing errors in boxes/route.ts and seed/route.ts unchanged
+---
+Task ID: 4
+Agent: main
+Task: 🟠 Remove old Rework system
+
+Work Log:
+- Audited all Rework-related models, routes, types, and UI references
+- Identified OLD system: `Rework` model (linked to Task), `/api/reworks/`, `/api/rework-reasons/`
+- Identified NEW system to keep: `SewingRework` model (linked to SewingTaskItem), `/api/sewing-reworks/`
+- Identified SHARED to keep: `ReworkReason` model, `reworkRate` on Product, `reworkReasons` includes in Products API
+- Removed `model Rework` and `reworks Rework[]` from Prisma schema
+- Deleted `/api/reworks/` and `/api/rework-reasons/` API directories (orphaned, no UI called them)
+- Removed `CreateReworkSchema`, `UpdateReworkSchema`, `ReworksQuerySchema`, `CreateReworkReasonSchema`, `ReworkReasonsQuerySchema` from schemas.ts
+- Removed `Rework` interface and `reworks: Rework[]` from types/index.ts
+- Updated `Stats` interface: `totalReworks`/`pendingReworks` → `totalSewingReworks`/`pendingSewingReworks`, removed per-employee rework counts
+- Updated stats/route.ts: replaced `db.rework.count()` with `db.sewingRework.count()`, removed `reworks: true` include
+- Updated tasks/route.ts: removed `reworks: true` from all includes
+- Updated tasks/[id]/route.ts: removed `reworks: true` from include
+- Updated seed/route.ts: removed `db.rework.deleteMany()` and all `db.rework.create()` calls
+- Ran `prisma db push --accept-data-loss` (dropped Rework table with 4 rows)
+- Build passed successfully
+- Dev server started and running
+
+Stage Summary:
+- Old Rework model and routes completely removed
+- Database migrated (Rework table dropped)
+- New SewingRework system untouched and fully functional
+- ReworkReason model kept (used by QC tab for dropdown)
+- reworkRate on Product kept (used for pricing calculations)
+- Build ✅, Dev server ✅

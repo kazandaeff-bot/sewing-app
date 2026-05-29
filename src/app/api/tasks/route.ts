@@ -18,7 +18,6 @@ export const GET = withAuth(async (req, ctx, user) => {
       include: {
         employee: true,
         product: true,
-        reworks: true,
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -48,7 +47,6 @@ export const POST = withAuth(async (req, ctx, user) => {
       include: {
         employee: true,
         product: true,
-        reworks: true,
       },
     })
 
