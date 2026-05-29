@@ -1,15 +1,15 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateBoxTypeSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateBoxTypeSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateBoxTypeSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateBoxTypeSchema)
     if ('error' in result) return result.error
     const { name, dimensions, capacities } = result.data
     const updateData: Record<string, unknown> = {}
@@ -40,18 +40,18 @@ export async function PATCH(
     console.error('Update box type error:', error)
     return NextResponse.json({ error: 'Ошибка обновления типа короба' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.boxType.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete box type error:', error)
     return NextResponse.json({ error: 'Ошибка удаления типа короба' }, { status: 500 })
   }
-}
+}, ['supervisor'])

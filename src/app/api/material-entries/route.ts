@@ -1,14 +1,13 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateMaterialEntrySchema } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreateMaterialEntrySchema, MaterialEntriesQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const materialId = searchParams.get('materialId')
-    const type = searchParams.get('type')
-    const cuttingPlanId = searchParams.get('cuttingPlanId')
+    const q = validateQuery(req, MaterialEntriesQuerySchema)
+    if ('error' in q) return q.error
+    const { materialId, type, cuttingPlanId } = q.data
 
     const where: Record<string, unknown> = {}
     if (materialId) where.materialId = materialId
@@ -29,11 +28,11 @@ export async function GET(request: NextRequest) {
     console.error('Get material entries error:', error)
     return NextResponse.json({ error: 'Ошибка получения записей' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateMaterialEntrySchema)
+    const result = await validateBody(req, CreateMaterialEntrySchema)
     if ('error' in result) return result.error
     const { materialId, type, qty, date, cuttingPlanId, note } = result.data
 
@@ -85,7 +84,7 @@ export async function POST(request: NextRequest) {
     console.error('Create material entry error:', error)
     return NextResponse.json({ error: 'Ошибка создания записи' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
 /**
  * Auto-calculate material consumption norms based on actual cutting data.

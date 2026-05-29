@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateBoxTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const boxTypes = await db.boxType.findMany({
       orderBy: { name: 'asc' },
@@ -16,11 +16,11 @@ export async function GET() {
     console.error('Get box types error:', error)
     return NextResponse.json({ error: 'Ошибка получения типов коробов' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateBoxTypeSchema)
+    const result = await validateBody(req, CreateBoxTypeSchema)
     if ('error' in result) return result.error
     const { name, dimensions, capacities } = result.data
 
@@ -45,4 +45,4 @@ export async function POST(request: NextRequest) {
     console.error('Create box type error:', error)
     return NextResponse.json({ error: 'Ошибка создания типа короба' }, { status: 500 })
   }
-}
+}, ['supervisor'])

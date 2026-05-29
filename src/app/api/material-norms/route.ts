@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateMaterialNormSchema } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreateMaterialNormSchema, IdParamSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const norms = await db.materialNorm.findMany({
       orderBy: { productId: 'asc' },
@@ -14,11 +14,11 @@ export async function GET() {
     console.error('Get material norms error:', error)
     return NextResponse.json({ error: 'Ошибка получения норм расходов' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateMaterialNormSchema)
+    const result = await validateBody(req, CreateMaterialNormSchema)
     if ('error' in result) return result.error
     const { materialId, productId, consumptionPerUnit, unit, autoCalculated } = result.data
     const norm = await db.materialNorm.create({
@@ -39,19 +39,18 @@ export async function POST(request: NextRequest) {
     console.error('Create material norm error:', error)
     return NextResponse.json({ error: 'Ошибка создания нормы расхода' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-    if (!id) {
-      return NextResponse.json({ error: 'Укажите ID нормы' }, { status: 400, headers: { 'Cache-Control': 'no-store' } })
-    }
+    const q = validateQuery(req, IdParamSchema)
+    if ('error' in q) return q.error
+    const { id } = q.data
+
     await db.materialNorm.delete({ where: { id } })
     return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Delete material norm error:', error)
     return NextResponse.json({ error: 'Ошибка удаления нормы расхода' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])

@@ -1,21 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { CreateSewingReworkSchema, SewingReworkStatus } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreateSewingReworkSchema, SewingReworksQuerySchema } from '@/lib/schemas'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const sewingTaskId = searchParams.get('sewingTaskId')
+    const q = validateQuery(req, SewingReworksQuerySchema)
+    if ('error' in q) return q.error
+    const { status, sewingTaskId } = q.data
 
     const where: Record<string, unknown> = {}
-    if (status) {
-      if (!SewingReworkStatus.options.includes(status as any)) {
-        return NextResponse.json({ error: 'Неверный статус фильтра' }, { status: 400 })
-      }
-      where.status = status
-    }
+    if (status) where.status = status
     if (sewingTaskId) where.sewingTaskId = sewingTaskId
 
     const reworks = await db.sewingRework.findMany({
@@ -41,11 +36,11 @@ export async function GET(request: NextRequest) {
     console.error('Get sewing reworks error:', error)
     return NextResponse.json({ error: 'Ошибка получения переделок' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateSewingReworkSchema)
+    const result = await validateBody(req, CreateSewingReworkSchema)
     if ('error' in result) return result.error
     const { sewingTaskItemId, sewingTaskId, quantity, reason } = result.data
 
@@ -61,7 +56,7 @@ export async function POST(request: NextRequest) {
       data: {
         sewingTaskItemId,
         sewingTaskId,
-        quantity,  // Already a proper integer from Zod coercion
+        quantity,
         reason,
       },
       include: {
@@ -84,4 +79,4 @@ export async function POST(request: NextRequest) {
     console.error('Create sewing rework error:', error)
     return NextResponse.json({ error: 'Ошибка создания переделки' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])

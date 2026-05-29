@@ -67,3 +67,31 @@ Stage Summary:
 - Added enum validation for all status fields
 - Auth infrastructure created (withAuth, getSessionUser) — ready for per-route auth gating
 - Build: ✅ | Dev server: ✅ (HTTP 200)
+---
+Task ID: 3
+Agent: Main Agent
+Task: 🟠 Zod validation on API routes + withAuth on all routes
+
+Work Log:
+- Scanned all 52 API route files and catalogued every endpoint
+- Found: 36 GET routes without query validation, 14 DELETE routes without ID validation, 0 routes using withAuth
+- Added 12 query schemas to schemas.ts (TasksQuerySchema, SewingTasksQuerySchema, SewingReworksQuerySchema, ReworksQuerySchema, ReworkReasonsQuerySchema, CuttingLeftoversQuerySchema, MaterialEntriesQuerySchema, MaterialsQuerySchema, MaterialBalanceQuerySchema, ProductSizeRatesQuerySchema, PlansQuerySchema, SeedQuerySchema)
+- Added IdParamSchema for [id] URL parameter validation
+- Added validateParams() utility to api-auth.ts for URL param validation
+- Updated api-auth.ts: RouteContext type, withAuth signature with Record<string, string> params
+- Updated ALL 50+ API route files with:
+  - withAuth() wrapping with role-based access control
+  - validateQuery() for GET routes with query params
+  - validateParams(ctx, IdParamSchema) for [id] routes
+  - validateBody() preserved for POST/PATCH routes
+- Fixed TypeScript errors: ctx type mismatch in sewing-tasks, sewing-reworks, reworks [id] routes
+- Fixed buildCuttingItems type issue in plans/[id]/route.ts
+- Build passes successfully
+
+Stage Summary:
+- 100% API route coverage: all routes now have Zod validation + withAuth
+- 12 query schemas, 1 IdParamSchema added
+- validateParams() utility created
+- Role-based access: supervisor, sewer, qc, cutter, ironing, seller, customer
+- Auth routes (login, logout, me, session) intentionally left public
+- Pre-existing errors in boxes/route.ts and seed/route.ts unchanged

@@ -1,12 +1,14 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateParams } from '@/lib/api-auth'
+import { IdParamSchema } from '@/lib/schemas'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const box = await db.box.findUnique({
       where: { id },
       include: {
@@ -65,4 +67,4 @@ export async function GET(
     console.error('Get print data error:', error)
     return NextResponse.json({ error: 'Ошибка получения данных для печати' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])

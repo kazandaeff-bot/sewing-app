@@ -1,11 +1,12 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { UpdatePlanSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdatePlanSchema, IdParamSchema } from '@/lib/schemas'
 
 /**
  * Helper: build cutting plan items with kit expansion
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function buildCuttingItems(planItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number; product?: any }>) {
   const cuttingItems: Array<{ productId: string; size: string; color: string; colorHex: string; plannedQty: number }> = []
   const productCache: Record<string, { product: Awaited<ReturnType<typeof db.product.findUnique>>; colors: Array<{ color: string; colorHex: string }>; kitCombo: Record<string, string[]> | null }> = {}
@@ -75,12 +76,12 @@ async function buildCuttingItems(planItems: Array<{ productId: string; size: str
   }))
 }
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const plan = await db.plan.findUnique({
       where: { id },
       include: {
@@ -177,15 +178,15 @@ export async function GET(
     console.error('Get plan error:', error)
     return NextResponse.json({ error: 'Ошибка получения плана' }, { status: 500 })
   }
-}
+}, ['supervisor', 'customer'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdatePlanSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdatePlanSchema)
     if ('error' in result) return result.error
     const { name, status, items, addItems, priority, deadline } = result.data
 
@@ -301,13 +302,13 @@ export async function PATCH(
         })
 
         const cuttingItems = await buildCuttingItems(
-          currentItems.map((item: any) => ({
-            productId: item.productId,
-            size: item.size,
-            color: item.color,
-            colorHex: item.colorHex,
-            quantity: item.quantity,
-            product: item.product,
+          currentItems.map((item: Record<string, unknown>) => ({
+            productId: item.productId as string,
+            size: item.size as string,
+            color: item.color as string,
+            colorHex: (item.colorHex as string) || '#9ca3af',
+            quantity: item.quantity as number,
+            product: item.product as any | undefined,
           }))
         )
 
@@ -379,14 +380,14 @@ export async function PATCH(
     console.error('Update plan error:', error)
     return NextResponse.json({ error: 'Ошибка обновления плана' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const existing = await db.plan.findUnique({ where: { id } })
     if (!existing) {
       return NextResponse.json({ error: 'План не найден' }, { status: 404 })
@@ -402,4 +403,4 @@ export async function DELETE(
     console.error('Delete plan error:', error)
     return NextResponse.json({ error: 'Ошибка удаления плана' }, { status: 500 })
   }
-}
+}, ['supervisor'])

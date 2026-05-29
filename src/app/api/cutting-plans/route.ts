@@ -1,7 +1,8 @@
 import { db } from '@/lib/db'
+import { withAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const cuttingPlans = await db.cuttingPlan.findMany({
       orderBy: { createdAt: 'desc' },
@@ -24,4 +25,4 @@ export async function GET() {
     console.error('Get cutting plans error:', error)
     return NextResponse.json({ error: 'Ошибка получения планов раскроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])

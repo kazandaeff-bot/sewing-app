@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateSellerPlanSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateSellerPlanSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const sellerPlan = await db.sellerPlan.findUnique({
       where: { id },
       include: {
@@ -34,15 +34,15 @@ export async function GET(
     console.error('Get seller plan error:', error)
     return NextResponse.json({ error: 'Ошибка получения плана селлера' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateSellerPlanSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateSellerPlanSchema)
     if ('error' in result) return result.error
     const { status, items, sellerName, customerId } = result.data
 
@@ -107,14 +107,14 @@ export async function PATCH(
     console.error('Update seller plan error:', error)
     return NextResponse.json({ error: 'Ошибка обновления плана селлера' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.sellerPlanCity.deleteMany({
       where: { sellerPlanItem: { sellerPlanId: id } },
     })
@@ -129,4 +129,4 @@ export async function DELETE(
     console.error('Delete seller plan error:', error)
     return NextResponse.json({ error: 'Ошибка удаления плана селлера' }, { status: 500 })
   }
-}
+}, ['supervisor'])

@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateBoxSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const boxes = await db.box.findMany({
       orderBy: [{ city: 'asc' }, { boxNumber: 'asc' }],
@@ -20,11 +20,11 @@ export async function GET() {
     console.error('Get boxes error:', error)
     return NextResponse.json({ error: 'Ошибка получения коробов' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateBoxSchema)
+    const result = await validateBody(req, CreateBoxSchema)
     if ('error' in result) return result.error
     const { sellerPlanId } = result.data
 
@@ -117,4 +117,4 @@ export async function POST(request: NextRequest) {
     console.error('Create boxes error:', error)
     return NextResponse.json({ error: 'Ошибка генерации коробов' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])

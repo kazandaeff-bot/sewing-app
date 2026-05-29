@@ -1,10 +1,10 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody, withAuth } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateEmployeeSchema, UpdateEmployeeSchema } from '@/lib/schemas'
 import { hashPassword } from '@/lib/auth'
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const employees = await db.employee.findMany({
       orderBy: { code: 'asc' },
@@ -25,11 +25,11 @@ export async function GET(req: NextRequest) {
     console.error('Get employees error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка сотрудников' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateEmployeeSchema)
+    const result = await validateBody(req, CreateEmployeeSchema)
     if ('error' in result) return result.error
     const { name, code, role, username, password, customerId } = result.data
 
@@ -60,4 +60,4 @@ export async function POST(request: NextRequest) {
     console.error('Create employee error:', error)
     return NextResponse.json({ error: 'Ошибка создания сотрудника' }, { status: 500 })
   }
-}
+}, ['supervisor'])

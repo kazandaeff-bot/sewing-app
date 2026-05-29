@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateParams } from '@/lib/api-auth'
+import { IdParamSchema } from '@/lib/schemas'
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
 
     // Find the entry first to reverse the stock change
     const entry = await db.materialEntry.findUnique({ where: { id } })
@@ -32,4 +33,4 @@ export async function DELETE(
     console.error('Delete material entry error:', error)
     return NextResponse.json({ error: 'Ошибка удаления записи' }, { status: 500 })
   }
-}
+}, ['supervisor'])

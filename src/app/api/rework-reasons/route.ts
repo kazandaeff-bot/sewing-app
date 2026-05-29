@@ -1,12 +1,14 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateReworkReasonSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateQuery, validateBody } from '@/lib/api-auth'
+import { CreateReworkReasonSchema, ReworkReasonsQuerySchema } from '@/lib/schemas'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const productId = searchParams.get('productId')
+    const q = validateQuery(req, ReworkReasonsQuerySchema)
+    if ('error' in q) return q.error
+    const { productId } = q.data
+
     const where: Record<string, unknown> = {}
     if (productId) where.productId = productId
     const reasons = await db.reworkReason.findMany({ where, orderBy: { createdAt: 'desc' } })
@@ -15,11 +17,11 @@ export async function GET(request: NextRequest) {
     console.error('Get rework reasons error:', error)
     return NextResponse.json({ error: 'Ошибка получения причин переделок' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateReworkReasonSchema)
+    const result = await validateBody(req, CreateReworkReasonSchema)
     if ('error' in result) return result.error
     const { productId, text } = result.data
     const reason = await db.reworkReason.create({ data: { productId, text } })
@@ -28,4 +30,4 @@ export async function POST(request: NextRequest) {
     console.error('Create rework reason error:', error)
     return NextResponse.json({ error: 'Ошибка создания причины переделки' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])

@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { IroningUpdateSchema } from '@/lib/schemas'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     // Get all SewingTaskItems with status pending_ironing, grouped by SewingTask
     const items = await db.sewingTaskItem.findMany({
@@ -39,11 +39,11 @@ export async function GET() {
     console.error('Get ironing items error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка на утюжку' }, { status: 500 })
   }
-}
+}, ['supervisor', 'ironing'])
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, IroningUpdateSchema)
+    const result = await validateBody(req, IroningUpdateSchema)
     if ('error' in result) return result.error
     const { itemIds } = result.data
 
@@ -102,4 +102,4 @@ export async function PATCH(request: NextRequest) {
     console.error('Ironing update error:', error)
     return NextResponse.json({ error: 'Ошибка обновления статуса утюжки' }, { status: 500 })
   }
-}
+}, ['supervisor', 'ironing'])

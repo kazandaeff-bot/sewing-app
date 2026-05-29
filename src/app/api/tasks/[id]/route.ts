@@ -1,15 +1,15 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateTaskSchema } from '@/lib/schemas'
+import { withAuth, validateParams, validateBody } from '@/lib/api-auth'
+import { IdParamSchema, UpdateTaskSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateTaskSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateTaskSchema)
     if ('error' in result) return result.error
     const {
       actualQuantity, fabricDefect, defectNote, status,
@@ -48,18 +48,18 @@ export async function PATCH(
     console.error('Update task error:', error)
     return NextResponse.json({ error: 'Ошибка обновления задания' }, { status: 500 })
   }
-}
+}, ['supervisor', 'sewer'])
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.task.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete task error:', error)
     return NextResponse.json({ error: 'Ошибка удаления задания' }, { status: 500 })
   }
-}
+}, ['supervisor'])

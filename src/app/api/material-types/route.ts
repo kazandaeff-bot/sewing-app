@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateMaterialTypeSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const types = await db.materialType.findMany({
       orderBy: { name: 'asc' },
@@ -14,11 +14,11 @@ export async function GET() {
     console.error('Get material types error:', error)
     return NextResponse.json({ error: 'Ошибка получения типов материалов' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateMaterialTypeSchema)
+    const result = await validateBody(req, CreateMaterialTypeSchema)
     if ('error' in result) return result.error
     const { name, unit } = result.data
     const type = await db.materialType.create({
@@ -33,4 +33,4 @@ export async function POST(request: NextRequest) {
     console.error('Create material type error:', error)
     return NextResponse.json({ error: 'Ошибка создания типа материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])

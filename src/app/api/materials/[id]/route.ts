@@ -1,15 +1,15 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateMaterialSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateMaterialSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateMaterialSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateMaterialSchema)
     if ('error' in result) return result.error
 
     const material = await db.material.update({
@@ -22,18 +22,18 @@ export async function PATCH(
     console.error('Update material error:', error)
     return NextResponse.json({ error: 'Ошибка обновления материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.material.delete({ where: { id } })
     return NextResponse.json({ success: true }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
     console.error('Delete material error:', error)
     return NextResponse.json({ error: 'Ошибка удаления материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])

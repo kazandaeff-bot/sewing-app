@@ -1,14 +1,13 @@
 import { db } from '@/lib/db'
+import { withAuth, validateQuery } from '@/lib/api-auth'
+import { MaterialBalanceQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const customerId = searchParams.get('customerId')
-
-    if (!customerId) {
-      return NextResponse.json({ error: 'Укажите customerId' }, { status: 400 })
-    }
+    const q = validateQuery(request, MaterialBalanceQuerySchema)
+    if ('error' in q) return q.error
+    const { customerId } = q.data
 
     // Check if the customer has showMaterialBalance enabled
     const customer = await db.customer.findUnique({ where: { id: customerId } })
@@ -81,4 +80,4 @@ export async function GET(request: NextRequest) {
     console.error('Get material balance error:', error)
     return NextResponse.json({ error: 'Ошибка получения остатков материалов' }, { status: 500 })
   }
-}
+}, ['supervisor', 'customer'])

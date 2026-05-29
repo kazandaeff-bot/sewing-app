@@ -1,26 +1,12 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateSellerPlanSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-/**
- * Helper: get current user from session cookie
- */
-function getSessionUser(request: NextRequest) {
-  try {
-    const token = request.cookies.get('session')?.value
-    if (!token) return null
-    return JSON.parse(Buffer.from(token, 'base64').toString())
-  } catch {
-    return null
-  }
-}
-
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     // If user is a "customer" role, filter by their customerId
-    const user = getSessionUser(request)
-    const where = (user?.role === 'customer' && user?.customerId)
+    const where = (user.role === 'customer' && user.customerId)
       ? { customerId: user.customerId }
       : {}
 
@@ -48,11 +34,11 @@ export async function GET(request: NextRequest) {
     console.error('Get seller plans error:', error)
     return NextResponse.json({ error: 'Ошибка получения планов от селлеров' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateSellerPlanSchema)
+    const result = await validateBody(req, CreateSellerPlanSchema)
     if ('error' in result) return result.error
     const { sellerName, customerId, planId, items } = result.data
     let resolvedCustomerId = customerId ?? null
@@ -147,4 +133,4 @@ export async function POST(request: NextRequest) {
     console.error('Create seller plan error:', error)
     return NextResponse.json({ error: 'Ошибка создания плана селлера' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])

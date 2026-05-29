@@ -1,13 +1,13 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateSewingTaskSchema } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreateSewingTaskSchema, SewingTasksQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const employeeId = searchParams.get('employeeId')
-    const status = searchParams.get('status')
+    const q = validateQuery(req, SewingTasksQuerySchema)
+    if ('error' in q) return q.error
+    const { employeeId, status } = q.data
 
     const where: Record<string, unknown> = {}
     if (employeeId) where.employeeId = employeeId
@@ -36,11 +36,11 @@ export async function GET(request: NextRequest) {
     console.error('Get sewing tasks error:', error)
     return NextResponse.json({ error: 'Ошибка получения заданий для швей' }, { status: 500 })
   }
-}
+}, ['supervisor', 'sewer', 'qc'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateSewingTaskSchema)
+    const result = await validateBody(req, CreateSewingTaskSchema)
     if ('error' in result) return result.error
     const { cuttingPlanId, employeeId, items } = result.data
 
@@ -113,4 +113,4 @@ export async function POST(request: NextRequest) {
     console.error('Create sewing task error:', error)
     return NextResponse.json({ error: 'Ошибка создания задания' }, { status: 500 })
   }
-}
+}, ['supervisor'])

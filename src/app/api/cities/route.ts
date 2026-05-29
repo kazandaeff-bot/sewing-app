@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateCitySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const cities = await db.city.findMany({ orderBy: { name: 'asc' } })
     return NextResponse.json(cities)
@@ -11,11 +11,11 @@ export async function GET() {
     console.error('Get cities error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка городов' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateCitySchema)
+    const result = await validateBody(req, CreateCitySchema)
     if ('error' in result) return result.error
     const { name } = result.data
     const city = await db.city.create({ data: { name } })
@@ -24,4 +24,4 @@ export async function POST(request: NextRequest) {
     console.error('Create city error:', error)
     return NextResponse.json({ error: 'Ошибка создания города' }, { status: 500 })
   }
-}
+}, ['supervisor'])

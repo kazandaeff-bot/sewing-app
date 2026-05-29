@@ -1,12 +1,13 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateMaterialSchema } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreateMaterialSchema, MaterialsQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const customerId = searchParams.get('customerId')
+    const q = validateQuery(request, MaterialsQuerySchema)
+    if ('error' in q) return q.error
+    const { customerId } = q.data
 
     // If customerId is provided, filter materials by customer's products
     if (customerId) {
@@ -50,9 +51,9 @@ export async function GET(request: NextRequest) {
     console.error('Get materials error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка материалов' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor', 'customer'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     const result = await validateBody(request, CreateMaterialSchema)
     if ('error' in result) return result.error
@@ -71,4 +72,4 @@ export async function POST(request: NextRequest) {
     console.error('Create material error:', error)
     return NextResponse.json({ error: 'Ошибка создания материала' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])

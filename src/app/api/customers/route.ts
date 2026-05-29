@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateCustomerSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const customers = await db.customer.findMany({
       orderBy: { name: 'asc' },
@@ -14,11 +14,11 @@ export async function GET() {
     console.error('Get customers error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка заказчиков' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateCustomerSchema)
+    const result = await validateBody(req, CreateCustomerSchema)
     if ('error' in result) return result.error
     const { name, contactInfo } = result.data
     const customer = await db.customer.create({
@@ -33,4 +33,4 @@ export async function POST(request: NextRequest) {
     console.error('Create customer error:', error)
     return NextResponse.json({ error: 'Ошибка создания заказчика' }, { status: 500, headers: { 'Cache-Control': 'no-store' } })
   }
-}
+}, ['supervisor'])

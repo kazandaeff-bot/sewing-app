@@ -1,19 +1,18 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateReworkSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateReworkSchema, IdParamSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateReworkSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateReworkSchema)
     if ('error' in result) return result.error
     const { status } = result.data
 
-    // When seamstress marks rework as done → goes back to QC
     if (status === 'pending_qc') {
       const existingRework = await db.rework.findUnique({ where: { id } })
       if (existingRework) {
@@ -24,7 +23,6 @@ export async function PATCH(
       }
     }
 
-    // When QC approves the rework → add quantity to actual and complete
     if (status === 'completed') {
       const existingRework = await db.rework.findUnique({
         where: { id },
@@ -54,4 +52,4 @@ export async function PATCH(
     console.error('Update rework error:', error)
     return NextResponse.json({ error: 'Ошибка обновления переделки' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])

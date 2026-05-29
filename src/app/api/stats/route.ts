@@ -1,7 +1,8 @@
 import { db } from '@/lib/db'
-import { NextResponse } from 'next/server'
+import { withAuth } from '@/lib/api-auth'
+import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const [
       totalTasks,
@@ -77,4 +78,4 @@ export async function GET() {
     console.error('Get stats error:', error)
     return NextResponse.json({ error: 'Ошибка получения статистики' }, { status: 500 })
   }
-}
+}, ['supervisor'])

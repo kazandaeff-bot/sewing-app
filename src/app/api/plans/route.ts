@@ -1,31 +1,17 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { CreatePlanSchema } from '@/lib/schemas'
+import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
+import { CreatePlanSchema, PlansQuerySchema } from '@/lib/schemas'
 
-/**
- * Helper: get current user from session cookie
- */
-function getSessionUser(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const token = request.cookies.get('session')?.value
-    if (!token) return null
-    return JSON.parse(Buffer.from(token, 'base64').toString())
-  } catch {
-    return null
-  }
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const queryCustomerId = searchParams.get('customerId')
+    const q = validateQuery(req, PlansQuerySchema)
+    if ('error' in q) return q.error
+    const { customerId } = q.data
 
     // If user is a "customer" role, force filter by their customerId
-    const user = getSessionUser(request)
-    let filterCustomerId = queryCustomerId
-
-    if (user?.role === 'customer' && user?.customerId) {
+    let filterCustomerId = customerId
+    if (user.role === 'customer' && user.customerId) {
       filterCustomerId = user.customerId
     }
 
@@ -52,11 +38,11 @@ export async function GET(request: NextRequest) {
     console.error('Get plans error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка планов' }, { status: 500 })
   }
-}
+}, ['supervisor', 'customer'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreatePlanSchema)
+    const result = await validateBody(req, CreatePlanSchema)
     if ('error' in result) return result.error
     const { customerId, items, priority, deadline } = result.data
 
@@ -107,4 +93,4 @@ export async function POST(request: NextRequest) {
     console.error('Create plan error:', error)
     return NextResponse.json({ error: 'Ошибка создания плана' }, { status: 500 })
   }
-}
+}, ['supervisor'])

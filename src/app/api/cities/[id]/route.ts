@@ -1,16 +1,18 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
+import { withAuth, validateParams } from '@/lib/api-auth'
+import { IdParamSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.city.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete city error:', error)
     return NextResponse.json({ error: 'Ошибка удаления города' }, { status: 500 })
   }
-}
+}, ['supervisor'])

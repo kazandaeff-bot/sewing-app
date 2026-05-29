@@ -57,6 +57,28 @@ export function validateQuery<T>(
   }
 }
 
+/** Validate URL params (e.g. [id]) against a Zod schema. Returns parsed data or error response. */
+export async function validateParams<T>(
+  ctx: { params: Promise<Record<string, string>> },
+  schema: ZodSchema<T>,
+): Promise<{ data: T } | { error: NextResponse }> {
+  const rawParams = await ctx.params
+  const result = schema.safeParse(rawParams)
+  if (result.success) {
+    return { data: result.data }
+  }
+  const issues = result.error.issues.map((i) => ({
+    path: i.path.join('.'),
+    message: i.message,
+  }))
+  return {
+    error: NextResponse.json(
+      { error: 'Ошибка валидации параметров URL', details: issues },
+      { status: 400 },
+    ),
+  }
+}
+
 // --- Auth middleware for API routes ---
 
 export interface SessionUser {
@@ -87,18 +109,24 @@ export async function getSessionUser(req: NextRequest): Promise<SessionUser | nu
   }
 }
 
-type HandlerFn = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<NextResponse>
+type RouteContext = { params: Promise<Record<string, string>> }
+
+type AuthedHandler = (
+  req: NextRequest,
+  ctx: RouteContext,
+  user: SessionUser,
+) => Promise<NextResponse>
 
 /**
  * Wrap an API route handler with authentication and optional role check.
  *
  * Usage:
- *   export const PATCH = withAuth(async (req, { params }) => { ... }, ['supervisor'])
+ *   export const PATCH = withAuth(async (req, { params }, user) => { ... }, ['supervisor'])
  */
 export function withAuth(
-  handler: (req: NextRequest, ctx: { params: Promise<{ id: string }> }, user: SessionUser) => Promise<NextResponse>,
+  handler: AuthedHandler,
   allowedRoles?: string[],
-): HandlerFn {
+): (req: NextRequest, ctx: RouteContext) => Promise<NextResponse> {
   return async (req, ctx) => {
     const user = await getSessionUser(req)
     if (!user) {

@@ -398,6 +398,68 @@ export const UpdateReworkSchema = z.object({
   status: z.enum(['pending', 'in_progress', 'pending_qc', 'completed']),
 })
 
+// --- Param schemas (for URL [id] segments) ---
+
+export const IdParamSchema = z.object({
+  id: cuid,
+})
+
+// --- Query schemas (for GET request search params) ---
+
+export const TasksQuerySchema = z.object({
+  employeeId: cuid.optional(),
+  status: z.string().optional(),
+})
+
+export const SewingTasksQuerySchema = z.object({
+  employeeId: cuid.optional(),
+  status: SewingTaskStatus.optional(),
+})
+
+export const SewingReworksQuerySchema = z.object({
+  status: SewingReworkStatus.optional(),
+  sewingTaskId: cuid.optional(),
+})
+
+export const ReworksQuerySchema = z.object({
+  status: z.enum(['pending', 'in_progress', 'pending_qc', 'completed']).optional(),
+})
+
+export const ReworkReasonsQuerySchema = z.object({
+  productId: cuid.optional(),
+})
+
+export const CuttingLeftoversQuerySchema = z.object({
+  status: z.string().optional(),
+  customerId: cuid.optional(),
+})
+
+export const MaterialEntriesQuerySchema = z.object({
+  materialId: cuid.optional(),
+  type: MaterialEntryType.optional(),
+  cuttingPlanId: cuid.optional(),
+})
+
+export const MaterialsQuerySchema = z.object({
+  customerId: cuid.optional(),
+})
+
+export const MaterialBalanceQuerySchema = z.object({
+  customerId: cuid,
+})
+
+export const ProductSizeRatesQuerySchema = z.object({
+  productId: cuid,
+})
+
+export const PlansQuerySchema = z.object({
+  customerId: cuid.optional(),
+})
+
+export const SeedQuerySchema = z.object({
+  force: z.enum(['true']).optional(),
+})
+
 // --- Print ---
 
 export const PrintQuerySchema = z.object({

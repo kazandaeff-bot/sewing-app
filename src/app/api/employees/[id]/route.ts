@@ -1,16 +1,16 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateEmployeeSchema } from '@/lib/schemas'
+import { withAuth, validateParams, validateBody } from '@/lib/api-auth'
+import { IdParamSchema, UpdateEmployeeSchema } from '@/lib/schemas'
 import { hashPassword } from '@/lib/auth'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateEmployeeSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateEmployeeSchema)
     if ('error' in result) return result.error
     const { name, code, role, username, password, customerId } = result.data
 
@@ -28,18 +28,18 @@ export async function PATCH(
     console.error('Update employee error:', error)
     return NextResponse.json({ error: 'Ошибка обновления сотрудника' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.employee.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete employee error:', error)
     return NextResponse.json({ error: 'Ошибка удаления сотрудника' }, { status: 500 })
   }
-}
+}, ['supervisor'])

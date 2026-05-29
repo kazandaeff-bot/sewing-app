@@ -1,21 +1,15 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { CreateProductSizeRateSchema, UpdateProductSizeRateSchema, DeleteProductSizeRateSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateQuery, validateBody } from '@/lib/api-auth'
+import { CreateProductSizeRateSchema, UpdateProductSizeRateSchema, DeleteProductSizeRateSchema, ProductSizeRatesQuerySchema } from '@/lib/schemas'
 
 const HEADERS = { 'Cache-Control': 'no-store' }
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const productId = searchParams.get('productId')
-
-    if (!productId) {
-      return NextResponse.json(
-        { error: 'Укажите productId' },
-        { status: 400, headers: HEADERS }
-      )
-    }
+    const q = validateQuery(req, ProductSizeRatesQuerySchema)
+    if ('error' in q) return q.error
+    const { productId } = q.data
 
     const sizeRates = await db.productSizeRate.findMany({
       where: { productId },
@@ -31,11 +25,11 @@ export async function GET(request: NextRequest) {
       { status: 500, headers: HEADERS }
     )
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateProductSizeRateSchema)
+    const result = await validateBody(req, CreateProductSizeRateSchema)
     if ('error' in result) return result.error
     const { productId, size, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
 
@@ -70,15 +64,15 @@ export async function POST(request: NextRequest) {
       { status: 500, headers: HEADERS }
     )
   }
-}
+}, ['supervisor'])
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, UpdateProductSizeRateSchema)
+    const result = await validateBody(req, UpdateProductSizeRateSchema)
     if ('error' in result) return result.error
     const { id, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
 
-    const data: Record<string, any> = {}
+    const data: Record<string, unknown> = {}
     if (sewerRate !== undefined) data.sewerRate = sewerRate
     if (homeRate !== undefined) data.homeRate = homeRate
     if (qcRate !== undefined) data.qcRate = qcRate
@@ -92,9 +86,10 @@ export async function PATCH(request: NextRequest) {
     })
 
     return NextResponse.json(sizeRate, { headers: HEADERS })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update product size rate error:', error)
-    if (error?.code === 'P2025') {
+    const prismaError = error as { code?: string }
+    if (prismaError.code === 'P2025') {
       return NextResponse.json(
         { error: 'Ставка по размеру не найдена' },
         { status: 404, headers: HEADERS }
@@ -105,20 +100,21 @@ export async function PATCH(request: NextRequest) {
       { status: 500, headers: HEADERS }
     )
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(request: NextRequest) {
+export const DELETE = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, DeleteProductSizeRateSchema)
+    const result = await validateBody(req, DeleteProductSizeRateSchema)
     if ('error' in result) return result.error
     const { id } = result.data
 
     await db.productSizeRate.delete({ where: { id } })
 
     return NextResponse.json({ success: true }, { headers: HEADERS })
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete product size rate error:', error)
-    if (error?.code === 'P2025') {
+    const prismaError = error as { code?: string }
+    if (prismaError.code === 'P2025') {
       return NextResponse.json(
         { error: 'Ставка по размеру не найдена' },
         { status: 404, headers: HEADERS }
@@ -129,4 +125,4 @@ export async function DELETE(request: NextRequest) {
       { status: 500, headers: HEADERS }
     )
   }
-}
+}, ['supervisor'])

@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateCuttingLeftoverSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateCuttingLeftoverSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const leftover = await db.cuttingLeftover.findUnique({
       where: { id },
       include: {
@@ -30,15 +30,15 @@ export async function GET(
     console.error('Get cutting leftover error:', error)
     return NextResponse.json({ error: 'Ошибка получения остатка кроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateCuttingLeftoverSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateCuttingLeftoverSchema)
     if ('error' in result) return result.error
     const { sewnQty, status, note, quantity } = result.data
 
@@ -81,18 +81,18 @@ export async function PATCH(
     console.error('Update cutting leftover error:', error)
     return NextResponse.json({ error: 'Ошибка обновления остатка кроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.cuttingLeftover.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete cutting leftover error:', error)
     return NextResponse.json({ error: 'Ошибка удаления остатка кроя' }, { status: 500 })
   }
-}
+}, ['supervisor'])

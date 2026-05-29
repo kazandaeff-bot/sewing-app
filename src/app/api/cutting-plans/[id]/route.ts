@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateCuttingPlanSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateCuttingPlanSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const cuttingPlan = await db.cuttingPlan.findUnique({
       where: { id },
       include: {
@@ -35,15 +35,15 @@ export async function GET(
     console.error('Get cutting plan error:', error)
     return NextResponse.json({ error: 'Ошибка получения плана раскроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateCuttingPlanSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateCuttingPlanSchema)
     if ('error' in result) return result.error
     const { status, label, items } = result.data
 
@@ -209,4 +209,4 @@ export async function PATCH(
     console.error('Update cutting plan error:', error)
     return NextResponse.json({ error: 'Ошибка обновления плана раскроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])

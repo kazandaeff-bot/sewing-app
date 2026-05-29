@@ -1,15 +1,15 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateSewingReworkSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateSewingReworkSchema, IdParamSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateSewingReworkSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateSewingReworkSchema)
     if ('error' in result) return result.error
     const { status } = result.data
 
@@ -24,18 +24,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Переделка не найдена' }, { status: 404 })
     }
 
-    // When seamstress marks rework as done → goes back to QC for re-check
     if (status === 'pending_qc') {
-      // Just update the rework status — QC will see it in the reworks list
-      // The parent task status is not changed; reworks are tracked independently
+      // Just update the rework status
     }
 
-    // When QC approves the rework → mark completed
-    // NOTE: We do NOT add rework quantity to actualQuantity.
-    // Rework verification is part of normal QC duties (paid by plan quantity).
-    // actualQuantity stays as the first-pass accepted count.
     if (status === 'completed') {
-      // No actualQuantity update — rework check is included in base pay
+      // No actualQuantity update
     }
 
     const rework = await db.sewingRework.update({
@@ -61,4 +55,4 @@ export async function PATCH(
     console.error('Update sewing rework error:', error)
     return NextResponse.json({ error: 'Ошибка обновления переделки' }, { status: 500 })
   }
-}
+}, ['supervisor', 'qc'])

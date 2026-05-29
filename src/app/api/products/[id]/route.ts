@@ -1,15 +1,15 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateProductSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateProductSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateProductSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateProductSchema)
     if ('error' in result) return result.error
     const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
 
@@ -63,18 +63,18 @@ export async function PATCH(
     console.error('Update product error:', error)
     return NextResponse.json({ error: 'Ошибка обновления изделия' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.product.delete({ where: { id } })
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete product error:', error)
     return NextResponse.json({ error: 'Ошибка удаления изделия' }, { status: 500 })
   }
-}
+}, ['supervisor'])

@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateBoxSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateBoxSchema, IdParamSchema } from '@/lib/schemas'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx, _user) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const box = await db.box.findUnique({
       where: { id },
       include: {
@@ -24,15 +24,15 @@ export async function GET(
     console.error('Get box error:', error)
     return NextResponse.json({ error: 'Ошибка получения короба' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx, _user) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateBoxSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateBoxSchema)
     if ('error' in result) return result.error
     const { status, items } = result.data
 
@@ -70,4 +70,4 @@ export async function PATCH(
     console.error('Update box error:', error)
     return NextResponse.json({ error: 'Ошибка обновления короба' }, { status: 500 })
   }
-}
+}, ['supervisor', 'seller'])

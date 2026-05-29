@@ -1,18 +1,17 @@
 import { db } from '@/lib/db'
-import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
-import { CreateCuttingLeftoverSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
+import { withAuth, validateQuery, validateBody } from '@/lib/api-auth'
+import { CreateCuttingLeftoverSchema, CuttingLeftoversQuerySchema } from '@/lib/schemas'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const customerId = searchParams.get('customerId')
+    const q = validateQuery(req, CuttingLeftoversQuerySchema)
+    if ('error' in q) return q.error
+    const { status, customerId } = q.data
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
 
-    // Filter by customer via cutting plan → plan → customerId
     const leftovers = await db.cuttingLeftover.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -28,7 +27,6 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    // If filtering by customer, do it in-memory (SQLite, small dataset)
     const filtered = customerId
       ? leftovers.filter((l: { cuttingPlan: { plan: { customerId: string | null } } }) => l.cuttingPlan.plan.customerId === customerId)
       : leftovers
@@ -38,11 +36,11 @@ export async function GET(request: NextRequest) {
     console.error('Get cutting leftovers error:', error)
     return NextResponse.json({ error: 'Ошибка получения остатков кроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateCuttingLeftoverSchema)
+    const result = await validateBody(req, CreateCuttingLeftoverSchema)
     if ('error' in result) return result.error
     const { cuttingPlanId, cuttingPlanItemId, productId, size, color, colorHex, quantity, source, note } = result.data
 
@@ -75,4 +73,4 @@ export async function POST(request: NextRequest) {
     console.error('Create cutting leftover error:', error)
     return NextResponse.json({ error: 'Ошибка создания остатка кроя' }, { status: 500 })
   }
-}
+}, ['supervisor', 'cutter'])

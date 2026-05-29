@@ -1,9 +1,9 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { validateBody } from '@/lib/api-auth'
+import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateProductSchema } from '@/lib/schemas'
 
-export async function GET() {
+export const GET = withAuth(async (req, ctx, user) => {
   try {
     const products = await db.product.findMany({
       orderBy: { article: 'asc' },
@@ -20,11 +20,11 @@ export async function GET() {
     console.error('Get products error:', error)
     return NextResponse.json({ error: 'Ошибка получения списка изделий' }, { status: 500 })
   }
-}
+}, ['supervisor'])
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (req, ctx, user) => {
   try {
-    const result = await validateBody(request, CreateProductSchema)
+    const result = await validateBody(req, CreateProductSchema)
     if ('error' in result) return result.error
     const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
 
@@ -66,4 +66,4 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ error: 'Ошибка создания изделия' }, { status: 500 })
   }
-}
+}, ['supervisor'])

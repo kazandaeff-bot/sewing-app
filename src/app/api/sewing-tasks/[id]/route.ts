@@ -1,14 +1,14 @@
 import { db } from '@/lib/db'
-import { validateBody } from '@/lib/api-auth'
-import { UpdateSewingTaskSchema } from '@/lib/schemas'
-import { NextRequest, NextResponse } from 'next/server'
+import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
+import { UpdateSewingTaskSchema, IdParamSchema } from '@/lib/schemas'
+import { NextResponse } from 'next/server'
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const GET = withAuth(async (_req, ctx) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     const sewingTask = await db.sewingTask.findUnique({
       where: { id },
       include: {
@@ -25,15 +25,15 @@ export async function GET(
     console.error('Get sewing task error:', error)
     return NextResponse.json({ error: 'Ошибка получения задания' }, { status: 500 })
   }
-}
+}, ['supervisor', 'sewer'])
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const PATCH = withAuth(async (req, ctx) => {
   try {
-    const { id } = await params
-    const result = await validateBody(request, UpdateSewingTaskSchema)
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
+    const result = await validateBody(req, UpdateSewingTaskSchema)
     if ('error' in result) return result.error
     const { status, items } = result.data
 
@@ -45,15 +45,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Задание не найдено' }, { status: 404 })
     }
 
-    // ========== ITEM-LEVEL STATUS UPDATES ==========
-    // Each SewingTaskItem can have its own status: issued → in_work → pending_ironing → pending_qc → completed
     if (items && Array.isArray(items)) {
       for (const item of items) {
         if (!item.id) continue
         const updateData: Record<string, unknown> = {}
         if (item.status !== undefined) {
           updateData.status = item.status
-          // Set timing timestamps on status transitions
           if (item.status === 'in_work') updateData.startedAt = new Date()
           if (item.status === 'pending_qc') updateData.ironedAt = new Date()
           if (item.status === 'completed') updateData.completedAt = new Date()
@@ -67,36 +64,23 @@ export async function PATCH(
       }
     }
 
-    // ========== TASK-LEVEL STATUS UPDATE ==========
-    // The task status auto-derives from item statuses:
-    // - All items issued → task is "issued"
-    // - Any item in_work → task is "in_work"
-    // - All items pending_ironing → task is "pending_ironing"
-    // - Some items ironed/pending_qc/completed → task could be "in_work"
-    // - All items pending_qc or completed → task is "pending_qc"
-    // - All items completed → task is "completed"
     if (status !== undefined) {
-      // If explicitly setting task status, also update all items
       if (status === 'in_work') {
-        // Mark all "issued" items as "in_work"
         await db.sewingTaskItem.updateMany({
           where: { sewingTaskId: id, status: 'issued' },
           data: { status: 'in_work', startedAt: new Date() },
         })
       } else if (status === 'pending_ironing') {
-        // Mark all "in_work" items as "pending_ironing" (ВТО stage before QC)
         await db.sewingTaskItem.updateMany({
           where: { sewingTaskId: id, status: 'in_work' },
           data: { status: 'pending_ironing' },
         })
       } else if (status === 'pending_qc') {
-        // Mark all "in_work" items as "pending_ironing" (they go through ВТО first)
         await db.sewingTaskItem.updateMany({
           where: { sewingTaskId: id, status: 'in_work' },
           data: { status: 'pending_ironing' },
         })
       } else if (status === 'completed') {
-        // Mark all items as "completed"
         await db.sewingTaskItem.updateMany({
           where: { sewingTaskId: id },
           data: { status: 'completed', completedAt: new Date() },
@@ -105,7 +89,6 @@ export async function PATCH(
 
       await db.sewingTask.update({ where: { id }, data: { status } })
     } else {
-      // Auto-derive task status from item statuses
       const currentItems = await db.sewingTaskItem.findMany({ where: { sewingTaskId: id } })
       const allStatuses = currentItems.map(i => i.status)
       
@@ -117,7 +100,6 @@ export async function PATCH(
       } else if (allStatuses.every(s => s === 'pending_qc' || s === 'completed')) {
         newTaskStatus = 'pending_qc'
       } else if (allStatuses.every(s => s === 'pending_ironing' || s === 'ironed' || s === 'pending_qc' || s === 'completed')) {
-        // All items are past sewing stage (in ВТО or beyond)
         newTaskStatus = 'pending_ironing'
       } else if (allStatuses.some(s => ['in_work', 'pending_ironing', 'ironed', 'pending_qc', 'completed'].includes(s))) {
         newTaskStatus = 'in_work'
@@ -128,7 +110,6 @@ export async function PATCH(
       }
     }
 
-    // Return updated task with items
     const updated = await db.sewingTask.findUnique({
       where: { id },
       include: {
@@ -143,14 +124,14 @@ export async function PATCH(
     console.error('Update sewing task error:', error)
     return NextResponse.json({ error: 'Ошибка обновления задания' }, { status: 500 })
   }
-}
+}, ['supervisor', 'sewer'])
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export const DELETE = withAuth(async (_req, ctx) => {
   try {
-    const { id } = await params
+    const p = await validateParams(ctx, IdParamSchema)
+    if ('error' in p) return p.error
+    const { id } = p.data
+
     await db.sewingRework.deleteMany({
       where: { sewingTaskId: id },
     })
@@ -161,4 +142,4 @@ export async function DELETE(
     console.error('Delete sewing task error:', error)
     return NextResponse.json({ error: 'Ошибка удаления задания' }, { status: 500 })
   }
-}
+}, ['supervisor'])
