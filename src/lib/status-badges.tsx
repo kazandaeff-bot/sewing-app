@@ -114,3 +114,37 @@ export function getBoxStatusBadge(status: string) {
       return <Badge variant="secondary">{status}</Badge>
   }
 }
+
+/** Item-level status badge for QC view — highlights items needing QC attention */
+export function getQcItemStatusBadge(status: string) {
+  switch (status) {
+    case 'pending_qc':
+      return <Badge variant="secondary" className="bg-sky-100 text-sky-700 hover:bg-sky-100 text-xs">На ОТК</Badge>
+    case 'completed':
+      return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Принято</Badge>
+    case 'in_work':
+      return <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">В работе</Badge>
+    case 'pending_ironing':
+      return <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">На ВТО</Badge>
+    case 'ironed':
+      return <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 text-xs">Отглажено</Badge>
+    case 'issued':
+      return <Badge variant="secondary" className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-xs">Выдано</Badge>
+    default:
+      return <Badge variant="secondary" className="text-xs">{status}</Badge>
+  }
+}
+
+/** Seller plan status badge for distribution view */
+export function getSellerPlanStatusBadge(status: string) {
+  switch (status) {
+    case 'draft':
+      return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Черновик</Badge>
+    case 'approved':
+      return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Утверждён</Badge>
+    case 'distributed':
+      return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Распределено</Badge>
+    default:
+      return <Badge variant="secondary">{status}</Badge>
+  }
+}

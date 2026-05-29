@@ -21,6 +21,7 @@ import {
 
 import type { Employee } from '@/types'
 import { getRoleLabel } from '@/lib/formatters'
+import { EMPLOYEE_ROLES } from '@/lib/constants'
 
 // ============ TAB 4: СОТРУДНИКИ ============
 export function EmployeesTab() {
@@ -132,15 +133,7 @@ export function EmployeesTab() {
     )
   }
 
-  const roleOptions = [
-    { value: 'sewer', label: 'Швея' },
-    { value: 'qc', label: 'ОТК' },
-    { value: 'supervisor', label: 'Руководитель' },
-    { value: 'seller', label: 'Селлер' },
-    { value: 'technologist', label: 'Технолог' },
-    { value: 'cutter', label: 'Закройщик' },
-    { value: 'ironing', label: 'ВТО' },
-  ]
+  const roleOptions = EMPLOYEE_ROLES.filter(r => r.value !== 'customer')
 
   return (
     <div className="space-y-6">

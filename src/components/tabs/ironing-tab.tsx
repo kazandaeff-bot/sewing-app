@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -15,10 +15,13 @@ import {
   Wallet,
 } from 'lucide-react'
 
-import type { SewingTaskResponse, SewingTaskItemResponse } from '@/types'
-import { filterByPeriod, getPeriodLabel } from '@/lib/formatters'
+import type { SewingTaskResponse, SewingTaskItemResponse, IroningGroup } from '@/types'
+import { getPeriodLabel } from '@/lib/formatters'
 import { getItemStatusBadge } from '@/lib/status-badges'
 import { ItemTimingInfo } from '@/components/tabs/item-timing-info'
+import { useSalaryCalculation } from '@/hooks/use-salary-calculation'
+import { apiGet, apiPatch } from '@/lib/api-client'
+import { DEFAULT_IRONING_RATE } from '@/lib/constants'
 
 // ============ TAB: ВТО (Ironing) ============
 export function IroningTab() {
@@ -26,26 +29,20 @@ export function IroningTab() {
   const queryClient = useQueryClient()
   const [salaryPeriod, setSalaryPeriod] = useState<'week' | 'month' | 'all'>('month')
 
-  const IRONING_RATE = 10 // ₽ per unit
-
   const { data: ironingGroups = [], isLoading: ironingLoading } = useQuery({
     queryKey: ['ironing-items'],
-    queryFn: () => fetch('/api/ironing').then((r) => r.json()),
+    queryFn: () => apiGet<IroningGroup[]>('/api/ironing'),
   })
 
   // Fetch all sewing tasks to find ironed items for salary calc
   const { data: allSewingTasks = [] } = useQuery({
     queryKey: ['sewing-tasks', 'ironing-all'],
-    queryFn: () => fetch('/api/sewing-tasks').then((r) => r.json()),
+    queryFn: () => apiGet<SewingTaskResponse[]>('/api/sewing-tasks'),
   })
 
   const ironingMutation = useMutation({
     mutationFn: (itemIds: string[]) =>
-      fetch('/api/ironing', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ itemIds }),
-      }).then((r) => r.json()),
+      apiPatch('/api/ironing', { itemIds }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ironing-items'] })
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
@@ -67,25 +64,22 @@ export function IroningTab() {
     }
   }, [ironingGroups, ironingMutation])
 
-  // Salary calc: find items that were ironed (transitioned from pending_ironing to pending_qc)
-  // For simplicity: count items with pending_qc or completed status that were updated recently
-  // Items that have been ironed = items with status pending_qc or completed (since they went through ironing)
-  const ironedItems = allSewingTasks
-    .filter((t: SewingTaskResponse) => filterByPeriod(t.updatedAt, salaryPeriod))
-    .flatMap((t: SewingTaskResponse) =>
+  // Salary calc via shared hook
+  const salary = useSalaryCalculation(allSewingTasks, 'ironingRate', 'ironed', salaryPeriod, DEFAULT_IRONING_RATE)
+  const periodLabel = getPeriodLabel(salaryPeriod)
+
+  // Ironed items list for "already ironed" display section
+  const ironedItems = useMemo(() =>
+    allSewingTasks.flatMap((t: SewingTaskResponse) =>
       t.items
         .filter((item: SewingTaskItemResponse) => item.status === 'pending_qc' || item.status === 'completed')
         .map((item: SewingTaskItemResponse) => ({
           ...item,
-          taskUpdatedAt: t.updatedAt,
           taskPlanName: t.cuttingPlan?.plan?.name || '',
           sewerName: t.employee?.name || '',
         }))
-    )
-
-  const totalIronedUnits = ironedItems.reduce((sum: number, item: any) => sum + (item.actualQuantity || item.quantity), 0)
-  const totalIroningSalary = totalIronedUnits * IRONING_RATE
-  const periodLabel = getPeriodLabel(salaryPeriod)
+    ), [allSewingTasks]
+  )
 
   const totalPendingItems = ironingGroups.reduce((sum: number, g: any) => sum + g.items.length, 0)
 
@@ -115,15 +109,15 @@ export function IroningTab() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Отглажено</div>
-              <div className="text-2xl font-bold text-purple-700">{totalIronedUnits} шт</div>
+              <div className="text-2xl font-bold text-purple-700">{salary.totalUnits} шт</div>
             </div>
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Ставка</div>
-              <div className="text-2xl font-bold text-purple-700">{IRONING_RATE} ₽/шт</div>
+              <div className="text-2xl font-bold text-purple-700">{DEFAULT_IRONING_RATE} ₽/шт</div>
             </div>
             <div className="text-center p-3 bg-purple-100 rounded-lg border-2 border-purple-300 col-span-2 sm:col-span-1">
               <div className="text-xs text-purple-700 mb-1 font-medium">Итого зарплата</div>
-              <div className="text-2xl font-bold text-purple-800">{totalIroningSalary.toLocaleString('ru-RU')} ₽</div>
+              <div className="text-2xl font-bold text-purple-800">{salary.totalSalary.toLocaleString('ru-RU')} ₽</div>
             </div>
           </div>
         </CardContent>

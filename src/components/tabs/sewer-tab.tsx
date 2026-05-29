@@ -28,9 +28,11 @@ import {
 } from 'lucide-react'
 
 import type { Employee, SewingTaskResponse, SewingTaskItemResponse } from '@/types'
-import { getPeriodLabel, filterByPeriod } from '@/lib/formatters'
+import { getPeriodLabel } from '@/lib/formatters'
 import { getItemStatusBadge } from '@/lib/status-badges'
 import { ItemTimingInfo } from '@/components/tabs/item-timing-info'
+import { useSalaryCalculation } from '@/hooks/use-salary-calculation'
+import { apiGet, apiPatch } from '@/lib/api-client'
 
 // ============ TAB 1: ШВЕЯ ============
 export function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: string }) {
@@ -51,7 +53,7 @@ export function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: st
 
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
-    queryFn: () => fetch('/api/employees').then((r) => r.json()),
+    queryFn: () => apiGet<Employee[]>('/api/employees'),
   })
 
   const sewers = employees.filter((e: Employee) => e.role === 'sewer')
@@ -61,18 +63,14 @@ export function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: st
     queryKey: ['sewing-tasks', 'employee', selectedEmployeeId],
     queryFn: () => {
       const params = selectedEmployeeId ? `?employeeId=${selectedEmployeeId}` : ''
-      return fetch(`/api/sewing-tasks${params}`).then((r) => r.json())
+      return apiGet<SewingTaskResponse[]>(`/api/sewing-tasks${params}`)
     },
     enabled: !!selectedEmployeeId,
   })
 
   const updateSewingTaskMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/sewing-tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      apiPatch(`/api/sewing-tasks/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
       toast({ title: 'Задание обновлено', description: 'Изменения сохранены' })
@@ -199,24 +197,8 @@ export function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: st
   const pendingQcTasks = sewingTasks.filter((t: any) => t.status === 'pending_qc')
   const completedTasks = sewingTasks.filter((t: any) => t.status === 'completed' || t.status === 'done')
 
-  // Salary calculation for completed tasks
-  const filteredCompleted = completedTasks.filter((t: any) => {
-    return filterByPeriod(t.updatedAt, salaryPeriod)
-  })
-
-  // Flatten items from completed tasks for salary calc
-  const allCompletedItems = filteredCompleted.flatMap((t: any) =>
-    t.items.map((item: any) => ({
-      ...item,
-      taskUpdatedAt: t.updatedAt,
-    }))
-  )
-  const totalAcceptedUnits = allCompletedItems.reduce((sum: number, item: any) => sum + (item.actualQuantity || item.quantity), 0)
-  const totalFabricDefects = allCompletedItems.reduce((sum: number, item: any) => sum + (item.fabricDefect || 0), 0)
-  const mainSalary = allCompletedItems.reduce((sum: number, item: any) => {
-    return sum + (item.actualQuantity || item.quantity) * (item.product?.sewerRate || 150)
-  }, 0)
-  const totalSalary = mainSalary
+  // Salary calculation via shared hook
+  const salary = useSalaryCalculation(sewingTasks, 'sewerRate', 'completed', salaryPeriod, 150)
   const periodLabel = getPeriodLabel(salaryPeriod)
 
   if (employeesLoading) {
@@ -292,40 +274,32 @@ export function SewerTab({ preselectedEmployeeId }: { preselectedEmployeeId?: st
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
                 <div className="text-center p-3 bg-white/70 rounded-lg">
                   <div className="text-xs text-muted-foreground mb-1">Принято ОТК</div>
-                  <div className="text-2xl font-bold text-emerald-700">{totalAcceptedUnits} шт</div>
+                  <div className="text-2xl font-bold text-emerald-700">{salary.totalUnits} шт</div>
                 </div>
                 <div className="text-center p-3 bg-white/70 rounded-lg">
                   <div className="text-xs text-muted-foreground mb-1">Тканевый брак</div>
-                  <div className="text-2xl font-bold text-red-600">{totalFabricDefects} шт</div>
+                  <div className="text-2xl font-bold text-red-600">{salary.totalDefects} шт</div>
                 </div>
                 <div className="text-center p-3 bg-emerald-100 rounded-lg border-2 border-emerald-300 col-span-2 sm:col-span-1">
                   <div className="text-xs text-emerald-700 mb-1 font-medium">Итого зарплата</div>
-                  <div className="text-2xl font-bold text-emerald-800">{totalSalary.toLocaleString('ru-RU')} ₽</div>
+                  <div className="text-2xl font-bold text-emerald-800">{salary.totalSalary.toLocaleString('ru-RU')} ₽</div>
                 </div>
               </div>
               {/* Расшифровка по изделиям */}
-              {allCompletedItems.length > 0 && (
+              {salary.breakdown.length > 0 && (
                 <div className="bg-white/60 rounded-lg p-3">
                   <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
                     <Calculator className="h-3 w-3" /> Расшифровка по изделиям
                   </div>
                   <div className="space-y-1">
-                    {(() => {
-                      const byProduct: Record<string, { name: string; units: number; rate: number }> = {}
-                      allCompletedItems.forEach((item: any) => {
-                        const key = item.productId
-                        if (!byProduct[key]) byProduct[key] = { name: item.product?.name || 'Изделие', units: 0, rate: item.product?.sewerRate || 150 }
-                        byProduct[key].units += (item.actualQuantity || item.quantity)
-                      })
-                      return Object.values(byProduct).map((p, i) => (
-                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-emerald-100 last:border-0">
-                          <span className="font-medium">{p.name}</span>
-                          <span className="text-muted-foreground">
-                            {p.units} шт x {p.rate} ₽ = <span className="font-semibold text-emerald-700">{(p.units * p.rate).toLocaleString('ru-RU')} ₽</span>
-                          </span>
-                        </div>
-                      ))
-                    })()}
+                    {salary.breakdown.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-emerald-100 last:border-0">
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-muted-foreground">
+                          {p.units} шт x {p.rate} ₽ = <span className="font-semibold text-emerald-700">{p.total.toLocaleString('ru-RU')} ₽</span>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

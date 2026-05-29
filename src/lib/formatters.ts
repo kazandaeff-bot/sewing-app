@@ -15,7 +15,7 @@ export function parseKitComboColors(raw: string | Record<string, string[]> | nul
 /**
  * Get kit label for product display (e.g. " [ч/б, к/с]")
  */
-export function getKitLabel(p: { isKit: boolean; kitComboColors: Record<string, string[]> | string | null }): string {
+export function getKitLabel(p: { isKit: boolean; kitComboColors?: string | Record<string, string[]> | null }): string {
   if (!p.isKit) return ''
   const kit = parseKitComboColors(p.kitComboColors)
   const keys = Object.keys(kit)

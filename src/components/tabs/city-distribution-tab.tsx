@@ -15,7 +15,7 @@ import { Loader2, Plus, X, CheckCircle2, MapPin, Truck, AlertTriangle } from 'lu
 import { useToast } from '@/hooks/use-toast'
 import type { Plan, SellerPlan } from '@/types'
 import { formatDate } from '@/lib/formatters'
-import { getColorDot } from '@/lib/status-badges'
+import { getColorDot, getSellerPlanStatusBadge } from '@/lib/status-badges'
 
 export function CityDistributionTab() {
   const { toast } = useToast()
@@ -266,14 +266,7 @@ export function CityDistributionTab() {
     return { totalQty, totalDistributed, percent: totalQty > 0 ? Math.round((totalDistributed / totalQty) * 100) : 0 }
   }, [])
 
-  const getSellerPlanStatusBadge = (status: string) => {
-    switch (status) {
-      case 'draft': return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100">Черновик</Badge>
-      case 'approved': return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Утверждён</Badge>
-      case 'distributed': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Распределено</Badge>
-      default: return <Badge variant="secondary">{status}</Badge>
-    }
-  }
+  // getSellerPlanStatusBadge is imported from @/lib/status-badges
 
   if (isLoading) {
     return (

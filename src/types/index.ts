@@ -344,3 +344,69 @@ export interface PlanItemRow {
   colorHex: string
   quantity: number
 }
+
+// --- Extended Employee with auth fields (used in ReferencesTab) ---
+
+export interface EmployeeWithAuth extends Employee {
+  username: string
+  password?: string
+}
+
+// --- Customer with edit fields ---
+
+export interface CustomerFormData {
+  name: string
+  contactInfo: string
+  showMaterialBalance: boolean
+}
+
+export interface CustomerEditData extends CustomerFormData {
+  id: string
+}
+
+// --- Plan Detail Response (for sewing-plans detail view) ---
+
+export interface PlanDetailResponse extends Plan {
+  items: PlanItem[]
+  cuttingPlans: CuttingPlan[]
+}
+
+// --- Ironing Group (from /api/ironing) ---
+
+export interface IroningGroup {
+  task: SewingTaskResponse
+  items: SewingTaskItemResponse[]
+}
+
+// --- Material Types & Entries ---
+
+export interface MaterialType {
+  id: string
+  name: string
+  unit: string
+  entries: MaterialEntry[]
+}
+
+export interface MaterialEntry {
+  id: string
+  materialTypeId: string
+  date: string
+  quantity: number
+  pricePerUnit: number
+  totalCost: number
+  note: string | null
+  customerId: string | null
+  customer: { id: string; name: string } | null
+  createdAt: string
+}
+
+// --- Material Norm ---
+
+export interface MaterialNorm {
+  id: string
+  productId: string
+  materialTypeId: string
+  quantityPerUnit: number
+  product: { id: string; name: string; article: string }
+  materialType: { id: string; name: string; unit: string }
+}

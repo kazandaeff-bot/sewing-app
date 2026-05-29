@@ -31,51 +31,13 @@ import {
   History,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import type { Product, Employee } from '@/types'
-import { getKitLabel } from '@/lib/formatters'
+import type { Product, Employee, EmployeeWithAuth, CustomerEditData, MaterialType } from '@/types'
+import { getKitLabel, parseKitComboColors } from '@/lib/formatters'
+import { EMPLOYEE_ROLES, STANDARD_SIZE_GRIDS, STANDARD_COLORS } from '@/lib/constants'
 
 // ============ Standard Size Grids & Colors (frontend constants) ============
-const STANDARD_SIZE_GRIDS: { label: string; sizes: string[] }[] = [
-  { label: 'S/M/L/XL', sizes: ['S', 'M', 'L', 'XL'] },
-  { label: 'XS-3XL', sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'] },
-  { label: '42-52 (чётные)', sizes: ['42', '44', '46', '48', '50', '52'] },
-  { label: '42-56 (чётные)', sizes: ['42', '44', '46', '48', '50', '52', '54', '56'] },
-  { label: '80-92', sizes: ['80', '86', '92'] },
-  { label: '80-110', sizes: ['80', '86', '92', '98', '104', '110'] },
-  { label: '104-128', sizes: ['104', '110', '116', '122', '128'] },
-  { label: 'ONE SIZE', sizes: ['ONE SIZE'] },
-]
-
-const STANDARD_COLORS: { color: string; hex: string }[] = [
-  { color: 'чёрный', hex: '#1a1a1a' },
-  { color: 'белый', hex: '#ffffff' },
-  { color: 'тёмно-синий', hex: '#1e3a5f' },
-  { color: 'серый', hex: '#808080' },
-  { color: 'бежевый', hex: '#d4b896' },
-  { color: 'красный', hex: '#dc2626' },
-  { color: 'зелёный', hex: '#16a34a' },
-  { color: 'коричневый', hex: '#7c5835' },
-  { color: 'розовый', hex: '#f472b6' },
-  { color: 'голубой', hex: '#38bdf8' },
-  { color: 'бордовый', hex: '#7f1d1d' },
-  { color: 'молочный', hex: '#faf5e4' },
-]
-
-const EMPLOYEE_ROLES: { value: string; label: string }[] = [
-  { value: 'sewer', label: 'Швея' },
-  { value: 'qc', label: 'ОТК' },
-  { value: 'supervisor', label: 'Руководитель' },
-  { value: 'seller', label: 'Продавец' },
-  { value: 'technologist', label: 'Технолог' },
-  { value: 'cutter', label: 'Раскройщик' },
-  { value: 'ironing', label: 'Утюжка' },
-]
-
-// Extended Employee type with username (API returns it but shared type omits it)
-interface EmployeeWithAuth extends Employee {
-  username: string
-  password?: string
-}
+// Constants moved to @/lib/constants.ts — EMPLOYEE_ROLES, STANDARD_SIZE_GRIDS, STANDARD_COLORS
+// Type EmployeeWithAuth moved to @/types/index.ts
 
 export function ReferencesTab() {
   const { toast } = useToast()
@@ -308,16 +270,7 @@ export function ReferencesTab() {
 
   const openEditProduct = useCallback((p: Product) => {
     setEditingProduct(p)
-    let parsedKitComboColors: Record<string, string[]> = {}
-    if (p.kitComboColors) {
-      try {
-        if (typeof p.kitComboColors === 'string') {
-          parsedKitComboColors = JSON.parse(p.kitComboColors)
-        } else {
-          parsedKitComboColors = p.kitComboColors as Record<string, string[]>
-        }
-      } catch { parsedKitComboColors = {} }
-    }
+    const parsedKitComboColors = parseKitComboColors(p.kitComboColors)
     setProductForm({ name: p.name, article: p.article, sewerRate: p.sewerRate, homeRate: p.homeRate, qcRate: p.qcRate, reworkRate: p.reworkRate, isKit: p.isKit, kitComboColors: parsedKitComboColors })
     setProductSizes(p.sizes.map(s => s.size))
     setProductColors(p.colors.map(c => ({ color: c.color, colorHex: c.colorHex })))
@@ -588,10 +541,7 @@ export function ReferencesTab() {
                 </TableHeader>
                 <TableBody>
                   {(products as Array<Product & { kitComboColors?: string | Record<string, string[]> }>).map((p) => {
-                    let parsedKit: Record<string, string[]> | null = null
-                    if (p.isKit && p.kitComboColors) {
-                      try { parsedKit = typeof p.kitComboColors === 'string' ? JSON.parse(p.kitComboColors) : p.kitComboColors } catch { parsedKit = null }
-                    }
+                    const parsedKit = p.isKit ? parseKitComboColors(p.kitComboColors) : null
                     return (
                       <TableRow key={p.id}>
                         <TableCell className="font-medium max-w-[180px]">{p.name}</TableCell>

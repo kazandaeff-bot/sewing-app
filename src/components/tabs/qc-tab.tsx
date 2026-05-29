@@ -22,29 +22,13 @@ import {
 } from 'lucide-react'
 
 import type { Product, ReworkReason, SewingTaskResponse, SewingTaskItemResponse, SewingReworkResponse } from '@/types'
-import { filterByPeriod, getPeriodLabel } from '@/lib/formatters'
-import { getColorDot, getStatusBadge, getReworkStatusBadge } from '@/lib/status-badges'
+import { getPeriodLabel, filterByPeriod } from '@/lib/formatters'
+import { getColorDot, getStatusBadge, getReworkStatusBadge, getQcItemStatusBadge } from '@/lib/status-badges'
 import { ItemTimingInfo } from '@/components/tabs/item-timing-info'
+import { useSalaryCalculation } from '@/hooks/use-salary-calculation'
+import { apiGet, apiPost, apiPatch } from '@/lib/api-client'
 
-// Item-level status badge for QC view
-function getQcItemStatusBadge(status: string) {
-  switch (status) {
-    case 'pending_qc':
-      return <Badge variant="secondary" className="bg-sky-100 text-sky-700 hover:bg-sky-100 text-xs">На ОТК</Badge>
-    case 'completed':
-      return <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Принято</Badge>
-    case 'in_work':
-      return <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">В работе</Badge>
-    case 'pending_ironing':
-      return <Badge variant="secondary" className="bg-purple-100 text-purple-700 hover:bg-purple-100 text-xs">На ВТО</Badge>
-    case 'ironed':
-      return <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 text-xs">Отглажено</Badge>
-    case 'issued':
-      return <Badge variant="secondary" className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-xs">Выдано</Badge>
-    default:
-      return <Badge variant="secondary" className="text-xs">{status}</Badge>
-  }
-}
+// getQcItemStatusBadge is imported from @/lib/status-badges
 
 // ============ TAB 2: ОТК ============
 export function QCTab() {
@@ -61,30 +45,26 @@ export function QCTab() {
 
   const { data: products = [] } = useQuery({
     queryKey: ['products'],
-    queryFn: () => fetch('/api/products').then((r) => r.json()),
+    queryFn: () => apiGet<Product[]>('/api/products'),
   })
 
   // Fetch ALL sewing tasks to support item-level status filtering
   const { data: allSewingTasks = [], isLoading: tasksLoading } = useQuery({
     queryKey: ['sewing-tasks', 'qc-all'],
-    queryFn: () => fetch('/api/sewing-tasks').then((r) => r.json()),
+    queryFn: () => apiGet<SewingTaskResponse[]>('/api/sewing-tasks'),
   })
 
   const { data: reworks = [], isLoading: reworksLoading } = useQuery({
     queryKey: ['sewing-reworks', reworkStatusFilter],
     queryFn: () => {
       const params = reworkStatusFilter !== 'all' ? `?status=${reworkStatusFilter}` : ''
-      return fetch(`/api/sewing-reworks${params}`).then((r) => r.json())
+      return apiGet<SewingReworkResponse[]>(`/api/sewing-reworks${params}`)
     },
   })
 
   const updateTaskMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/sewing-tasks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      apiPatch(`/api/sewing-tasks/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
       queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
@@ -97,11 +77,7 @@ export function QCTab() {
 
   const createReworkMutation = useMutation({
     mutationFn: (data: { sewingTaskItemId: string; sewingTaskId: string; quantity: number; reason: string }) =>
-      fetch('/api/sewing-reworks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      apiPost('/api/sewing-reworks', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
@@ -115,11 +91,7 @@ export function QCTab() {
 
   const updateReworkMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      fetch(`/api/sewing-reworks/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      }).then((r) => r.json()),
+      apiPatch(`/api/sewing-reworks/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sewing-reworks'] })
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
@@ -221,29 +193,12 @@ export function QCTab() {
     return product?.reworkReasons || []
   }
 
-  // ============ Расчёт зарплаты ОТК (item-level) ============
-  // Flatten items with completed status from all tasks for salary calc
-  const qcCompletedItems = allSewingTasks
-    .filter((t: SewingTaskResponse) => filterByPeriod(t.updatedAt, qcSalaryPeriod))
-    .flatMap((t: SewingTaskResponse) =>
-      t.items
-        .filter((item: SewingTaskItemResponse) => item.status === 'completed')
-        .map((item: SewingTaskItemResponse) => ({
-          ...item,
-          taskUpdatedAt: t.updatedAt,
-        }))
-    )
+  // ============ Расчёт зарплаты ОТК (via shared hook) ============
+  const qcSalary = useSalaryCalculation(allSewingTasks, 'qcRate', 'completed', qcSalaryPeriod, 50)
 
   // Переделки — показываем для информации, но НЕ оплачиваем дополнительно
-  // Переделки входят в нормальную нагрузку ОТК (оплата по плану)
   const qcReworksChecked = reworks.filter((r: SewingReworkResponse) => r.status === 'completed' && filterByPeriod(r.updatedAt, qcSalaryPeriod))
-  // Количество проверенных единиц (только основные изделия, без переделок)
-  const qcTotalUnitsChecked = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => sum + (item.actualQuantity || item.quantity), 0)
   const qcTotalReworksChecked = qcReworksChecked.reduce((sum: number, r: SewingReworkResponse) => sum + r.quantity, 0)
-  // Зарплата: только по принятым изделиям из плана (переделки не оплачиваются дополнительно)
-  const qcSalary = qcCompletedItems.reduce((sum: number, item: SewingTaskItemResponse) => {
-    return sum + (item.actualQuantity || item.quantity) * (item.product.qcRate || 50)
-  }, 0)
   const qcPeriodLabel = getPeriodLabel(qcSalaryPeriod)
 
   return (
@@ -272,7 +227,7 @@ export function QCTab() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-4">
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Принято изделий</div>
-              <div className="text-2xl font-bold text-sky-700">{qcTotalUnitsChecked} шт</div>
+              <div className="text-2xl font-bold text-sky-700">{qcSalary.totalUnits} шт</div>
             </div>
             <div className="text-center p-3 bg-white/70 rounded-lg">
               <div className="text-xs text-muted-foreground mb-1">Переделок проверено</div>
@@ -281,33 +236,25 @@ export function QCTab() {
             </div>
             <div className="text-center p-3 bg-sky-100 rounded-lg border-2 border-sky-300 col-span-2 sm:col-span-1">
               <div className="text-xs text-sky-700 mb-1 font-medium">Итого зарплата</div>
-              <div className="text-2xl font-bold text-sky-800">{qcSalary.toLocaleString('ru-RU')} ₽</div>
+              <div className="text-2xl font-bold text-sky-800">{qcSalary.totalSalary.toLocaleString('ru-RU')} ₽</div>
               <div className="text-xs text-sky-600">по плану, без доплаты за переделки</div>
             </div>
           </div>
           {/* Расшифровка по изделиям */}
-          {qcCompletedItems.length > 0 && (
+          {qcSalary.breakdown.length > 0 && (
             <div className="bg-white/60 rounded-lg p-3">
               <div className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
                 <Calculator className="h-3 w-3" /> Расшифровка по изделиям
               </div>
               <div className="space-y-1">
-                {(() => {
-                  const byProduct: Record<string, { name: string; units: number; rate: number }> = {}
-                  qcCompletedItems.forEach((item: SewingTaskItemResponse) => {
-                    const key = item.productId
-                    if (!byProduct[key]) byProduct[key] = { name: item.product?.name || 'Изделие', units: 0, rate: item.product?.qcRate || 50 }
-                    byProduct[key].units += (item.actualQuantity || item.quantity)
-                  })
-                  return Object.values(byProduct).map((p, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-sky-100 last:border-0">
-                      <span className="font-medium">{p.name}</span>
-                      <span className="text-muted-foreground">
-                        {p.units} шт x {p.rate} ₽ = <span className="font-semibold text-sky-700">{(p.units * p.rate).toLocaleString('ru-RU')} ₽</span>
-                      </span>
-                    </div>
-                  ))
-                })()}
+                {qcSalary.breakdown.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-sky-100 last:border-0">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-muted-foreground">
+                      {p.units} шт x {p.rate} ₽ = <span className="font-semibold text-sky-700">{p.total.toLocaleString('ru-RU')} ₽</span>
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
