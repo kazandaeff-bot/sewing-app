@@ -24,12 +24,20 @@ export function BoxesTab() {
 
   const { data: boxes = [], isLoading } = useQuery({
     queryKey: ['boxes'],
-    queryFn: () => fetch('/api/boxes').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/boxes')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: sellerPlans = [] } = useQuery({
     queryKey: ['seller-plans'],
-    queryFn: () => fetch('/api/seller-plans').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/seller-plans')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const approvedSellerPlans = sellerPlans.filter((sp: SellerPlan) => sp.status === 'approved')

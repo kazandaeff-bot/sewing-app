@@ -20,7 +20,11 @@ export function CuttingPlansTab() {
 
   const { data: cuttingPlans = [], isLoading } = useQuery({
     queryKey: ['cutting-plans'],
-    queryFn: () => fetch('/api/cutting-plans').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/cutting-plans')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const updateMutation = useMutation({

@@ -37,17 +37,29 @@ export function CityDistributionTab() {
   // --- Data queries ---
   const { data: plans = [] } = useQuery({
     queryKey: ['plans'],
-    queryFn: () => fetch('/api/plans').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/plans')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: sellerPlans = [], isLoading } = useQuery({
     queryKey: ['seller-plans'],
-    queryFn: () => fetch('/api/seller-plans').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/seller-plans')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: cities = [] } = useQuery({
     queryKey: ['cities'],
-    queryFn: () => fetch('/api/cities').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/cities')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   // --- Filter plans to only approved or in_work ---

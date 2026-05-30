@@ -47,12 +47,20 @@ export function EmployeesTab() {
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
-    queryFn: () => fetch('/api/employees').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/employees')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
-    queryFn: () => fetch('/api/customers').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/customers')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const createMutation = useMutation({

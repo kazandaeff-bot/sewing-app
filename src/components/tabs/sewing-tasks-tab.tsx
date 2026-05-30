@@ -32,17 +32,29 @@ export function SewingTasksTab() {
 
   const { data: sewingTasks = [], isLoading } = useQuery({
     queryKey: ['sewing-tasks'],
-    queryFn: () => fetch('/api/sewing-tasks').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/sewing-tasks')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: cuttingPlans = [] } = useQuery({
     queryKey: ['cutting-plans'],
-    queryFn: () => fetch('/api/cutting-plans').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/cutting-plans')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
-    queryFn: () => fetch('/api/employees').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/employees')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const cutPlans = cuttingPlans.filter((cp: CuttingPlan) => cp.status === 'cut')

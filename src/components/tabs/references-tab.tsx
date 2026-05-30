@@ -103,31 +103,59 @@ export function ReferencesTab() {
   // ---- Queries ----
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: () => fetch('/api/products').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/products')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
-    queryFn: () => fetch('/api/employees').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/employees')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: cities = [], isLoading: citiesLoading } = useQuery({
     queryKey: ['cities'],
-    queryFn: () => fetch('/api/cities').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/cities')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: boxTypes = [], isLoading: boxTypesLoading } = useQuery({
     queryKey: ['box-types'],
-    queryFn: () => fetch('/api/box-types').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/box-types')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ['customers'],
-    queryFn: () => fetch(`/api/customers?_t=${Date.now()}`).then((r) => { if (!r.ok) throw new Error('Failed'); return r.json() }).catch(() => []),
+    queryFn: async () => {
+      const r = await fetch(`/api/customers?_t=${Date.now()}`)
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: materialTypes = [], isLoading: materialTypesLoading } = useQuery({
     queryKey: ['material-types'],
-    queryFn: () => fetch(`/api/material-types?_t=${Date.now()}`).then((r) => { if (!r.ok) throw new Error('Failed'); return r.json() }).catch(() => []),
+    queryFn: async () => {
+      const r = await fetch(`/api/material-types?_t=${Date.now()}`)
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
   const { data: materialNorms = [], isLoading: materialNormsLoading } = useQuery({
     queryKey: ['material-norms'],
-    queryFn: () => fetch(`/api/material-norms?_t=${Date.now()}`).then((r) => { if (!r.ok) throw new Error('Failed'); return r.json() }).catch(() => []),
+    queryFn: async () => {
+      const r = await fetch(`/api/material-norms?_t=${Date.now()}`)
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   // ---- Product mutations ----
@@ -251,7 +279,11 @@ export function ReferencesTab() {
 
   const { data: materialEntries = [] } = useQuery({
     queryKey: ['material-entries', historyMaterialId],
-    queryFn: () => fetch(`/api/material-entries?materialId=${historyMaterialId}`).then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch(`/api/material-entries?materialId=${historyMaterialId}`)
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
     enabled: !!historyMaterialId && historyDialogOpen,
   })
 

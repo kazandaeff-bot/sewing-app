@@ -83,7 +83,11 @@ export function ProductsTab() {
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
-    queryFn: () => fetch('/api/products').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/products')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const createMutation = useMutation({

@@ -25,16 +25,22 @@ export function CuttingLeftoversTab() {
 
   const { data: leftovers = [], isLoading } = useQuery({
     queryKey: ['cutting-leftovers', filterCustomerId],
-    queryFn: () => {
+    queryFn: async () => {
       const params = new URLSearchParams()
       if (filterCustomerId) params.set('customerId', filterCustomerId)
-      return fetch(`/api/cutting-leftovers?${params.toString()}`).then((r) => r.json())
+      const r = await fetch(`/api/cutting-leftovers?${params.toString()}`)
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
     },
   })
 
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
-    queryFn: () => fetch('/api/customers').then((r) => r.json()),
+    queryFn: async () => {
+      const r = await fetch('/api/customers')
+      const data = await r.json()
+      return Array.isArray(data) ? data : []
+    },
   })
 
   const updateMutation = useMutation({

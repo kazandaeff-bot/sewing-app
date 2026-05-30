@@ -13,7 +13,8 @@ export function CustomerMaterialsTab({ customerId }: { customerId: string }) {
       if (res.status === 403) {
         throw new Error('access_denied')
       }
-      return res.json()
+      const data = await res.json()
+      return Array.isArray(data) ? data : []
     },
     enabled: !!customerId,
   })
