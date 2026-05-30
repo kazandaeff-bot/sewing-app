@@ -13,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Loader2, Plus, X, CheckCircle2, MapPin, Truck, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { Plan, SellerPlan } from '@/types'
 import { formatDate } from '@/lib/formatters'
 import { getColorDot, getSellerPlanStatusBadge } from '@/lib/status-badges'
@@ -38,7 +39,7 @@ export function CityDistributionTab() {
   const { data: plans = [] } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
-      const r = await fetch('/api/plans')
+      const r = await authFetch('/api/plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -47,7 +48,7 @@ export function CityDistributionTab() {
   const { data: sellerPlans = [], isLoading } = useQuery({
     queryKey: ['seller-plans'],
     queryFn: async () => {
-      const r = await fetch('/api/seller-plans')
+      const r = await authFetch('/api/seller-plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -56,7 +57,7 @@ export function CityDistributionTab() {
   const { data: cities = [] } = useQuery({
     queryKey: ['cities'],
     queryFn: async () => {
-      const r = await fetch('/api/cities')
+      const r = await authFetch('/api/cities')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -162,7 +163,7 @@ export function CityDistributionTab() {
         cities: Array<{ city: string; quantity: number }>
       }>
     }) =>
-      fetch('/api/seller-plans', {
+      authFetch('/api/seller-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -182,7 +183,7 @@ export function CityDistributionTab() {
   // --- Existing plan mutations ---
   const approveMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/seller-plans/${id}`, {
+      authFetch(`/api/seller-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'approved' }),
@@ -198,7 +199,7 @@ export function CityDistributionTab() {
 
   const markDistributedMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/seller-plans/${id}`, {
+      authFetch(`/api/seller-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'distributed' }),

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Loader2, Plus, X, CheckCircle2, ClipboardList, Users, Printer } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { Employee, CuttingPlan, CuttingPlanItem, SewingTask } from '@/types'
 import { printDocument } from '@/lib/formatters'
 import { getColorDot, getSewingTaskStatusBadge } from '@/lib/status-badges'
@@ -33,7 +34,7 @@ export function SewingTasksTab() {
   const { data: sewingTasks = [], isLoading } = useQuery({
     queryKey: ['sewing-tasks'],
     queryFn: async () => {
-      const r = await fetch('/api/sewing-tasks')
+      const r = await authFetch('/api/sewing-tasks')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -42,7 +43,7 @@ export function SewingTasksTab() {
   const { data: cuttingPlans = [] } = useQuery({
     queryKey: ['cutting-plans'],
     queryFn: async () => {
-      const r = await fetch('/api/cutting-plans')
+      const r = await authFetch('/api/cutting-plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -51,7 +52,7 @@ export function SewingTasksTab() {
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      const r = await fetch('/api/employees')
+      const r = await authFetch('/api/employees')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -160,7 +161,7 @@ export function SewingTasksTab() {
         const cpItem = plan.items.find(i => i.id === assignment.cuttingPlanItemId)
         if (!cpItem) return Promise.resolve(null)
 
-        return fetch('/api/sewing-tasks', {
+        return authFetch('/api/sewing-tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -198,7 +199,7 @@ export function SewingTasksTab() {
   // Status update for existing tasks
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      fetch(`/api/sewing-tasks/${id}`, {
+      authFetch(`/api/sewing-tasks/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),

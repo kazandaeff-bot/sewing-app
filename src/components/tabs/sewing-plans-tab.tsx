@@ -33,6 +33,7 @@ import {
   Users,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { Product, Plan, PlanItem, CuttingPlanItem, SewingTaskItem } from '@/types'
 import { formatDate, parseKitComboColors, getKitLabel, printDocument } from '@/lib/formatters'
 import { getColorDot, getPlanStatusBadge, getCuttingStatusBadge, getSewingTaskStatusBadge } from '@/lib/status-badges'
@@ -120,7 +121,7 @@ export function SewingPlansTab() {
     setDetailLoading(true)
     setDetailData(null)
     try {
-      const res = await fetch(`/api/plans/${planId}`)
+      const res = await authFetch(`/api/plans/${planId}`)
       const data = await res.json()
       setDetailData(data)
     } catch {
@@ -133,7 +134,7 @@ export function SewingPlansTab() {
   const { data: plans = [], isLoading: plansLoading } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
-      const r = await fetch('/api/plans')
+      const r = await authFetch('/api/plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -142,7 +143,7 @@ export function SewingPlansTab() {
   const { data: products = [] } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const r = await fetch('/api/products')
+      const r = await authFetch('/api/products')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -151,7 +152,7 @@ export function SewingPlansTab() {
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const r = await fetch('/api/customers')
+      const r = await authFetch('/api/customers')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -159,7 +160,7 @@ export function SewingPlansTab() {
 
   const createMutation = useMutation({
     mutationFn: (data: { customerId: string; priority?: string; deadline?: string; items: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
-      fetch('/api/plans', {
+      authFetch('/api/plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -180,7 +181,7 @@ export function SewingPlansTab() {
 
   const statusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      fetch(`/api/plans/${id}`, {
+      authFetch(`/api/plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -197,7 +198,7 @@ export function SewingPlansTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/plans/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetch(`/api/plans/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       toast({ title: 'План удалён', description: 'План пошива удалён' })
@@ -209,7 +210,7 @@ export function SewingPlansTab() {
 
   const updatePlanMutation = useMutation({
     mutationFn: ({ id, items }: { id: string; items: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
-      fetch(`/api/plans/${id}`, {
+      authFetch(`/api/plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
@@ -226,7 +227,7 @@ export function SewingPlansTab() {
 
   const supplementMutation = useMutation({
     mutationFn: ({ id, addItems }: { id: string; addItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
-      fetch(`/api/plans/${id}`, {
+      authFetch(`/api/plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addItems }),

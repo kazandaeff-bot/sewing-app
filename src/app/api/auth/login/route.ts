@@ -31,6 +31,8 @@ export async function POST(request: NextRequest) {
       customerId: employee.customerId || null,
     })
 
+    // Return token in response body so the client can store it
+    // and send via Authorization header (more reliable than cookies in sandbox)
     const response = NextResponse.json({
       user: {
         id: employee.id,
@@ -39,8 +41,10 @@ export async function POST(request: NextRequest) {
         code: employee.code,
         customerId: employee.customerId || null,
       },
+      token,
     })
 
+    // Also set as cookie as fallback
     response.cookies.set('token', token, {
       httpOnly: true,
       secure: true,

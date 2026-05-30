@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import {
   Camera,
   Loader2,
@@ -84,7 +85,7 @@ export function ProductsTab() {
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const r = await fetch('/api/products')
+      const r = await authFetch('/api/products')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -92,20 +93,20 @@ export function ProductsTab() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
+      authFetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setCreateOpen(false); resetCreateForm(); toast({ title: 'Изделие создано' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось создать изделие', variant: 'destructive' }) },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
+      authFetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setEditOpen(false); setSelectedProduct(null); toast({ title: 'Изделие обновлено' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось обновить изделие', variant: 'destructive' }) },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/products/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/products/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setDeleteOpen(false); setSelectedProduct(null); toast({ title: 'Изделие удалено' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить изделие', variant: 'destructive' }) },
   })
@@ -123,7 +124,7 @@ export function ProductsTab() {
     const parsedKitComboColors = parseKitComboColors(product.isKit ? product.kitComboColors : null)
     setSelectedProduct(product); setEditName(product.name); setEditArticle(product.article); setEditSewerRate(String(product.sewerRate)); setEditHomeRate(String(product.homeRate)); setEditQcRate(String(product.qcRate)); setEditReworkRate(String(product.reworkRate)); setEditIroningRate(String(product.ironingRate ?? 0)); setEditCuttingRate(String(product.cuttingRate ?? 0)); setEditIsKit(product.isKit); setEditKitComboColors(parsedKitComboColors); setEditKitKey(''); setEditKitValue(''); setEditSizes(product.sizes.map((s) => s.size)); setEditSizeInput(''); setEditColors(product.colors.map((c) => ({ color: c.color, colorHex: c.colorHex }))); setEditColorName(''); setEditColorHex('#9ca3af'); setEditReworkReasons(product.reworkReasons.map((r) => r.text)); setEditReasonInput(''); setEditImageUrl(product.imageUrl || null); setEditImageFile(null); setSizeRates({}); setEditOpen(true)
     // Load size rates
-    fetch(`/api/product-size-rates?productId=${product.id}`).then(r => r.json()).then((rates: Array<{ size: string; sewerRate: number | null; homeRate: number | null; qcRate: number | null; ironingRate: number | null; cuttingRate: number | null }>) => {
+    authFetch(`/api/product-size-rates?productId=${product.id}`).then(r => r.json()).then((rates: Array<{ size: string; sewerRate: number | null; homeRate: number | null; qcRate: number | null; ironingRate: number | null; cuttingRate: number | null }>) => {
       const r: Record<string, { sewerRate: string; homeRate: string; qcRate: string; ironingRate: string; cuttingRate: string }> = {}
       rates.forEach(s => { r[s.size] = { sewerRate: String(s.sewerRate ?? ''), homeRate: String(s.homeRate ?? ''), qcRate: String(s.qcRate ?? ''), ironingRate: String(s.ironingRate ?? ''), cuttingRate: String(s.cuttingRate ?? '') } })
       setSizeRates(r)
@@ -144,7 +145,7 @@ export function ProductsTab() {
       cuttingRate: v.cuttingRate ? parseInt(v.cuttingRate) : null,
     }))
     if (ratesToSave.length > 0) {
-      fetch('/api/product-size-rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rates: ratesToSave }) }).catch(() => {})
+      authFetch('/api/product-size-rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rates: ratesToSave }) }).catch(() => {})
     }
   }, [selectedProduct, editName, editArticle, editSewerRate, editHomeRate, editQcRate, editReworkRate, editIroningRate, editCuttingRate, editIsKit, editKitComboColors, editSizes, editColors, editImageUrl, sizeRates, updateMutation, toast])
 
@@ -232,7 +233,7 @@ export function ProductsTab() {
                         if (!file) return
                         setNewImageFile(file)
                         const fd = new FormData(); fd.append('file', file)
-                        try { const res = await fetch('/api/upload', { method: 'POST', body: fd }); const data = await res.json(); if (data.url) setNewImageUrl(data.url) } catch { toast({ title: 'Ошибка', description: 'Не удалось загрузить фото', variant: 'destructive' }) }
+                        try { const res = await authFetch('/api/upload', { method: 'POST', body: fd }); const data = await res.json(); if (data.url) setNewImageUrl(data.url) } catch { toast({ title: 'Ошибка', description: 'Не удалось загрузить фото', variant: 'destructive' }) }
                       }} />
                     </label>
                   )}
@@ -317,7 +318,7 @@ export function ProductsTab() {
                         if (!file) return
                         setEditImageFile(file)
                         const fd = new FormData(); fd.append('file', file)
-                        try { const res = await fetch('/api/upload', { method: 'POST', body: fd }); const data = await res.json(); if (data.url) setEditImageUrl(data.url) } catch { toast({ title: 'Ошибка', description: 'Не удалось загрузить фото', variant: 'destructive' }) }
+                        try { const res = await authFetch('/api/upload', { method: 'POST', body: fd }); const data = await res.json(); if (data.url) setEditImageUrl(data.url) } catch { toast({ title: 'Ошибка', description: 'Не удалось загрузить фото', variant: 'destructive' }) }
                       }} />
                     </label>
                   )}

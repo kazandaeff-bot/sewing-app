@@ -15,12 +15,14 @@ interface AuthContextType {
   loading: boolean
   login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
+  token: string | null
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 const AUTH_CHECK_TIMEOUT = 8000
 const USER_KEY = 'auth_user'
+const TOKEN_KEY = 'auth_token'
 
 function saveUserToStorage(user: User) {
   if (typeof window === 'undefined') return
@@ -40,10 +42,44 @@ function loadUserFromStorage(): User | null {
 function clearUserStorage() {
   if (typeof window === 'undefined') return
   localStorage.removeItem(USER_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+}
+
+function saveTokenToStorage(token: string) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(TOKEN_KEY, token)
+}
+
+function loadTokenFromStorage(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(TOKEN_KEY)
+}
+
+/**
+ * Get authorization headers for API requests.
+ * Uses token from localStorage (set during login).
+ */
+export function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (!token) return {}
+  return { Authorization: `Bearer ${token}` }
+}
+
+/**
+ * Fetch wrapper that automatically includes auth headers.
+ */
+export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    ...options.headers,
+    ...getAuthHeaders(),
+  }
+  return fetch(url, { ...options, headers })
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [token, setToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -56,8 +92,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }, AUTH_CHECK_TIMEOUT)
 
-    // First check: try server-side session (cookie)
-    fetch('/api/auth/me', { signal: controller.signal })
+    // Try to restore session from localStorage token
+    const storedToken = loadTokenFromStorage()
+    const storedUser = loadUserFromStorage()
+
+    if (!storedToken || !storedUser) {
+      // No stored token — not logged in, skip server check
+      clearTimeout(timeoutId)
+      // Use microtask to avoid synchronous setState in effect
+      queueMicrotask(() => { if (!cancelled) setLoading(false) })
+      return () => {
+        cancelled = true
+        clearTimeout(timeoutId)
+        controller.abort()
+      }
+    }
+
+    // Verify token with server
+    fetch('/api/auth/me', {
+      signal: controller.signal,
+      headers: { Authorization: `Bearer ${storedToken}` },
+    })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -66,27 +121,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) {
           if (data.user) {
             setUser(data.user)
+            setToken(storedToken)
             saveUserToStorage(data.user)
           } else {
-            // No server session — check localStorage
-            const storedUser = loadUserFromStorage()
-            if (storedUser) {
-              setUser(storedUser)
-            } else {
-              setUser(null)
-            }
+            // Token invalid — clear everything
+            setUser(null)
+            setToken(null)
+            clearUserStorage()
           }
         }
       })
       .catch(() => {
         if (!cancelled) {
-          // Network error — try localStorage as fallback
-          const storedUser = loadUserFromStorage()
-          if (storedUser) {
-            setUser(storedUser)
-          } else {
-            setUser(null)
-          }
+          // Server unreachable — still use localStorage for offline access
+          setUser(storedUser)
+          setToken(storedToken)
         }
       })
       .finally(() => {
@@ -113,8 +162,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json()
       if (res.ok && data.user) {
         setUser(data.user)
-        // Save to localStorage for persistence across page navigations
+        setToken(data.token)
         saveUserToStorage(data.user)
+        if (data.token) {
+          saveTokenToStorage(data.token)
+        }
         return { success: true }
       }
       return { success: false, error: data.error || 'Ошибка входа' }
@@ -124,13 +176,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    const headers = getAuthHeaders()
+    await fetch('/api/auth/logout', { method: 'POST', headers })
     setUser(null)
+    setToken(null)
     clearUserStorage()
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, token }}>
       {children}
     </AuthContext.Provider>
   )

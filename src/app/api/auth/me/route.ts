@@ -3,8 +3,18 @@ import { verifyToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
-    // Get token from cookie — same cookie name as set in /api/auth/login
-    const token = request.cookies.get('token')?.value
+    let token: string | undefined
+
+    // 1. Check Authorization header (Bearer token)
+    const authHeader = request.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7)
+    }
+
+    // 2. Fallback: check cookie
+    if (!token) {
+      token = request.cookies.get('token')?.value
+    }
 
     if (!token) {
       return NextResponse.json({ user: null })

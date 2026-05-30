@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Loader2, Scissors, Printer, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { CuttingPlan, CuttingLeftover } from '@/types'
 import { formatDate, printDocument } from '@/lib/formatters'
 import { getColorDot, getCuttingStatusBadge } from '@/lib/status-badges'
@@ -21,7 +22,7 @@ export function CuttingPlansTab() {
   const { data: cuttingPlans = [], isLoading } = useQuery({
     queryKey: ['cutting-plans'],
     queryFn: async () => {
-      const r = await fetch('/api/cutting-plans')
+      const r = await authFetch('/api/cutting-plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -29,7 +30,7 @@ export function CuttingPlansTab() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { status?: string; items?: Array<{ id: string; actualQty: number | null }> } }) =>
-      fetch(`/api/cutting-plans/${id}`, {
+      authFetch(`/api/cutting-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

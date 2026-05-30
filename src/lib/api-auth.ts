@@ -89,15 +89,30 @@ export interface SessionUser {
 }
 
 /**
- * Extract and verify session from request cookies.
+ * Extract and verify session from request.
+ * Checks Authorization header first (Bearer token), then cookie fallback.
  * Returns user info or null if not authenticated.
  */
 export async function getSessionUser(req: NextRequest): Promise<SessionUser | null> {
   try {
-    const token = req.cookies.get('token')?.value
+    let token: string | undefined
+
+    // 1. Check Authorization header (Bearer token) — most reliable for sandbox/preview
+    const authHeader = req.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      token = authHeader.slice(7)
+    }
+
+    // 2. Fallback: check cookie
+    if (!token) {
+      token = req.cookies.get('token')?.value
+    }
+
     if (!token) return null
+
     const payload = verifyToken(token)
     if (!payload) return null
+
     return {
       id: payload.id as string,
       role: payload.role as string,

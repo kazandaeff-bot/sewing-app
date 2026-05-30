@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Loader2, Scissors, Pencil, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { CuttingLeftover } from '@/types'
 
 export function CuttingLeftoversTab() {
@@ -28,7 +29,7 @@ export function CuttingLeftoversTab() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (filterCustomerId) params.set('customerId', filterCustomerId)
-      const r = await fetch(`/api/cutting-leftovers?${params.toString()}`)
+      const r = await authFetch(`/api/cutting-leftovers?${params.toString()}`)
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -37,7 +38,7 @@ export function CuttingLeftoversTab() {
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const r = await fetch('/api/customers')
+      const r = await authFetch('/api/customers')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -45,7 +46,7 @@ export function CuttingLeftoversTab() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      fetch(`/api/cutting-leftovers/${id}`, {
+      authFetch(`/api/cutting-leftovers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -62,7 +63,7 @@ export function CuttingLeftoversTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/cutting-leftovers/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetch(`/api/cutting-leftovers/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cutting-leftovers'] })
       toast({ title: 'Удалено', description: 'Остаток кроя удалён' })

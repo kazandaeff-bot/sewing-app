@@ -1,9 +1,13 @@
 // ============ Shared API Client ============
 // Eliminates boilerplate fetch() calls across tab components
 
-/** Generic GET request with JSON parsing */
+import { getAuthHeaders } from '@/components/auth-provider'
+
+/** Generic GET request with JSON parsing and auth */
 export async function apiGet<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(url)
+  const res = await fetch(url, {
+    headers: { ...getAuthHeaders() },
+  })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
     throw new Error(error.message || `GET ${url} failed: ${res.status}`)
@@ -11,11 +15,11 @@ export async function apiGet<T = unknown>(url: string): Promise<T> {
   return res.json()
 }
 
-/** Generic POST request with JSON body */
+/** Generic POST request with JSON body and auth */
 export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -25,11 +29,11 @@ export async function apiPost<T = unknown>(url: string, body: unknown): Promise<
   return res.json()
 }
 
-/** Generic PATCH request with JSON body */
+/** Generic PATCH request with JSON body and auth */
 export async function apiPatch<T = unknown>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
   if (!res.ok) {
@@ -39,10 +43,11 @@ export async function apiPatch<T = unknown>(url: string, body: unknown): Promise
   return res.json()
 }
 
-/** Generic DELETE request */
+/** Generic DELETE request with auth */
 export async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     method: 'DELETE',
+    headers: { ...getAuthHeaders() },
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
@@ -51,10 +56,11 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
   return res.json()
 }
 
-/** POST with FormData (for file uploads) */
+/** POST with FormData (for file uploads) and auth */
 export async function apiUpload<T = unknown>(url: string, formData: FormData): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
+    headers: { ...getAuthHeaders() },
     body: formData,
   })
   if (!res.ok) {

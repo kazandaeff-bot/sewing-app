@@ -31,6 +31,7 @@ import {
   History,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { Product, Employee, EmployeeWithAuth, CustomerEditData, MaterialType } from '@/types'
 import { getKitLabel, parseKitComboColors } from '@/lib/formatters'
 import { EMPLOYEE_ROLES, STANDARD_SIZE_GRIDS, STANDARD_COLORS } from '@/lib/constants'
@@ -104,7 +105,7 @@ export function ReferencesTab() {
   const { data: products = [], isLoading: productsLoading } = useQuery({
     queryKey: ['products'],
     queryFn: async () => {
-      const r = await fetch('/api/products')
+      const r = await authFetch('/api/products')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -112,7 +113,7 @@ export function ReferencesTab() {
   const { data: employees = [], isLoading: employeesLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      const r = await fetch('/api/employees')
+      const r = await authFetch('/api/employees')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -120,7 +121,7 @@ export function ReferencesTab() {
   const { data: cities = [], isLoading: citiesLoading } = useQuery({
     queryKey: ['cities'],
     queryFn: async () => {
-      const r = await fetch('/api/cities')
+      const r = await authFetch('/api/cities')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -128,7 +129,7 @@ export function ReferencesTab() {
   const { data: boxTypes = [], isLoading: boxTypesLoading } = useQuery({
     queryKey: ['box-types'],
     queryFn: async () => {
-      const r = await fetch('/api/box-types')
+      const r = await authFetch('/api/box-types')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -136,7 +137,7 @@ export function ReferencesTab() {
   const { data: customers = [], isLoading: customersLoading } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const r = await fetch(`/api/customers?_t=${Date.now()}`)
+      const r = await authFetch(`/api/customers?_t=${Date.now()}`)
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -144,7 +145,7 @@ export function ReferencesTab() {
   const { data: materialTypes = [], isLoading: materialTypesLoading } = useQuery({
     queryKey: ['material-types'],
     queryFn: async () => {
-      const r = await fetch(`/api/material-types?_t=${Date.now()}`)
+      const r = await authFetch(`/api/material-types?_t=${Date.now()}`)
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -152,7 +153,7 @@ export function ReferencesTab() {
   const { data: materialNorms = [], isLoading: materialNormsLoading } = useQuery({
     queryKey: ['material-norms'],
     queryFn: async () => {
-      const r = await fetch(`/api/material-norms?_t=${Date.now()}`)
+      const r = await authFetch(`/api/material-norms?_t=${Date.now()}`)
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -160,46 +161,46 @@ export function ReferencesTab() {
 
   // ---- Product mutations ----
   const createProductMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: Record<string, unknown>) => authFetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); closeProductDialog(); toast({ title: 'Изделие создано' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const updateProductMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => fetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => authFetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); closeProductDialog(); toast({ title: 'Изделие обновлено' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteProductMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/products/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/products/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); toast({ title: 'Изделие удалено' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить изделие', variant: 'destructive' }) },
   })
 
   // ---- Employee mutations ----
   const createEmployeeMutation = useMutation({
-    mutationFn: (data: Record<string, string>) => fetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: Record<string, string>) => authFetch('/api/employees', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); closeEmployeeDialog(); toast({ title: 'Сотрудник добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const updateEmployeeMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) => fetch(`/api/employees/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) => authFetch(`/api/employees/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); closeEmployeeDialog(); toast({ title: 'Сотрудник обновлён' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteEmployeeMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/employees/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/employees/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['employees'] }); toast({ title: 'Сотрудник удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить сотрудника', variant: 'destructive' }) },
   })
 
   // ---- City mutations ----
   const createCityMutation = useMutation({
-    mutationFn: (name: string) => fetch('/api/cities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then((r) => r.json()),
+    mutationFn: (name: string) => authFetch('/api/cities', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['cities'] }); setNewCity(''); toast({ title: 'Город добавлен' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось добавить город', variant: 'destructive' }) },
   })
   const deleteCityMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/cities/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/cities/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['cities'] }); toast({ title: 'Город удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить город', variant: 'destructive' }) },
   })
@@ -207,72 +208,72 @@ export function ReferencesTab() {
   // ---- Box type mutations ----
   const createBoxTypeMutation = useMutation({
     mutationFn: (data: { name: string; dimensions?: string; capacities?: Array<{ productId: string; size: string; maxQty: number }> }) =>
-      fetch('/api/box-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
+      authFetch('/api/box-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['box-types'] }); setBoxDialogOpen(false); setNewBoxName(''); setNewBoxDimensions(''); setNewCapacities([]); toast({ title: 'Тип короба добавлен' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось добавить тип короба', variant: 'destructive' }) },
   })
   const deleteBoxTypeMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/box-types/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/box-types/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['box-types'] }); toast({ title: 'Тип короба удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить тип короба', variant: 'destructive' }) },
   })
 
   // ---- Customer mutations ----
   const createCustomerMutation = useMutation({
-    mutationFn: (data: { name: string; contactInfo?: string }) => fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: { name: string; contactInfo?: string }) => authFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const updateCustomerMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; contactInfo?: string; showMaterialBalance?: boolean } }) => fetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: ({ id, data }: { id: string; data: { name?: string; contactInfo?: string; showMaterialBalance?: boolean } }) => authFetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик обновлён' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteCustomerMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/customers/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/customers/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); toast({ title: 'Заказчик удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить заказчика', variant: 'destructive' }) },
   })
 
   // ---- Material type mutations ----
   const createMaterialTypeMutation = useMutation({
-    mutationFn: (data: { name: string; unit?: string }) => fetch('/api/material-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: { name: string; unit?: string }) => authFetch('/api/material-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); setNewMaterialTypeName(''); setNewMaterialTypeUnit('шт'); toast({ title: 'Тип материала добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialTypeMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/material-types/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/material-types/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); toast({ title: 'Тип материала удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить тип материала', variant: 'destructive' }) },
   })
 
   // ---- Material mutations ----
   const createMaterialMutation = useMutation({
-    mutationFn: (data: { name: string; materialTypeId: string; unit?: string }) => fetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: { name: string; materialTypeId: string; unit?: string }) => authFetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); setNewMaterialName(''); setNewMaterialUnit('шт'); setAddingMaterialToTypeId(null); toast({ title: 'Материал добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/materials/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/materials/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); toast({ title: 'Материал удалён' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить материал', variant: 'destructive' }) },
   })
 
   // ---- Material norm mutations ----
   const createMaterialNormMutation = useMutation({
-    mutationFn: (data: { materialId: string; productId: string; consumptionPerUnit: number; unit?: string }) => fetch('/api/material-norms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: { materialId: string; productId: string; consumptionPerUnit: number; unit?: string }) => authFetch('/api/material-norms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-norms'] }); setNewNormProductId(''); setNewNormMaterialId(''); setNewNormConsumption(''); setNewNormUnit('гр'); toast({ title: 'Норма расхода добавлена' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialNormMutation = useMutation({
-    mutationFn: (id: string) => fetch(`/api/material-norms?id=${id}`, { method: 'DELETE' }).then((r) => r.json()),
+    mutationFn: (id: string) => authFetch(`/api/material-norms?id=${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-norms'] }); toast({ title: 'Норма расхода удалена' }) },
     onError: () => { toast({ title: 'Ошибка', description: 'Не удалось удалить норму расхода', variant: 'destructive' }) },
   })
 
   // ---- Material entry mutations ----
   const createEntryMutation = useMutation({
-    mutationFn: (data: { materialId: string; type: 'incoming' | 'consumed'; qty: number; note?: string }) => fetch('/api/material-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: { materialId: string; type: 'incoming' | 'consumed'; qty: number; note?: string }) => authFetch('/api/material-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-entries'] }); setEntryDialogOpen(false); setEntryQty(''); setEntryNote(''); toast({ title: entryType === 'incoming' ? 'Приход добавлен' : 'Расход списан' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
@@ -280,7 +281,7 @@ export function ReferencesTab() {
   const { data: materialEntries = [] } = useQuery({
     queryKey: ['material-entries', historyMaterialId],
     queryFn: async () => {
-      const r = await fetch(`/api/material-entries?materialId=${historyMaterialId}`)
+      const r = await authFetch(`/api/material-entries?materialId=${historyMaterialId}`)
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },

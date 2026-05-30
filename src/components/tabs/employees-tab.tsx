@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import {
   Loader2,
   Pencil,
@@ -48,7 +49,7 @@ export function EmployeesTab() {
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
-      const r = await fetch('/api/employees')
+      const r = await authFetch('/api/employees')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -57,7 +58,7 @@ export function EmployeesTab() {
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const r = await fetch('/api/customers')
+      const r = await authFetch('/api/customers')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -65,7 +66,7 @@ export function EmployeesTab() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, string>) =>
-      fetch('/api/employees', {
+      authFetch('/api/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -88,7 +89,7 @@ export function EmployeesTab() {
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) =>
-      fetch(`/api/employees/${id}`, {
+      authFetch(`/api/employees/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -106,7 +107,7 @@ export function EmployeesTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      fetch(`/api/employees/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetch(`/api/employees/${id}`, { method: 'DELETE' }).then((r) => r.json()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setDeleteOpen(false)

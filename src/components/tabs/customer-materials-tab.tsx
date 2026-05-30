@@ -3,13 +3,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Loader2, Package } from 'lucide-react'
+import { authFetch } from '@/components/auth-provider'
 
 // ============ TAB: Customer Materials ============
 export function CustomerMaterialsTab({ customerId }: { customerId: string }) {
   const { data: materials = [], isLoading, error } = useQuery({
     queryKey: ['material-balance', customerId],
     queryFn: async () => {
-      const res = await fetch(`/api/material-balance?customerId=${customerId}`)
+      const res = await authFetch(`/api/material-balance?customerId=${customerId}`)
       if (res.status === 403) {
         throw new Error('access_denied')
       }

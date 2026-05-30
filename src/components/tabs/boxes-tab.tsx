@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Loader2, Plus, Package, Truck, Printer } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { authFetch } from '@/components/auth-provider'
 import type { SellerPlan, Box } from '@/types'
 import { getColorDot, getBoxStatusBadge } from '@/lib/status-badges'
 
@@ -25,7 +26,7 @@ export function BoxesTab() {
   const { data: boxes = [], isLoading } = useQuery({
     queryKey: ['boxes'],
     queryFn: async () => {
-      const r = await fetch('/api/boxes')
+      const r = await authFetch('/api/boxes')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -34,7 +35,7 @@ export function BoxesTab() {
   const { data: sellerPlans = [] } = useQuery({
     queryKey: ['seller-plans'],
     queryFn: async () => {
-      const r = await fetch('/api/seller-plans')
+      const r = await authFetch('/api/seller-plans')
       const data = await r.json()
       return Array.isArray(data) ? data : []
     },
@@ -53,7 +54,7 @@ export function BoxesTab() {
 
   const generateMutation = useMutation({
     mutationFn: (sellerPlanId: string) =>
-      fetch('/api/boxes', {
+      authFetch('/api/boxes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sellerPlanId }),
@@ -74,7 +75,7 @@ export function BoxesTab() {
 
   const updateBoxMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: { status?: string; items?: Array<{ id: string; actualQty: number | null }> } }) =>
-      fetch(`/api/boxes/${id}`, {
+      authFetch(`/api/boxes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -119,7 +120,7 @@ export function BoxesTab() {
 
   const handleBoxPrint = useCallback(async (boxId: string) => {
     try {
-      const res = await fetch(`/api/boxes/print/${boxId}`)
+      const res = await authFetch(`/api/boxes/print/${boxId}`)
       const data = await res.json()
       const printWindow = window.open('', '_blank')
       if (!printWindow) {
