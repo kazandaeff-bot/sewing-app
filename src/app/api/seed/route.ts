@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { hashPassword } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,26 +17,32 @@ export async function GET(request: NextRequest) {
       await db.product.deleteMany()
     }
 
-    // Create employees
-    const employees = await Promise.all([
-      db.employee.create({ data: { name: 'Иванова Мария', code: 'Ш-001', username: 'sewer1', password: '123456', role: 'sewer' } }),
-      db.employee.create({ data: { name: 'Петрова Анна', code: 'Ш-002', username: 'sewer2', password: '123456', role: 'sewer' } }),
-      db.employee.create({ data: { name: 'Сидорова Елена', code: 'Ш-003', username: 'sewer3', password: '123456', role: 'sewer' } }),
-      db.employee.create({ data: { name: 'Козлова Ольга', code: 'Ш-004', username: 'sewer4', password: '123456', role: 'sewer' } }),
-      db.employee.create({ data: { name: 'Новикова Татьяна', code: 'Ш-005', username: 'sewer5', password: '123456', role: 'sewer' } }),
-      db.employee.create({ data: { name: 'Смирнова Ирина', code: 'ОТК-001', username: 'qc1', password: '123456', role: 'qc' } }),
-      db.employee.create({ data: { name: 'Кузнецова Наталья', code: 'ОТК-002', username: 'qc2', password: '123456', role: 'qc' } }),
-      db.employee.create({ data: { name: 'Директор Ольга', code: 'РУК-001', username: 'admin', password: 'admin', role: 'supervisor' } }),
+    // Hash passwords for all employees
+    const [pw123456, pwAdmin] = await Promise.all([
+      hashPassword('123456'),
+      hashPassword('admin'),
     ])
 
-    // Create products with rework reasons
+    // Create employees with hashed passwords
+    const employees = await Promise.all([
+      db.employee.create({ data: { name: 'Иванова Мария', code: 'Ш-001', username: 'sewer1', password: pw123456, role: 'sewer' } }),
+      db.employee.create({ data: { name: 'Петрова Анна', code: 'Ш-002', username: 'sewer2', password: pw123456, role: 'sewer' } }),
+      db.employee.create({ data: { name: 'Сидорова Елена', code: 'Ш-003', username: 'sewer3', password: pw123456, role: 'sewer' } }),
+      db.employee.create({ data: { name: 'Козлова Ольга', code: 'Ш-004', username: 'sewer4', password: pw123456, role: 'sewer' } }),
+      db.employee.create({ data: { name: 'Новикова Татьяна', code: 'Ш-005', username: 'sewer5', password: pw123456, role: 'sewer' } }),
+      db.employee.create({ data: { name: 'Смирнова Ирина', code: 'ОТК-001', username: 'qc1', password: pw123456, role: 'qc' } }),
+      db.employee.create({ data: { name: 'Кузнецова Наталья', code: 'ОТК-002', username: 'qc2', password: pw123456, role: 'qc' } }),
+      db.employee.create({ data: { name: 'Директор Ольга', code: 'РУК-001', username: 'admin', password: pwAdmin, role: 'supervisor' } }),
+    ])
+
+    // Create products with all rate fields including ironingRate and cuttingRate
     const products = await Promise.all([
-      db.product.create({ data: { name: 'Футболка мужская', article: 'ФМ-01', sewerRate: 120, qcRate: 40, reworkRate: 60 } }),
-      db.product.create({ data: { name: 'Футболка женская', article: 'ФЖ-01', sewerRate: 130, qcRate: 40, reworkRate: 65 } }),
-      db.product.create({ data: { name: 'Брюки мужские', article: 'БМ-01', sewerRate: 200, qcRate: 60, reworkRate: 100 } }),
-      db.product.create({ data: { name: 'Брюки женские', article: 'БЖ-01', sewerRate: 200, qcRate: 60, reworkRate: 100 } }),
-      db.product.create({ data: { name: 'Рубашка мужская', article: 'РМ-01', sewerRate: 180, qcRate: 55, reworkRate: 90 } }),
-      db.product.create({ data: { name: 'Платье женское', article: 'ПЖ-01', sewerRate: 350, qcRate: 70, reworkRate: 150 } }),
+      db.product.create({ data: { name: 'Футболка мужская', article: 'ФМ-01', sewerRate: 120, qcRate: 40, reworkRate: 60, ironingRate: 10, cuttingRate: 30 } }),
+      db.product.create({ data: { name: 'Футболка женская', article: 'ФЖ-01', sewerRate: 130, qcRate: 40, reworkRate: 65, ironingRate: 10, cuttingRate: 30 } }),
+      db.product.create({ data: { name: 'Брюки мужские', article: 'БМ-01', sewerRate: 200, qcRate: 60, reworkRate: 100, ironingRate: 15, cuttingRate: 40 } }),
+      db.product.create({ data: { name: 'Брюки женские', article: 'БЖ-01', sewerRate: 200, qcRate: 60, reworkRate: 100, ironingRate: 15, cuttingRate: 40 } }),
+      db.product.create({ data: { name: 'Рубашка мужская', article: 'РМ-01', sewerRate: 180, qcRate: 55, reworkRate: 90, ironingRate: 12, cuttingRate: 35 } }),
+      db.product.create({ data: { name: 'Платье женское', article: 'ПЖ-01', sewerRate: 350, qcRate: 70, reworkRate: 150, ironingRate: 20, cuttingRate: 50 } }),
     ])
 
     // Create rework reasons for products

@@ -148,3 +148,26 @@ Stage Summary:
 - ProductsTab already had ironingRate and cuttingRate fields, only defaults were wrong
 - ReferencesTab was missing ironingRate and cuttingRate entirely — now fixed
 - Preview server starts but background processes are killed by sandbox after ~15-20 seconds
+
+---
+Task ID: 6
+Agent: Main
+Task: Fix app startup issues - password hashing, seed data, all rates per product
+
+Work Log:
+- Fixed critical bug: seed route stored plain-text passwords but login used bcrypt.compare
+- Fixed all 10 employee passwords in DB by hashing them with bcrypt
+- Updated seed route to use hashPassword() for proper password hashing
+- Added ironingRate and cuttingRate to product creation in seed route
+- Restored middleware.ts (proxy.ts rename was causing issues)
+- Verified build succeeds: `bun run build` compiles without errors
+- Database has 7 products, all with proper rate fields (sewerRate, ironingRate, cuttingRate, qcRate, reworkRate)
+- Login credentials: admin/admin (supervisor), sewer1/123456 (sewer), etc.
+- Background processes are killed by sandbox after ~10-15 seconds of inactivity
+
+Stage Summary:
+- App code is correct and builds successfully
+- All passwords are properly bcrypt-hashed
+- All rate fields (Швея, Надомница, ВТО, Крой, ОТК, Переделка) are in both ProductsTab and ReferencesTab
+- Organizations = Заказчики (Customers) in Справочники tab
+- Preview requires system auto-start of dev server (user should refresh preview page)
