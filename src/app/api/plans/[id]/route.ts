@@ -6,8 +6,7 @@ import { UpdatePlanSchema, IdParamSchema } from '@/lib/schemas'
 /**
  * Helper: build cutting plan items with kit expansion
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function buildCuttingItems(planItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number; product?: any }>) {
+async function buildCuttingItems(planItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number; product?: Record<string, unknown> }>) {
   const cuttingItems: Array<{ productId: string; size: string; color: string; colorHex: string; plannedQty: number }> = []
   const productCache: Record<string, { product: Awaited<ReturnType<typeof db.product.findUnique>>; colors: Array<{ color: string; colorHex: string }>; kitCombo: Record<string, string[]> | null }> = {}
 
@@ -308,7 +307,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
             color: item.color as string,
             colorHex: (item.colorHex as string) || '#9ca3af',
             quantity: item.quantity as number,
-            product: item.product as any | undefined,
+            product: item.product as Record<string, unknown> | undefined,
           }))
         )
 
