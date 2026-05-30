@@ -385,6 +385,11 @@ export const IdParamSchema = z.object({
   id: cuid,
 })
 
+export const DealContactIdParamSchema = z.object({
+  id: cuid,
+  contactId: cuid,
+})
+
 // --- Query schemas (for GET request search params) ---
 
 export const TasksQuerySchema = z.object({
@@ -438,4 +443,132 @@ export const SeedQuerySchema = z.object({
 export const PrintQuerySchema = z.object({
   type: PrintType,
   id: cuid,
+})
+
+// --- Invoices ---
+
+export const InvoiceStatus = z.enum(['draft', 'sent', 'paid', 'cancelled'])
+
+const InvoiceItemInput = z.object({
+  productId: cuid.optional(),
+  description: z.string().min(1, 'Укажите наименование'),
+  quantity: positiveInt,
+  unit: z.string().default('шт'),
+  price: z.coerce.number().nonnegative().default(0),
+  amount: z.coerce.number().nonnegative().default(0),
+  vatRate: z.coerce.number().nonnegative().nullable().optional(),
+  vatAmount: z.coerce.number().nonnegative().nullable().optional(),
+})
+
+export const CreateInvoiceSchema = z.object({
+  number: z.string().min(1, 'Укажите номер счёта'),
+  date: z.string().optional(),
+  customerId: cuid,
+  planId: cuid.optional(),
+  status: InvoiceStatus.default('draft'),
+  dueDate: z.string().nullable().optional(),
+  note: z.string().optional(),
+  items: z.array(InvoiceItemInput).min(1, 'Добавьте хотя бы одну позицию'),
+  vatRate: z.coerce.number().nonnegative().default(20),
+})
+
+export const UpdateInvoiceSchema = z.object({
+  number: z.string().min(1).optional(),
+  date: z.string().optional(),
+  customerId: cuid.optional(),
+  planId: cuid.nullable().optional(),
+  status: InvoiceStatus.optional(),
+  dueDate: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  items: z.array(InvoiceItemInput).optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
+})
+
+// --- UPD ---
+
+export const UPDStatus = z.enum(['draft', 'confirmed', 'sent', 'signed'])
+export const UPDOperationType = z.enum(['shipment', 'transfer', 'return'])
+
+const UPDItemInput = z.object({
+  productId: cuid.optional(),
+  description: z.string().min(1, 'Укажите наименование'),
+  quantity: positiveInt,
+  unit: z.string().default('шт'),
+  price: z.coerce.number().nonnegative().default(0),
+  amount: z.coerce.number().nonnegative().default(0),
+  vatRate: z.coerce.number().nonnegative().nullable().optional(),
+  vatAmount: z.coerce.number().nonnegative().nullable().optional(),
+})
+
+export const CreateUPDSchema = z.object({
+  number: z.string().min(1, 'Укажите номер УПД'),
+  date: z.string().optional(),
+  customerId: cuid,
+  invoiceId: cuid.optional(),
+  sellerPlanId: cuid.optional(),
+  status: UPDStatus.default('draft'),
+  operationType: UPDOperationType.default('shipment'),
+  note: z.string().optional(),
+  items: z.array(UPDItemInput).min(1, 'Добавьте хотя бы одну позицию'),
+  vatRate: z.coerce.number().nonnegative().default(20),
+})
+
+export const UpdateUPDSchema = z.object({
+  number: z.string().min(1).optional(),
+  date: z.string().optional(),
+  customerId: cuid.optional(),
+  invoiceId: cuid.nullable().optional(),
+  sellerPlanId: cuid.nullable().optional(),
+  status: UPDStatus.optional(),
+  operationType: UPDOperationType.optional(),
+  note: z.string().nullable().optional(),
+  items: z.array(UPDItemInput).optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
+})
+
+// --- Deals (CRM) ---
+
+export const DealStatus = z.enum(['new', 'negotiation', 'agreed', 'won', 'lost', 'suspended'])
+
+export const CreateDealSchema = z.object({
+  title: z.string().min(1, 'Укажите название сделки'),
+  customerId: cuid,
+  status: DealStatus.default('new'),
+  amount: z.coerce.number().nonnegative().nullable().optional(),
+  description: z.string().optional(),
+  result: z.string().optional(),
+  nextStep: z.string().optional(),
+  deadline: z.string().nullable().optional(),
+})
+
+export const UpdateDealSchema = z.object({
+  title: z.string().min(1).optional(),
+  customerId: cuid.optional(),
+  status: DealStatus.optional(),
+  amount: z.coerce.number().nonnegative().nullable().optional(),
+  description: z.string().nullable().optional(),
+  result: z.string().nullable().optional(),
+  nextStep: z.string().nullable().optional(),
+  deadline: z.string().nullable().optional(),
+})
+
+// --- Deal Contacts ---
+
+export const DealContactType = z.enum(['meeting', 'call', 'email', 'note'])
+
+export const CreateDealContactSchema = z.object({
+  dealId: cuid,
+  date: z.string().optional(),
+  type: DealContactType.default('meeting'),
+  result: z.string().optional(),
+  description: z.string().optional(),
+  nextStep: z.string().optional(),
+})
+
+export const UpdateDealContactSchema = z.object({
+  date: z.string().optional(),
+  type: DealContactType.optional(),
+  result: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  nextStep: z.string().nullable().optional(),
 })

@@ -74,7 +74,7 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     ...options.headers,
     ...getAuthHeaders(),
   }
-  return fetch(url, { ...options, headers })
+  return fetch(url, { ...options, headers, credentials: 'include' as RequestCredentials })
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -112,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     fetch('/api/auth/me', {
       signal: controller.signal,
       headers: { Authorization: `Bearer ${storedToken}` },
+      credentials: 'include',
     })
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
@@ -158,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        credentials: 'include',
       })
       const data = await res.json()
       if (res.ok && data.user) {
@@ -177,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     const headers = getAuthHeaders()
-    await fetch('/api/auth/logout', { method: 'POST', headers })
+    await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'include' })
     setUser(null)
     setToken(null)
     clearUserStorage()

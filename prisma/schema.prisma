@@ -49,6 +49,8 @@ model Product {
   materialNorms   MaterialNorm[]
   cuttingLeftovers CuttingLeftover[]
   sizeRates        ProductSizeRate[]
+  invoiceItems     InvoiceItem[]
+  updItems         UPDItem[]
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 }
@@ -171,6 +173,9 @@ model Customer {
   customerProducts    CustomerProduct[]
   plans               Plan[]
   sellerPlans         SellerPlan[]
+  invoices            Invoice[]
+  upds                UPD[]
+  deals               Deal[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -407,4 +412,105 @@ model MaterialNorm {
   product              Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([materialId, productId])
+}
+
+// ============ МОДУЛЬ 7: Счета (выставление) ============
+model Invoice {
+  id            String         @id @default(cuid())
+  number        String         @unique  // Номер счета (авто или ручной)
+  date          DateTime       @default(now())
+  customerId    String
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  planId        String?        // Привязка к плану пошива
+  status        String         @default("draft") // draft | sent | paid | cancelled
+  dueDate       DateTime?      // Срок оплаты
+  note          String?        // Примечание
+  items         InvoiceItem[]
+  upds          UPD[]
+  totalAmount   Float          @default(0)
+  vatRate       Float          @default(20)  // Ставка НДС %
+  vatAmount     Float          @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model InvoiceItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  description String   // Наименование позиции
+  quantity    Int      @default(1)
+  unit        String   @default("шт")
+  price       Float    @default(0)  // Цена за единицу
+  amount      Float    @default(0)  // Сумма = quantity * price
+  vatRate     Float?   // Если отличается от ставки счёта
+  vatAmount   Float?   // Сумма НДС позиции
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// ============ МОДУЛЬ 8: УПД (Универсальный передаточный документ) ============
+model UPD {
+  id            String     @id @default(cuid())
+  number        String     @unique  // Номер УПД
+  date          DateTime   @default(now())
+  customerId    String
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  invoiceId     String?    // Привязка к счёту
+  invoice       Invoice?   @relation(fields: [invoiceId], references: [id])
+  sellerPlanId  String?    // Привязка к отгрузке
+  status        String     @default("draft") // draft | confirmed | sent | signed
+  operationType String     @default("shipment") // shipment | transfer | return
+  note          String?
+  items         UPDItem[]
+  totalAmount   Float      @default(0)
+  vatRate       Float      @default(20)
+  vatAmount     Float      @default(0)
+  createdBy     String?    // Кто создал (id сотрудника)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model UPDItem {
+  id           String  @id @default(cuid())
+  updId        String
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id])
+  description  String  // Наименование товара
+  quantity     Int     @default(1)
+  unit         String  @default("шт")
+  price        Float   @default(0)
+  amount       Float   @default(0)
+  vatRate      Float?
+  vatAmount    Float?
+  upd          UPD     @relation(fields: [updId], references: [id], onDelete: Cascade)
+}
+
+// ============ МОДУЛЬ 9: CRM — Сделки и переговоры ============
+model Deal {
+  id          String        @id @default(cuid())
+  title       String        // Название сделки / тема переговоров
+  customerId  String
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  status      String        @default("new") // new | negotiation | agreed | won | lost | suspended
+  amount      Float?        // Предполагаемая сумма
+  description String?       // Описание / суть переговоров
+  result      String?       // Итог переговоров
+  nextStep    String?       // Следующий шаг
+  deadline    DateTime?     // Срок сделки
+  contacts    DealContact[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model DealContact {
+  id          String   @id @default(cuid())
+  dealId      String
+  date        DateTime @default(now())
+  type        String   @default("meeting") // meeting | call | email | note
+  result      String?  // Результат встречи / звонка
+  description String?  // Подробности
+  nextStep    String?  // Что делать дальше
+  deal        Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
 }

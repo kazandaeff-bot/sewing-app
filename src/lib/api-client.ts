@@ -7,6 +7,7 @@ import { getAuthHeaders } from '@/components/auth-provider'
 export async function apiGet<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     headers: { ...getAuthHeaders() },
+    credentials: 'include',
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
@@ -21,6 +22,7 @@ export async function apiPost<T = unknown>(url: string, body: unknown): Promise<
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
@@ -35,6 +37,7 @@ export async function apiPatch<T = unknown>(url: string, body: unknown): Promise
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
+    credentials: 'include',
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
@@ -48,6 +51,7 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
   const res = await fetch(url, {
     method: 'DELETE',
     headers: { ...getAuthHeaders() },
+    credentials: 'include',
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))
@@ -62,6 +66,7 @@ export async function apiUpload<T = unknown>(url: string, formData: FormData): P
     method: 'POST',
     headers: { ...getAuthHeaders() },
     body: formData,
+    credentials: 'include',
   })
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: res.statusText }))

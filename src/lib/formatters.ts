@@ -97,7 +97,11 @@ export function getPeriodLabel(period: 'week' | 'month' | 'all'): string {
  */
 export async function printDocument(type: string, id: string): Promise<void> {
   try {
-    const res = await fetch(`/api/print?type=${type}&id=${id}`)
+    const { getAuthHeaders } = await import('@/components/auth-provider')
+    const res = await fetch(`/api/print?type=${type}&id=${id}`, {
+      headers: { ...getAuthHeaders() },
+      credentials: 'include',
+    })
     const data = await res.json()
     if (data.html) {
       const printWindow = window.open('', '_blank')

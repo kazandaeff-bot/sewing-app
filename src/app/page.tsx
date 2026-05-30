@@ -28,6 +28,9 @@ import { SewingTasksTab } from '@/components/tabs/sewing-tasks-tab'
 import { CityDistributionTab } from '@/components/tabs/city-distribution-tab'
 import { BoxesTab } from '@/components/tabs/boxes-tab'
 import { ReferencesTab } from '@/components/tabs/references-tab'
+import { InvoicesTab } from '@/components/tabs/invoices-tab'
+import { UPDTab } from '@/components/tabs/upd-tab'
+import { CRMTab } from '@/components/tabs/crm-tab'
 
 // Icons
 import {
@@ -48,6 +51,9 @@ import {
   Box,
   ChevronLeft,
   ChevronRight,
+  Receipt,
+  FileSpreadsheet,
+  Handshake,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -93,7 +99,7 @@ function Sidebar({
     }
   }
 
-  const groupOrder = ['Планирование', 'Производство', 'Справочники']
+  const groupOrder = ['Планирование', 'Производство', 'Менеджер', 'Справочники']
 
   return (
     <div
@@ -232,6 +238,9 @@ const SUPERVISOR_MENU: MenuItem[] = [
   { id: 'ironing', label: 'ВТО', icon: Heater, group: 'Производство' },
   { id: 'distribution', label: 'Города', icon: MapPin, group: 'Производство' },
   { id: 'boxes', label: 'Короба', icon: Box, group: 'Производство' },
+  { id: 'invoices', label: 'Счета', icon: Receipt, group: 'Менеджер' },
+  { id: 'upd', label: 'УПД', icon: FileSpreadsheet, group: 'Менеджер' },
+  { id: 'crm', label: 'Сделки', icon: Handshake, group: 'Менеджер' },
   { id: 'products', label: 'Изделия', icon: Package, group: 'Справочники' },
   { id: 'employees', label: 'Сотрудники', icon: Users, group: 'Справочники' },
   { id: 'references', label: 'Справочники', icon: BookOpen, group: 'Справочники' },
@@ -453,6 +462,9 @@ export default function HomePage() {
       case 'products': return <ProductsTab />
       case 'employees': return <EmployeesTab />
       case 'references': return <ReferencesTab />
+      case 'invoices': return <InvoicesTab />
+      case 'upd': return <UPDTab />
+      case 'crm': return <CRMTab />
       default: return <SewingPlansTab />
     }
   }
