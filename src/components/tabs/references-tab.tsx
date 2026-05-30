@@ -48,6 +48,7 @@ export function ReferencesTab() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [productForm, setProductForm] = useState({
     name: '', article: '', sewerRate: 150, homeRate: 0, qcRate: 50, reworkRate: 80,
+    ironingRate: 10, cuttingRate: 30,
     isKit: false, kitComboColors: {} as Record<string, string[]>,
   })
   const [productSizes, setProductSizes] = useState<string[]>([])
@@ -257,7 +258,7 @@ export function ReferencesTab() {
   // ---- Product dialog helpers ----
   const openCreateProduct = useCallback(() => {
     setEditingProduct(null)
-    setProductForm({ name: '', article: '', sewerRate: 150, homeRate: 0, qcRate: 50, reworkRate: 80, isKit: false, kitComboColors: {} })
+    setProductForm({ name: '', article: '', sewerRate: 150, homeRate: 0, qcRate: 50, reworkRate: 80, ironingRate: 10, cuttingRate: 30, isKit: false, kitComboColors: {} })
     setProductSizes([])
     setProductColors([])
     setNewSize('')
@@ -271,7 +272,7 @@ export function ReferencesTab() {
   const openEditProduct = useCallback((p: Product) => {
     setEditingProduct(p)
     const parsedKitComboColors = parseKitComboColors(p.kitComboColors)
-    setProductForm({ name: p.name, article: p.article, sewerRate: p.sewerRate, homeRate: p.homeRate, qcRate: p.qcRate, reworkRate: p.reworkRate, isKit: p.isKit, kitComboColors: parsedKitComboColors })
+    setProductForm({ name: p.name, article: p.article, sewerRate: p.sewerRate, homeRate: p.homeRate, qcRate: p.qcRate, reworkRate: p.reworkRate, ironingRate: p.ironingRate ?? 10, cuttingRate: p.cuttingRate ?? 30, isKit: p.isKit, kitComboColors: parsedKitComboColors })
     setProductSizes(p.sizes.map(s => s.size))
     setProductColors(p.colors.map(c => ({ color: c.color, colorHex: c.colorHex })))
     setNewSize('')
@@ -295,6 +296,8 @@ export function ReferencesTab() {
       homeRate: productForm.homeRate,
       qcRate: productForm.qcRate,
       reworkRate: productForm.reworkRate,
+      ironingRate: productForm.ironingRate,
+      cuttingRate: productForm.cuttingRate,
       isKit: productForm.isKit,
       kitComboColors: productForm.isKit ? productForm.kitComboColors : null,
       sizes: productSizes,
@@ -557,8 +560,9 @@ export function ReferencesTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                          <div>Шв: {p.sewerRate} | Над: {p.homeRate}</div>
-                          <div>ОТК: {p.qcRate} | Пер: {p.reworkRate}</div>
+                          <div>Шв: {p.sewerRate}₽ | Над: {p.homeRate}₽</div>
+                          <div>ВТО: {p.ironingRate ?? 0}₽ | Крой: {p.cuttingRate ?? 0}₽</div>
+                          <div>ОТК: {p.qcRate}₽ | Пер: {p.reworkRate}₽</div>
                         </TableCell>
                         <TableCell>
                           {p.isKit ? (
@@ -918,9 +922,11 @@ export function ReferencesTab() {
                 <div className="space-y-2"><Label>Артикул *</Label><Input value={productForm.article} onChange={(e) => setProductForm(p => ({ ...p, article: e.target.value }))} placeholder="ФЖ-01" /></div>
               </div>
               {/* Ставки */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div className="space-y-2"><Label className="text-xs">Швея (за ед.)</Label><Input type="number" min="0" value={productForm.sewerRate || ''} onChange={(e) => setProductForm(p => ({ ...p, sewerRate: parseFloat(e.target.value) || 0 }))} /></div>
                 <div className="space-y-2"><Label className="text-xs">Надомница (за ед.)</Label><Input type="number" min="0" value={productForm.homeRate || ''} onChange={(e) => setProductForm(p => ({ ...p, homeRate: parseFloat(e.target.value) || 0 }))} /></div>
+                <div className="space-y-2"><Label className="text-xs">ВТО (за ед.)</Label><Input type="number" min="0" value={productForm.ironingRate || ''} onChange={(e) => setProductForm(p => ({ ...p, ironingRate: parseFloat(e.target.value) || 0 }))} /></div>
+                <div className="space-y-2"><Label className="text-xs">Крой (за ед.)</Label><Input type="number" min="0" value={productForm.cuttingRate || ''} onChange={(e) => setProductForm(p => ({ ...p, cuttingRate: parseFloat(e.target.value) || 0 }))} /></div>
                 <div className="space-y-2"><Label className="text-xs">ОТК (за ед.)</Label><Input type="number" min="0" value={productForm.qcRate || ''} onChange={(e) => setProductForm(p => ({ ...p, qcRate: parseFloat(e.target.value) || 0 }))} /></div>
                 <div className="space-y-2"><Label className="text-xs">Переделка (за ед.)</Label><Input type="number" min="0" value={productForm.reworkRate || ''} onChange={(e) => setProductForm(p => ({ ...p, reworkRate: parseFloat(e.target.value) || 0 }))} /></div>
               </div>

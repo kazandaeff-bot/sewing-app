@@ -125,3 +125,26 @@ Stage Summary:
 - ReworkReason model kept (used by QC tab for dropdown)
 - reworkRate on Product kept (used for pricing calculations)
 - Build ✅, Dev server ✅
+
+---
+Task ID: 5
+Agent: Main
+Task: Fix all rates to be editable per product in Products section; fix ReferencesTab missing rates
+
+Work Log:
+- Fixed ProductsTab: set correct default values for ironingRate ('10' instead of '0') and cuttingRate ('30' instead of '0')
+- Fixed ProductsTab: updated resetCreateForm to use correct defaults for ironingRate and cuttingRate
+- Fixed ReferencesTab: added ironingRate (10) and cuttingRate (30) to productForm initial state
+- Fixed ReferencesTab: updated openCreateProduct to include ironingRate and cuttingRate in form reset
+- Fixed ReferencesTab: updated openEditProduct to include ironingRate and cuttingRate when editing
+- Fixed ReferencesTab: updated handleSaveProduct to send ironingRate and cuttingRate to API
+- Fixed ReferencesTab: added ВТО and Крой input fields in product dialog (6 rate fields in 3x2 grid)
+- Fixed ReferencesTab: updated product table to show all 6 rates (Шв, Над, ВТО, Крой, ОТК, Пер)
+- Built project successfully with `bun run build`
+- Clarified: Organizations = Заказчики (Customers), located in Справочники tab
+
+Stage Summary:
+- All 6 rate fields (Швея, Надомница, ВТО, Крой, ОТК, Переделка) are now editable per product in both ProductsTab and ReferencesTab
+- ProductsTab already had ironingRate and cuttingRate fields, only defaults were wrong
+- ReferencesTab was missing ironingRate and cuttingRate entirely — now fixed
+- Preview server starts but background processes are killed by sandbox after ~15-20 seconds

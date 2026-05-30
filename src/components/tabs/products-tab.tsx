@@ -54,8 +54,8 @@ export function ProductsTab() {
   const [newColorHex, setNewColorHex] = useState('#9ca3af')
   const [newReworkReasons, setNewReworkReasons] = useState<string[]>([])
   const [newReasonInput, setNewReasonInput] = useState('')
-  const [newIroningRate, setNewIroningRate] = useState('0')
-  const [newCuttingRate, setNewCuttingRate] = useState('0')
+  const [newIroningRate, setNewIroningRate] = useState('10')
+  const [newCuttingRate, setNewCuttingRate] = useState('30')
   const [newImageUrl, setNewImageUrl] = useState<string | null>(null)
   const [newImageFile, setNewImageFile] = useState<File | null>(null)
   const [editName, setEditName] = useState('')
@@ -75,8 +75,8 @@ export function ProductsTab() {
   const [editColorHex, setEditColorHex] = useState('#9ca3af')
   const [editReworkReasons, setEditReworkReasons] = useState<string[]>([])
   const [editReasonInput, setEditReasonInput] = useState('')
-  const [editIroningRate, setEditIroningRate] = useState('0')
-  const [editCuttingRate, setEditCuttingRate] = useState('0')
+  const [editIroningRate, setEditIroningRate] = useState('10')
+  const [editCuttingRate, setEditCuttingRate] = useState('30')
   const [editImageUrl, setEditImageUrl] = useState<string | null>(null)
   const [editImageFile, setEditImageFile] = useState<File | null>(null)
   const [sizeRates, setSizeRates] = useState<Record<string, { sewerRate: string; homeRate: string; qcRate: string; ironingRate: string; cuttingRate: string }>>({})
@@ -107,7 +107,7 @@ export function ProductsTab() {
   })
 
   const resetCreateForm = useCallback(() => {
-    setNewName(''); setNewArticle(''); setNewSewerRate('150'); setNewHomeRate('0'); setNewQcRate('50'); setNewReworkRate('80'); setNewIroningRate('0'); setNewCuttingRate('0'); setNewIsKit(false); setNewKitComboColors({}); setNewKitKey(''); setNewKitValue(''); setNewSizes([]); setNewSizeInput(''); setNewColors([]); setNewColorName(''); setNewColorHex('#9ca3af'); setNewReworkReasons([]); setNewReasonInput(''); setNewImageUrl(null); setNewImageFile(null)
+    setNewName(''); setNewArticle(''); setNewSewerRate('150'); setNewHomeRate('0'); setNewQcRate('50'); setNewReworkRate('80'); setNewIroningRate('10'); setNewCuttingRate('30'); setNewIsKit(false); setNewKitComboColors({}); setNewKitKey(''); setNewKitValue(''); setNewSizes([]); setNewSizeInput(''); setNewColors([]); setNewColorName(''); setNewColorHex('#9ca3af'); setNewReworkReasons([]); setNewReasonInput(''); setNewImageUrl(null); setNewImageFile(null)
   }, [])
 
   const handleCreate = useCallback(() => {
