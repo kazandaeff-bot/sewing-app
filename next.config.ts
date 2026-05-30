@@ -2,21 +2,16 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  headers: async () => [
-    {
-      source: '/:path*',
-      headers: [
-        {
-          key: 'Cache-Control',
-          value: 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        },
-      ],
-    },
+  allowedDevOrigins: [
+    // Wildcard patterns for preview subdomains
+    // These match any subdomain of space-z.ai and chatglm.site
+    '.space-z.ai',
+    '.space.chatglm.site',
+    '.chatglm.site',
   ],
 };
 
