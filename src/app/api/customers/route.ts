@@ -20,9 +20,24 @@ export const POST = withAuth(async (req, ctx, user) => {
   try {
     const result = await validateBody(req, CreateCustomerSchema)
     if ('error' in result) return result.error
-    const { name, contactInfo } = result.data
+    const { name, type, inn, kpp, legalAddress, postalAddress, phone, email, bankName, bik, checkingAccount, corrAccount, bankCity, contactInfo } = result.data
     const customer = await db.customer.create({
-      data: { name, contactInfo: contactInfo || null },
+      data: {
+        name,
+        type: type || 'organization',
+        inn: inn || null,
+        kpp: kpp || null,
+        legalAddress: legalAddress || null,
+        postalAddress: postalAddress || null,
+        phone: phone || null,
+        email: email || null,
+        bankName: bankName || null,
+        bik: bik || null,
+        checkingAccount: checkingAccount || null,
+        corrAccount: corrAccount || null,
+        bankCity: bankCity || null,
+        contactInfo: contactInfo || null,
+      },
       include: { customerProducts: true, employees: true },
     })
     return NextResponse.json(customer, { status: 201, headers: { 'Cache-Control': 'no-store' } })

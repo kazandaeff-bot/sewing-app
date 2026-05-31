@@ -28,18 +28,19 @@ export const POST = withAuth(async (req, ctx, user) => {
 
     // Calculate totals from items
     const totalAmount = items.reduce((sum, item) => sum + item.amount, 0)
-    const vatAmount = totalAmount * vatRate / 100
+    // Если vatRate = -1, это "без НДС"
+    const vatAmount = vatRate < 0 ? 0 : totalAmount * vatRate / 100
 
     const invoice = await db.invoice.create({
       data: {
         number,
-        date: date || new Date().toISOString(),
+        date: date ? new Date(date) : new Date(),
         customerId,
         planId: planId || null,
         status,
-        dueDate: dueDate || null,
+        dueDate: dueDate ? new Date(dueDate) : null,
         note: note || null,
-        vatRate,
+        vatRate: vatRate < 0 ? 0 : vatRate,
         totalAmount,
         vatAmount,
         items: {

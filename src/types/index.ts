@@ -341,6 +341,18 @@ export interface EmployeeWithAuth extends Employee {
 
 export interface CustomerFormData {
   name: string
+  type: 'organization' | 'ip' | 'individual'
+  inn: string
+  kpp: string
+  legalAddress: string
+  postalAddress: string
+  phone: string
+  email: string
+  bankName: string
+  bik: string
+  checkingAccount: string
+  corrAccount: string
+  bankCity: string
   contactInfo: string
   showMaterialBalance: boolean
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo } from 'react'
+import QRCode from 'qrcode'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +27,7 @@ import {
   Send,
   CheckCircle,
   ArrowRight,
+  QrCode,
 } from 'lucide-react'
 
 // ============ Types ============
@@ -54,13 +56,20 @@ interface Invoice {
   totalAmount: number
   vatAmount: number
   items: InvoiceItem[]
-  customer: { id: string; name: string }
+  customer: { id: string; name: string; inn?: string }
   createdAt: string
 }
 
 interface Customer {
   id: string
   name: string
+  inn?: string
+  kpp?: string
+  legalAddress?: string
+  bankName?: string
+  bik?: string
+  checkingAccount?: string
+  corrAccount?: string
 }
 
 interface Product {
@@ -103,6 +112,24 @@ function generateInvoiceNumber(): string {
   return `СЧ-${year}-${random}`
 }
 
+// ============ VAT Rate Select ============
+
+function VatRateSelect({ value, onValueChange }: { value: string; onValueChange: (v: string) => void }) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="20">НДС 20%</SelectItem>
+        <SelectItem value="10">НДС 10%</SelectItem>
+        <SelectItem value="0">НДС 0%</SelectItem>
+        <SelectItem value="-1">Без НДС</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+}
+
 // ============ Items Table Component (outside render) ============
 
 function ItemsTable({
@@ -122,6 +149,8 @@ function ItemsTable({
   vatRate: string
   products: Product[]
 }) {
+  const isNoVat = parseInt(vatRate) < 0
+
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">Позиции счёта</Label>
@@ -232,12 +261,12 @@ function ItemsTable({
             <span className="font-medium">{formatAmount(totals.totalAmount)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">НДС ({vatRate}%):</span>
-            <span className="font-medium">{formatAmount(totals.vatAmount)}</span>
+            <span className="text-muted-foreground">{isNoVat ? 'НДС:' : `НДС (${vatRate}%):`}</span>
+            <span className="font-medium">{isNoVat ? 'Без НДС' : formatAmount(totals.vatAmount)}</span>
           </div>
           <Separator />
           <div className="flex justify-between text-base font-semibold">
-            <span>Всего с НДС:</span>
+            <span>Всего:</span>
             <span className="text-emerald-700">{formatAmount(totals.totalAmount + totals.vatAmount)}</span>
           </div>
         </div>
@@ -304,6 +333,11 @@ export function InvoicesTab() {
   const [editVatRate, setEditVatRate] = useState('20')
   const [editNote, setEditNote] = useState('')
   const [editItems, setEditItems] = useState<ItemRow[]>([])
+
+  // QR code state
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [qrInvoiceNumber, setQrInvoiceNumber] = useState('')
 
   // ============ Queries ============
 
@@ -429,7 +463,7 @@ export function InvoicesTab() {
 
   const calcTotals = useCallback((items: ItemRow[], vatRate: number) => {
     const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.price, 0)
-    const vatAmount = totalAmount * vatRate / 100
+    const vatAmount = vatRate < 0 ? 0 : totalAmount * vatRate / 100
     return { totalAmount, vatAmount }
   }, [])
 
@@ -588,7 +622,24 @@ export function InvoicesTab() {
     statusMutation.mutate({ id: invoiceId, status: newStatus })
   }, [statusMutation])
 
-
+  const handleShowQr = useCallback(async (invoice: Invoice) => {
+    const customer = customers.find((c) => c.id === invoice.customerId)
+    if (!customer?.checkingAccount || !customer?.bankName || !customer?.bik) {
+      toast({ title: 'Ошибка', description: 'У заказчика не указаны банковские реквизиты', variant: 'destructive' })
+      return
+    }
+    const sum = Math.round((invoice.totalAmount + invoice.vatAmount) * 100)
+    const purpose = `Оплата по счёту №${invoice.number}`
+    const content = `ST00012|Name=${customer.name}|PersonalAcc=${customer.checkingAccount}|BankName=${customer.bankName}|BIC=${customer.bik}|CorrespAcc=${customer.corrAccount || ''}|PaymPurpose=${purpose}|Sum=${sum}`
+    try {
+      const url = await QRCode.toDataURL(content, { width: 256, margin: 2 })
+      setQrDataUrl(url)
+      setQrInvoiceNumber(invoice.number)
+      setQrOpen(true)
+    } catch {
+      toast({ title: 'Ошибка', description: 'Не удалось сгенерировать QR-код', variant: 'destructive' })
+    }
+  }, [customers, toast])
 
   // ============ Render ============
 
@@ -640,60 +691,80 @@ export function InvoicesTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id} className="hover:bg-muted/50">
-                      <TableCell className="font-medium text-sm">{invoice.number}</TableCell>
-                      <TableCell className="text-sm">{invoice.customer?.name || '—'}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{formatDate(invoice.date)}</TableCell>
-                      <TableCell>{statusBadge(invoice.status)}</TableCell>
-                      <TableCell className="text-sm text-right font-medium">
-                        {formatAmount(invoice.totalAmount + invoice.vatAmount)}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(invoice.dueDate)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 justify-center">
-                          {/* Quick status change */}
-                          {STATUS_FLOW[invoice.status] && (
+                  {invoices.map((invoice) => {
+                    const customerForInvoice = customers.find((c) => c.id === invoice.customerId)
+                    return (
+                      <TableRow key={invoice.id} className="hover:bg-muted/50">
+                        <TableCell className="font-medium text-sm">{invoice.number}</TableCell>
+                        <TableCell className="text-sm">
+                          <div>{invoice.customer?.name || '—'}</div>
+                          {customerForInvoice?.inn && (
+                            <div className="text-xs text-muted-foreground">ИНН: {customerForInvoice.inn}</div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDate(invoice.date)}</TableCell>
+                        <TableCell>{statusBadge(invoice.status)}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">
+                          {formatAmount(invoice.totalAmount + invoice.vatAmount)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {formatDate(invoice.dueDate)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 justify-center">
+                            {/* QR code button for draft/sent */}
+                            {(invoice.status === 'draft' || invoice.status === 'sent') && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-violet-600 hover:text-violet-700 hover:bg-violet-50"
+                                onClick={() => handleShowQr(invoice)}
+                                title="QR-код для оплаты"
+                              >
+                                <QrCode className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {/* Quick status change */}
+                            {STATUS_FLOW[invoice.status] && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-8 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => handleStatusChange(invoice.id, STATUS_FLOW[invoice.status]!)}
+                                disabled={statusMutation.isPending}
+                                title={`Перевести в «${STATUS_LABELS[STATUS_FLOW[invoice.status]!]}»`}
+                              >
+                                {invoice.status === 'draft' ? (
+                                  <Send className="h-4 w-4" />
+                                ) : (
+                                  <CheckCircle className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-8 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                              onClick={() => handleStatusChange(invoice.id, STATUS_FLOW[invoice.status]!)}
-                              disabled={statusMutation.isPending}
-                              title={`Перевести в «${STATUS_LABELS[STATUS_FLOW[invoice.status]!]}»`}
+                              className="h-8 px-2"
+                              onClick={() => handleOpenEdit(invoice)}
                             >
-                              {invoice.status === 'draft' ? (
-                                <Send className="h-4 w-4" />
-                              ) : (
-                                <CheckCircle className="h-4 w-4" />
-                              )}
+                              <Pencil className="h-4 w-4" />
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2"
-                            onClick={() => handleOpenEdit(invoice)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => {
-                              setSelectedInvoice(invoice)
-                              setDeleteOpen(true)
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => {
+                                setSelectedInvoice(invoice)
+                                setDeleteOpen(true)
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
@@ -779,14 +850,8 @@ export function InvoicesTab() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Ставка НДС, %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={newVatRate}
-                    onChange={(e) => setNewVatRate(e.target.value)}
-                  />
+                  <Label>Ставка НДС</Label>
+                  <VatRateSelect value={newVatRate} onValueChange={setNewVatRate} />
                 </div>
               </div>
 
@@ -896,14 +961,8 @@ export function InvoicesTab() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Ставка НДС, %</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={editVatRate}
-                    onChange={(e) => setEditVatRate(e.target.value)}
-                  />
+                  <Label>Ставка НДС</Label>
+                  <VatRateSelect value={editVatRate} onValueChange={setEditVatRate} />
                 </div>
               </div>
 
@@ -969,6 +1028,33 @@ export function InvoicesTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ============ QR Code Dialog ============ */}
+      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>QR-код для оплаты</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-4">
+            <p className="text-sm text-muted-foreground">Счёт №{qrInvoiceNumber}</p>
+            {qrDataUrl && (
+              <img
+                src={qrDataUrl}
+                alt="QR-код для оплаты СБП"
+                className="w-64 h-64"
+              />
+            )}
+            <p className="text-xs text-muted-foreground text-center">
+              Отсканируйте QR-код в приложении банка для оплаты через СБП
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setQrOpen(false)}>
+              Закрыть
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

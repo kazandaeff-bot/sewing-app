@@ -31,6 +31,7 @@ import { ReferencesTab } from '@/components/tabs/references-tab'
 import { InvoicesTab } from '@/components/tabs/invoices-tab'
 import { UPDTab } from '@/components/tabs/upd-tab'
 import { CRMTab } from '@/components/tabs/crm-tab'
+import { ContractsTab } from '@/components/tabs/contracts-tab'
 
 // Icons
 import {
@@ -54,6 +55,7 @@ import {
   Receipt,
   FileSpreadsheet,
   Handshake,
+  ScrollText,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -238,6 +240,7 @@ const SUPERVISOR_MENU: MenuItem[] = [
   { id: 'ironing', label: 'ВТО', icon: Heater, group: 'Производство' },
   { id: 'distribution', label: 'Города', icon: MapPin, group: 'Производство' },
   { id: 'boxes', label: 'Короба', icon: Box, group: 'Производство' },
+  { id: 'contracts', label: 'Договоры', icon: ScrollText, group: 'Менеджер' },
   { id: 'invoices', label: 'Счета', icon: Receipt, group: 'Менеджер' },
   { id: 'upd', label: 'УПД', icon: FileSpreadsheet, group: 'Менеджер' },
   { id: 'crm', label: 'Сделки', icon: Handshake, group: 'Менеджер' },
@@ -462,6 +465,7 @@ export default function HomePage() {
       case 'products': return <ProductsTab />
       case 'employees': return <EmployeesTab />
       case 'references': return <ReferencesTab />
+      case 'contracts': return <ContractsTab />
       case 'invoices': return <InvoicesTab />
       case 'upd': return <UPDTab />
       case 'crm': return <CRMTab />

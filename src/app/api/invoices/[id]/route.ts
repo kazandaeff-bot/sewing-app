@@ -39,13 +39,13 @@ export const PATCH = withAuth(async (req, ctx, user) => {
     // Build update data for scalar fields
     const updateData: Record<string, unknown> = {}
     if (number !== undefined) updateData.number = number
-    if (date !== undefined) updateData.date = date
+    if (date !== undefined) updateData.date = date ? new Date(date) : new Date()
     if (customerId !== undefined) updateData.customerId = customerId
     if (planId !== undefined) updateData.planId = planId
     if (status !== undefined) updateData.status = status
-    if (dueDate !== undefined) updateData.dueDate = dueDate
+    if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
     if (note !== undefined) updateData.note = note
-    if (vatRate !== undefined) updateData.vatRate = vatRate
+    if (vatRate !== undefined) updateData.vatRate = vatRate < 0 ? 0 : vatRate
 
     // If items are provided, replace them and recalculate totals
     if (items !== undefined) {
@@ -53,7 +53,7 @@ export const PATCH = withAuth(async (req, ctx, user) => {
       await db.invoiceItem.deleteMany({ where: { invoiceId: id } })
 
       // Calculate new totals
-      const effectiveVatRate = vatRate !== undefined ? vatRate : (await db.invoice.findUnique({ where: { id }, select: { vatRate: true } }))?.vatRate ?? 20
+      const effectiveVatRate = vatRate !== undefined ? (vatRate < 0 ? 0 : vatRate) : (await db.invoice.findUnique({ where: { id }, select: { vatRate: true } }))?.vatRate ?? 20
       const totalAmount = items.reduce((sum, item) => sum + item.amount, 0)
       const vatAmount = totalAmount * effectiveVatRate / 100
 
@@ -82,8 +82,9 @@ export const PATCH = withAuth(async (req, ctx, user) => {
         include: { items: true },
       })
       if (existing) {
+        const effectiveVatRate = vatRate < 0 ? 0 : vatRate
         const totalAmount = existing.items.reduce((sum, item) => sum + item.amount, 0)
-        const vatAmount = totalAmount * vatRate / 100
+        const vatAmount = totalAmount * effectiveVatRate / 100
         updateData.totalAmount = totalAmount
         updateData.vatAmount = vatAmount
       }
@@ -114,7 +115,6 @@ export const DELETE = withAuth(async (req, ctx, user) => {
     if ('error' in p) return p.error
     const { id } = p.data
 
-    // Delete items first (though cascading should handle it, be explicit)
     await db.invoiceItem.deleteMany({ where: { invoiceId: id } })
     await db.invoice.delete({ where: { id } })
 

@@ -243,13 +243,39 @@ export const UpdateBoxTypeSchema = CreateBoxTypeSchema.partial()
 
 // --- Customers ---
 
+export const CustomerType = z.enum(['organization', 'ip', 'individual'])
+
 export const CreateCustomerSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название'),
+  type: CustomerType.default('organization'),
+  inn: z.string().trim().optional(),
+  kpp: z.string().trim().optional(),
+  legalAddress: z.string().trim().optional(),
+  postalAddress: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+  email: z.string().trim().optional(),
+  bankName: z.string().trim().optional(),
+  bik: z.string().trim().optional(),
+  checkingAccount: z.string().trim().optional(),
+  corrAccount: z.string().trim().optional(),
+  bankCity: z.string().trim().optional(),
   contactInfo: z.string().trim().optional(),
 })
 
 export const UpdateCustomerSchema = z.object({
   name: z.string().trim().min(1).optional(),
+  type: CustomerType.optional(),
+  inn: z.string().trim().nullable().optional(),
+  kpp: z.string().trim().nullable().optional(),
+  legalAddress: z.string().trim().nullable().optional(),
+  postalAddress: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  email: z.string().trim().nullable().optional(),
+  bankName: z.string().trim().nullable().optional(),
+  bik: z.string().trim().nullable().optional(),
+  checkingAccount: z.string().trim().nullable().optional(),
+  corrAccount: z.string().trim().nullable().optional(),
+  bankCity: z.string().trim().nullable().optional(),
   contactInfo: z.string().trim().nullable().optional(),
   showMaterialBalance: z.boolean().optional(),
 })
@@ -571,4 +597,45 @@ export const UpdateDealContactSchema = z.object({
   result: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   nextStep: z.string().nullable().optional(),
+})
+
+// --- Contracts ---
+
+export const ContractType = z.enum(['service', 'supply'])
+export const ContractStatus = z.enum(['draft', 'active', 'completed', 'terminated'])
+
+export const CreateContractSchema = z.object({
+  number: z.string().min(1, 'Укажите номер договора'),
+  date: z.string().optional(),
+  customerId: cuid,
+  type: ContractType.default('service'),
+  status: ContractStatus.default('draft'),
+  subject: z.string().optional(),
+  amount: z.coerce.number().nonnegative().nullable().optional(),
+  vatRate: z.coerce.number().nonnegative().default(20),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  paymentTerms: z.string().optional(),
+  deliveryTerms: z.string().optional(),
+  note: z.string().optional(),
+  planId: cuid.optional(),
+  invoiceId: cuid.optional(),
+})
+
+export const UpdateContractSchema = z.object({
+  number: z.string().min(1).optional(),
+  date: z.string().optional(),
+  customerId: cuid.optional(),
+  type: ContractType.optional(),
+  status: ContractStatus.optional(),
+  subject: z.string().nullable().optional(),
+  amount: z.coerce.number().nonnegative().nullable().optional(),
+  vatRate: z.coerce.number().nonnegative().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  paymentTerms: z.string().nullable().optional(),
+  deliveryTerms: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+  planId: cuid.nullable().optional(),
+  invoiceId: cuid.nullable().optional(),
 })

@@ -167,6 +167,20 @@ model BoxCapacity {
 model Customer {
   id                  String           @id @default(cuid())
   name                String           @unique
+  type                String           @default("organization") // organization | ip | individual
+  inn                 String?
+  kpp                 String?
+  legalAddress        String?
+  postalAddress       String?
+  phone               String?
+  email               String?
+  // Банковские реквизиты
+  bankName            String?
+  bik                 String?
+  checkingAccount     String?          // Расчётный счёт
+  corrAccount         String?          // Корреспондентский счёт
+  bankCity            String?          // Город банка
+  // Старые поля (оставлены для совместимости)
   contactInfo         String?
   showMaterialBalance Boolean          @default(false)
   employees           Employee[]
@@ -176,6 +190,7 @@ model Customer {
   invoices            Invoice[]
   upds                UPD[]
   deals               Deal[]
+  contracts           Contract[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -513,4 +528,29 @@ model DealContact {
   nextStep    String?  // Что делать дальше
   deal        Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+}
+
+// ============ МОДУЛЬ 10: Договоры ============
+model Contract {
+  id            String     @id @default(cuid())
+  number        String     @unique  // Номер договора
+  date          DateTime   @default(now())
+  customerId    String
+  customer      Customer   @relation(fields: [customerId], references: [id])
+  type          String     @default("service") // service | supply
+  // service = договор на услуги (пошив), supply = договор на поставку
+  status        String     @default("draft") // draft | active | completed | terminated
+  subject       String?    // Предмет договора
+  amount        Float?     // Сумма договора
+  vatRate       Float      @default(20)  // Ставка НДС %
+  vatAmount     Float?     // Сумма НДС
+  startDate     DateTime?  // Дата начала действия
+  endDate       DateTime?  // Дата окончания
+  paymentTerms  String?    // Условия оплаты
+  deliveryTerms String?    // Условия поставки
+  note          String?
+  planId        String?    // Привязка к плану пошива
+  invoiceId     String?    // Привязка к счёту
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 }

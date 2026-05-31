@@ -76,8 +76,8 @@ export function ReferencesTab() {
 
   // ---- Customers state ----
   const [customerDialogOpen, setCustomerDialogOpen] = useState(false)
-  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name: string; contactInfo: string; showMaterialBalance: boolean } | null>(null)
-  const [customerForm, setCustomerForm] = useState({ name: '', contactInfo: '', showMaterialBalance: false })
+  const [editingCustomer, setEditingCustomer] = useState<{ id: string; name: string; type: 'organization' | 'ip' | 'individual'; inn: string; kpp: string; legalAddress: string; postalAddress: string; phone: string; email: string; bankName: string; bik: string; checkingAccount: string; corrAccount: string; bankCity: string; contactInfo: string; showMaterialBalance: boolean } | null>(null)
+  const [customerForm, setCustomerForm] = useState({ name: '', type: 'organization' as 'organization' | 'ip' | 'individual', inn: '', kpp: '', legalAddress: '', postalAddress: '', phone: '', email: '', bankName: '', bik: '', checkingAccount: '', corrAccount: '', bankCity: '', contactInfo: '', showMaterialBalance: false })
 
   // ---- Material types state ----
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
@@ -220,12 +220,12 @@ export function ReferencesTab() {
 
   // ---- Customer mutations ----
   const createCustomerMutation = useMutation({
-    mutationFn: (data: { name: string; contactInfo?: string }) => authFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: Record<string, unknown>) => authFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const updateCustomerMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; contactInfo?: string; showMaterialBalance?: boolean } }) => authFetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => authFetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик обновлён' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
@@ -487,13 +487,14 @@ export function ReferencesTab() {
   // ---- Customer dialog helpers ----
   const openCreateCustomer = useCallback(() => {
     setEditingCustomer(null)
-    setCustomerForm({ name: '', contactInfo: '', showMaterialBalance: false })
+    setCustomerForm({ name: '', type: 'organization', inn: '', kpp: '', legalAddress: '', postalAddress: '', phone: '', email: '', bankName: '', bik: '', checkingAccount: '', corrAccount: '', bankCity: '', contactInfo: '', showMaterialBalance: false })
     setCustomerDialogOpen(true)
   }, [])
 
-  const openEditCustomer = useCallback((c: { id: string; name: string; contactInfo: string | null; showMaterialBalance?: boolean }) => {
-    setEditingCustomer({ id: c.id, name: c.name, contactInfo: c.contactInfo || '', showMaterialBalance: c.showMaterialBalance || false })
-    setCustomerForm({ name: c.name, contactInfo: c.contactInfo || '', showMaterialBalance: c.showMaterialBalance || false })
+  const openEditCustomer = useCallback((c: { id: string; name: string; type?: string; inn?: string | null; kpp?: string | null; legalAddress?: string | null; postalAddress?: string | null; phone?: string | null; email?: string | null; bankName?: string | null; bik?: string | null; checkingAccount?: string | null; corrAccount?: string | null; bankCity?: string | null; contactInfo?: string | null; showMaterialBalance?: boolean }) => {
+    const custType = (c.type as 'organization' | 'ip' | 'individual') || 'organization'
+    setEditingCustomer({ id: c.id, name: c.name, type: custType, inn: c.inn || '', kpp: c.kpp || '', legalAddress: c.legalAddress || '', postalAddress: c.postalAddress || '', phone: c.phone || '', email: c.email || '', bankName: c.bankName || '', bik: c.bik || '', checkingAccount: c.checkingAccount || '', corrAccount: c.corrAccount || '', bankCity: c.bankCity || '', contactInfo: c.contactInfo || '', showMaterialBalance: c.showMaterialBalance || false })
+    setCustomerForm({ name: c.name, type: custType, inn: c.inn || '', kpp: c.kpp || '', legalAddress: c.legalAddress || '', postalAddress: c.postalAddress || '', phone: c.phone || '', email: c.email || '', bankName: c.bankName || '', bik: c.bik || '', checkingAccount: c.checkingAccount || '', corrAccount: c.corrAccount || '', bankCity: c.bankCity || '', contactInfo: c.contactInfo || '', showMaterialBalance: c.showMaterialBalance || false })
     setCustomerDialogOpen(true)
   }, [])
 
@@ -503,10 +504,29 @@ export function ReferencesTab() {
     if (!customerForm.name.trim()) {
       toast({ title: 'Ошибка', description: 'Заполните название', variant: 'destructive' }); return
     }
+    if (!customerForm.inn.trim()) {
+      toast({ title: 'Ошибка', description: 'Заполните ИНН', variant: 'destructive' }); return
+    }
+    const data: Record<string, unknown> = {
+      name: customerForm.name,
+      type: customerForm.type,
+      inn: customerForm.inn || null,
+      kpp: customerForm.type === 'organization' ? (customerForm.kpp || null) : null,
+      legalAddress: customerForm.legalAddress || null,
+      postalAddress: customerForm.postalAddress || null,
+      phone: customerForm.phone || null,
+      email: customerForm.email || null,
+      bankName: customerForm.bankName || null,
+      bik: customerForm.bik || null,
+      checkingAccount: customerForm.checkingAccount || null,
+      corrAccount: customerForm.corrAccount || null,
+      bankCity: customerForm.bankCity || null,
+      contactInfo: customerForm.contactInfo || null,
+    }
     if (editingCustomer) {
-      updateCustomerMutation.mutate({ id: editingCustomer.id, data: { name: customerForm.name, contactInfo: customerForm.contactInfo || undefined, showMaterialBalance: customerForm.showMaterialBalance } })
+      updateCustomerMutation.mutate({ id: editingCustomer.id, data: { ...data, showMaterialBalance: customerForm.showMaterialBalance } })
     } else {
-      createCustomerMutation.mutate({ name: customerForm.name, contactInfo: customerForm.contactInfo || undefined })
+      createCustomerMutation.mutate(data)
     }
   }, [customerForm, editingCustomer, updateCustomerMutation, createCustomerMutation, toast])
 
@@ -753,9 +773,12 @@ export function ReferencesTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(customers as Array<{ id: string; name: string; contactInfo: string | null; showMaterialBalance?: boolean; customerProducts: Array<{ id: string; product: { name: string } }> }>).map((c) => (
+                  {(customers as Array<{ id: string; name: string; type?: string; inn?: string | null; kpp?: string | null; legalAddress?: string | null; postalAddress?: string | null; phone?: string | null; email?: string | null; bankName?: string | null; bik?: string | null; checkingAccount?: string | null; corrAccount?: string | null; bankCity?: string | null; contactInfo?: string | null; showMaterialBalance?: boolean; customerProducts: Array<{ id: string; product: { name: string } }> }>).map((c) => (
                     <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <div>{c.name}</div>
+                        {c.inn && <div className="text-xs text-muted-foreground">ИНН {c.inn}</div>}
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">{c.contactInfo || '—'}</TableCell>
                       <TableCell>
                         {c.customerProducts.length > 0 ? (
@@ -1175,17 +1198,110 @@ export function ReferencesTab() {
 
       {/* ===== CUSTOMER DIALOG ===== */}
       <Dialog open={customerDialogOpen} onOpenChange={(open) => { if (!open) closeCustomerDialog(); else setCustomerDialogOpen(true) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingCustomer ? 'Редактировать заказчика' : 'Новый заказчик'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2"><Label>Название *</Label><Input value={customerForm.name} onChange={(e) => setCustomerForm(p => ({ ...p, name: e.target.value }))} placeholder="ООО «Текстиль»" /></div>
-            <div className="space-y-2"><Label>Контактная информация</Label><Input value={customerForm.contactInfo} onChange={(e) => setCustomerForm(p => ({ ...p, contactInfo: e.target.value }))} placeholder="Телефон, email, адрес..." /></div>
-            {editingCustomer && (
-              <div className="flex items-center gap-3">
-                <Checkbox id="showMaterialBalance" checked={customerForm.showMaterialBalance} onCheckedChange={(checked) => setCustomerForm(p => ({ ...p, showMaterialBalance: !!checked }))} />
-                <Label htmlFor="showMaterialBalance" className="text-sm">Показывать остатки материалов заказчику</Label>
+          <div className="space-y-6">
+            {/* Section 1: Основная информация */}
+            <div>
+              <h4 className="text-sm font-semibold text-emerald-700 mb-3">Основная информация</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Тип заказчика</Label>
+                  <Select value={customerForm.type} onValueChange={(v) => setCustomerForm(p => ({ ...p, type: v as 'organization' | 'ip' | 'individual' }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="organization">Организация</SelectItem>
+                      <SelectItem value="ip">ИП</SelectItem>
+                      <SelectItem value="individual">Физлицо</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Название *</Label>
+                  <Input value={customerForm.name} onChange={(e) => setCustomerForm(p => ({ ...p, name: e.target.value }))} placeholder="ООО «Текстиль»" />
+                </div>
+                <div className="space-y-2">
+                  <Label>ИНН *</Label>
+                  <Input value={customerForm.inn} onChange={(e) => setCustomerForm(p => ({ ...p, inn: e.target.value }))} placeholder="1234567890" />
+                </div>
+                {customerForm.type === 'organization' && (
+                  <div className="space-y-2">
+                    <Label>КПП</Label>
+                    <Input value={customerForm.kpp} onChange={(e) => setCustomerForm(p => ({ ...p, kpp: e.target.value }))} placeholder="123456789" />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Телефон</Label>
+                  <Input value={customerForm.phone} onChange={(e) => setCustomerForm(p => ({ ...p, phone: e.target.value }))} placeholder="+7 (999) 123-45-67" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input type="email" value={customerForm.email} onChange={(e) => setCustomerForm(p => ({ ...p, email: e.target.value }))} placeholder="info@company.ru" />
+                </div>
               </div>
-            )}
+            </div>
+
+            <Separator />
+
+            {/* Section 2: Адреса */}
+            <div>
+              <h4 className="text-sm font-semibold text-emerald-700 mb-3">Адреса</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Юридический адрес</Label>
+                  <Input value={customerForm.legalAddress} onChange={(e) => setCustomerForm(p => ({ ...p, legalAddress: e.target.value }))} placeholder="г. Москва, ул. Примерная, д. 1" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Почтовый адрес</Label>
+                  <Input value={customerForm.postalAddress} onChange={(e) => setCustomerForm(p => ({ ...p, postalAddress: e.target.value }))} placeholder="123456, г. Москва, а/я 123" />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Section 3: Банковские реквизиты */}
+            <div>
+              <h4 className="text-sm font-semibold text-emerald-700 mb-3">Банковские реквизиты</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Название банка</Label>
+                  <Input value={customerForm.bankName} onChange={(e) => setCustomerForm(p => ({ ...p, bankName: e.target.value }))} placeholder="ПАО «Сбербанк»" />
+                </div>
+                <div className="space-y-2">
+                  <Label>БИК</Label>
+                  <Input value={customerForm.bik} onChange={(e) => setCustomerForm(p => ({ ...p, bik: e.target.value }))} placeholder="044525225" maxLength={9} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Город банка</Label>
+                  <Input value={customerForm.bankCity} onChange={(e) => setCustomerForm(p => ({ ...p, bankCity: e.target.value }))} placeholder="Москва" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Расчётный счёт</Label>
+                  <Input value={customerForm.checkingAccount} onChange={(e) => setCustomerForm(p => ({ ...p, checkingAccount: e.target.value }))} placeholder="40702810123450001234" maxLength={20} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Корр. счёт</Label>
+                  <Input value={customerForm.corrAccount} onChange={(e) => setCustomerForm(p => ({ ...p, corrAccount: e.target.value }))} placeholder="30101810400000000225" maxLength={20} />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Additional fields */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Контактная информация</Label>
+                <Input value={customerForm.contactInfo} onChange={(e) => setCustomerForm(p => ({ ...p, contactInfo: e.target.value }))} placeholder="Доп. контакты, заметки..." />
+              </div>
+              {editingCustomer && (
+                <div className="flex items-center gap-3">
+                  <Checkbox id="showMaterialBalance" checked={customerForm.showMaterialBalance} onCheckedChange={(checked) => setCustomerForm(p => ({ ...p, showMaterialBalance: !!checked }))} />
+                  <Label htmlFor="showMaterialBalance" className="text-sm">Показывать остатки материалов заказчику</Label>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeCustomerDialog}>Отмена</Button>
