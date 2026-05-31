@@ -31,6 +31,8 @@ import {
   CheckCircle2,
   Play,
   Flag,
+  Ban,
+  MoreHorizontal,
 } from 'lucide-react'
 
 // ============ Types ============
@@ -103,6 +105,24 @@ const VAT_OPTIONS = [
   { value: '-1', label: 'Без НДС' },
 ]
 
+/** Convert vatRate from DB to string value for VAT select */
+function vatRateToSelectValue(rate: number): string {
+  // -1 means "Без НДС"
+  if (rate < 0) return '-1'
+  return String(rate)
+}
+
+/** Convert select value to vatRate for DB */
+function selectValueToVatRate(val: string): number {
+  return parseFloat(val)
+}
+
+/** Format VAT rate for display */
+function formatVatRate(rate: number): string {
+  if (rate < 0) return 'Без НДС'
+  return `${rate}%`
+}
+
 // ============ Helpers ============
 
 function formatAmount(value: number | null | undefined): string {
@@ -165,9 +185,11 @@ function generateContractDocument(contract: Contract): string {
   const typeLabel = contract.type === 'service' ? 'на оказание услуг' : 'на поставку'
   const typeLabelFull = contract.type === 'service' ? 'Оказание услуг по пошиву изделий' : 'Поставка изделий'
 
-  const vatText = contract.vatRate > 0
-    ? `В том числе НДС (${contract.vatRate}%): ${formatAmount(contract.vatAmount)}`
-    : 'Без НДС'
+  const vatText = contract.vatRate < 0
+    ? 'Без НДС'
+    : contract.vatRate > 0
+      ? `В том числе НДС (${contract.vatRate}%): ${formatAmount(contract.vatAmount)}`
+      : 'НДС 0%'
 
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -781,7 +803,7 @@ export function ContractsTab() {
       toast({ title: 'Ошибка', description: 'Выберите заказчика', variant: 'destructive' })
       return
     }
-    const vatRate = newVatRate === '-1' ? 0 : parseFloat(newVatRate) || 20
+    const vatRate = selectValueToVatRate(newVatRate)
     createMutation.mutate({
       number: newNumber,
       date: newDate || undefined,
@@ -809,7 +831,7 @@ export function ContractsTab() {
     setEditEndDate(contract.endDate ? new Date(contract.endDate).toISOString().slice(0, 10) : '')
     setEditSubject(contract.subject || '')
     setEditAmount(contract.amount != null ? String(contract.amount) : '')
-    setEditVatRate(String(contract.vatRate))
+    setEditVatRate(vatRateToSelectValue(contract.vatRate))
     setEditPaymentTerms(contract.paymentTerms || '')
     setEditDeliveryTerms(contract.deliveryTerms || '')
     setEditNote(contract.note || '')
@@ -822,7 +844,7 @@ export function ContractsTab() {
       toast({ title: 'Ошибка', description: 'Укажите номер договора', variant: 'destructive' })
       return
     }
-    const vatRate = editVatRate === '-1' ? 0 : parseFloat(editVatRate) || 20
+    const vatRate = selectValueToVatRate(editVatRate)
     updateMutation.mutate({
       id: selectedContract.id,
       data: {
@@ -914,6 +936,20 @@ export function ContractsTab() {
                 {nextLabel}
               </Button>
             )}
+            {/* Terminate button — available for draft and active contracts */}
+            {(selectedContract.status === 'draft' || selectedContract.status === 'active') && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-200"
+                onClick={() => handleStatusChange(selectedContract.id, 'terminated')}
+                disabled={statusMutation.isPending}
+                title="Расторгнуть договор"
+              >
+                <Ban className="h-4 w-4 mr-2" />
+                Расторгнуть
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -968,8 +1004,8 @@ export function ContractsTab() {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground mb-1">НДС ({selectedContract.vatRate}%)</p>
-                <p className="font-medium">{formatAmount(selectedContract.vatAmount)}</p>
+                <p className="text-xs text-muted-foreground mb-1">НДС</p>
+                <p className="font-medium">{formatVatRate(selectedContract.vatRate)}{selectedContract.vatRate > 0 && selectedContract.vatAmount != null ? ` — ${formatAmount(selectedContract.vatAmount)}` : ''}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Срок действия</p>
@@ -1210,9 +1246,9 @@ export function ContractsTab() {
                   {contract.amount != null && (
                     <p className="text-sm font-semibold text-emerald-600 mb-2">
                       {formatAmount(contract.amount)}
-                      {contract.vatRate > 0 && (
+                      {contract.vatRate !== 0 && (
                         <span className="text-xs text-muted-foreground font-normal ml-1">
-                          + НДС {contract.vatRate}%
+                          {contract.vatRate < 0 ? '(Без НДС)' : `+ НДС ${contract.vatRate}%`}
                         </span>
                       )}
                     </p>
@@ -1225,7 +1261,7 @@ export function ContractsTab() {
                     </p>
                   )}
 
-                  {/* Footer: dates + quick status change */}
+                  {/* Footer: dates + action buttons */}
                   <div className="flex items-center justify-between mt-2 pt-2 border-t">
                     <div className="flex items-center gap-2">
                       {(contract.startDate || contract.endDate) && (
@@ -1235,27 +1271,57 @@ export function ContractsTab() {
                         </span>
                       )}
                     </div>
-                    {/* Quick status button */}
-                    {nextStatus && nextLabel && (
+                    <div className="flex items-center gap-0.5">
+                      {/* Edit button on card */}
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        className="h-7 px-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         onClick={(e) => {
                           e.stopPropagation()
-                          handleStatusChange(contract.id, nextStatus)
+                          handleOpenEdit(contract)
                         }}
-                        disabled={statusMutation.isPending}
-                        title={`Перевести в «${nextLabel}»`}
+                        title="Редактировать"
                       >
-                        {contract.status === 'draft' ? (
-                          <Play className="h-3.5 w-3.5 mr-1" />
-                        ) : (
-                          <Flag className="h-3.5 w-3.5 mr-1" />
-                        )}
-                        <span className="text-xs">{nextLabel}</span>
+                        <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                    )}
+                      {/* Quick status button */}
+                      {nextStatus && nextLabel && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleStatusChange(contract.id, nextStatus)
+                          }}
+                          disabled={statusMutation.isPending}
+                          title={`Перевести в «${nextLabel}»`}
+                        >
+                          {contract.status === 'draft' ? (
+                            <Play className="h-3.5 w-3.5" />
+                          ) : (
+                            <Flag className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
+                      {/* Terminate button for active/draft contracts */}
+                      {(contract.status === 'draft' || contract.status === 'active') && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-1.5 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleStatusChange(contract.id, 'terminated')
+                          }}
+                          disabled={statusMutation.isPending}
+                          title="Расторгнуть"
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

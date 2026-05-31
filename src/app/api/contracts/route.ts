@@ -29,7 +29,7 @@ export const POST = withAuth(async (req, ctx, user) => {
       paymentTerms, deliveryTerms, note, planId, invoiceId,
     } = result.data
 
-    // Calculate VAT amount
+    // Calculate VAT amount (-1 = Без НДС, 0 = 0% НДС)
     const vatAmount = amount != null && vatRate > 0 ? amount * vatRate / 100 : null
 
     const contract = await db.contract.create({

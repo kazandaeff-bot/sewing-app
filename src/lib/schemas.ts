@@ -612,7 +612,7 @@ export const CreateContractSchema = z.object({
   status: ContractStatus.default('draft'),
   subject: z.string().optional(),
   amount: z.coerce.number().nonnegative().nullable().optional(),
-  vatRate: z.coerce.number().nonnegative().default(20),
+  vatRate: z.coerce.number().min(-1).default(20),  // -1 = Без НДС, 0 = 0%, 10/20 = rate%
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   paymentTerms: z.string().optional(),
@@ -630,7 +630,7 @@ export const UpdateContractSchema = z.object({
   status: ContractStatus.optional(),
   subject: z.string().nullable().optional(),
   amount: z.coerce.number().nonnegative().nullable().optional(),
-  vatRate: z.coerce.number().nonnegative().optional(),
+  vatRate: z.coerce.number().min(-1).optional(),  // -1 = Без НДС
   startDate: z.string().nullable().optional(),
   endDate: z.string().nullable().optional(),
   paymentTerms: z.string().nullable().optional(),

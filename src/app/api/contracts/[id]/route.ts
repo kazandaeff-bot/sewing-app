@@ -54,7 +54,7 @@ export const PATCH = withAuth(async (req, ctx, user) => {
     if (data.planId !== undefined) updateData.planId = data.planId
     if (data.invoiceId !== undefined) updateData.invoiceId = data.invoiceId
 
-    // Recalculate VAT amount if amount or vatRate changed
+    // Recalculate VAT amount if amount or vatRate changed (-1 = Без НДС)
     if (data.amount !== undefined || data.vatRate !== undefined) {
       const existing = await db.contract.findUnique({ where: { id } })
       if (existing) {
