@@ -1,7 +1,16 @@
 import bcrypt from 'bcryptjs'
+import { SignJWT, jwtVerify } from 'jose'
 
 const SALT_ROUNDS = 10
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me'
+
+// JWT secret — must be at least 32 chars for HS256
+function getSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET
+  if (!secret || secret === 'dev-secret-change-me') {
+    console.warn('⚠️  JWT_SECRET is not set or uses default value. Generate a secure secret and set it in .env')
+  }
+  return new TextEncoder().encode(secret || 'dev-secret-change-me')
+}
 
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, SALT_ROUNDS)
@@ -11,20 +20,42 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash)
 }
 
-export function signToken(payload: Record<string, unknown>): string {
-  // Simple base64 token for dev — replace with proper JWT in production
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
-  const body = Buffer.from(JSON.stringify({ ...payload, iat: Date.now() })).toString('base64url')
-  const sig = Buffer.from(`${header}.${body}.${JWT_SECRET}`).toString('base64url')
-  return `${header}.${body}.${sig}`
+export interface TokenPayload {
+  id: string
+  name: string
+  role: string
+  code?: string
+  customerId?: string | null
 }
 
-export function verifyToken(token: string): Record<string, unknown> | null {
+/**
+ * Sign a JWT token with HMAC-SHA256.
+ * Properly signed — signature is verified on decode.
+ */
+export async function signToken(payload: TokenPayload): Promise<string> {
+  return new SignJWT({ ...payload })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(getSecret())
+}
+
+/**
+ * Verify and decode a JWT token.
+ * Returns null if the signature is invalid, token is expired, or format is wrong.
+ */
+export async function verifyToken(token: string): Promise<TokenPayload | null> {
   try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const [, body] = parts
-    return JSON.parse(Buffer.from(body, 'base64url').toString())
+    const { payload } = await jwtVerify(token, getSecret(), {
+      algorithms: ['HS256'],
+    })
+    return {
+      id: payload.id as string,
+      name: payload.name as string,
+      role: payload.role as string,
+      code: payload.code as string | undefined,
+      customerId: payload.customerId as string | null,
+    }
   } catch {
     return null
   }

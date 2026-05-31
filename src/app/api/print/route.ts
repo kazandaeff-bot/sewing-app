@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { validateQuery } from '@/lib/api-auth'
+import { validateQuery, withAuth, SessionUser } from '@/lib/api-auth'
 import { PrintQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -606,7 +606,7 @@ function generatePackingListForSellerPlan(
 
 // ─── Route handler ──────────────────────────────────────────────────────────
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest, _ctx, _user: SessionUser) => {
   try {
     const qResult = validateQuery(request, PrintQuerySchema)
     if ('error' in qResult) return qResult.error
@@ -655,4 +655,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
+})

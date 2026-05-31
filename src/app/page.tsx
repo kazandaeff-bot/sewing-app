@@ -4,12 +4,15 @@
 export const dynamic = 'force-dynamic'
 
 import { useState } from 'react'
-import { useAuth } from '@/components/auth-provider'
+import { useAuth, getAuthHeaders } from '@/components/auth-provider'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 import { getRoleLabel } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
@@ -56,6 +59,7 @@ import {
   FileSpreadsheet,
   Handshake,
   ScrollText,
+  KeyRound,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -79,6 +83,7 @@ function Sidebar({
   userName,
   userRole,
   onLogout,
+  onChangePassword,
 }: {
   items: MenuItem[]
   activeId: string
@@ -88,6 +93,7 @@ function Sidebar({
   userName: string
   userRole: string
   onLogout: () => void
+  onChangePassword: () => void
 }) {
   // Group items
   const groups: Record<string, MenuItem[]> = {}
@@ -173,6 +179,16 @@ function Sidebar({
             </div>
           </div>
         )}
+        <button
+          onClick={onChangePassword}
+          className={cn(
+            'flex items-center gap-3 w-full rounded-lg text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors',
+            collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
+          )}
+        >
+          <KeyRound className="h-4 w-4 shrink-0" />
+          {!collapsed && <span className="text-sm">Сменить пароль</span>}
+        </button>
         <button
           onClick={onLogout}
           className={cn(
@@ -262,8 +278,11 @@ export default function HomePage() {
   const userRole = user?.role || ''
   const [activeSection, setActiveSection] = useState('plans')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
 
   const handleLogout = async () => { await logout(); router.push('/login') }
+
+  const handleChangePassword = () => setShowChangePassword(true)
 
   if (loading) {
     return (
@@ -358,6 +377,7 @@ export default function HomePage() {
           userName={user.name}
           userRole={userRole}
           onLogout={handleLogout}
+          onChangePassword={handleChangePassword}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -381,6 +401,7 @@ export default function HomePage() {
           userName={user.name}
           userRole={userRole}
           onLogout={handleLogout}
+          onChangePassword={handleChangePassword}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -404,6 +425,7 @@ export default function HomePage() {
           userName={user.name}
           userRole={userRole}
           onLogout={handleLogout}
+          onChangePassword={handleChangePassword}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -439,6 +461,7 @@ export default function HomePage() {
           userName={user.name}
           userRole={userRole}
           onLogout={handleLogout}
+          onChangePassword={handleChangePassword}
         />
         <main className="flex-1 overflow-y-auto bg-gray-50/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -483,12 +506,96 @@ export default function HomePage() {
         userName={user.name}
         userRole={userRole}
         onLogout={handleLogout}
+        onChangePassword={handleChangePassword}
       />
       <main className="flex-1 overflow-y-auto bg-gray-50/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {renderContent()}
         </div>
       </main>
+      <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
     </div>
+  )
+}
+
+// ---- Change Password Dialog ----
+function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setSuccess(false)
+
+    if (newPassword.length < 6) {
+      setError('Новый пароль должен содержать минимум 6 символов')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Пароли не совпадают')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify({ currentPassword, newPassword }),
+        credentials: 'include',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setSuccess(true)
+        setCurrentPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setTimeout(() => onOpenChange(false), 1500)
+      } else {
+        setError(data.error || 'Ошибка смены пароля')
+      }
+    } catch {
+      setError('Ошибка подключения')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Сменить пароль</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="currentPassword">Текущий пароль</Label>
+            <Input id="currentPassword" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="newPassword">Новый пароль</Label>
+            <Input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Подтвердите новый пароль</Label>
+            <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
+          </div>
+          {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-3 text-sm">{error}</div>}
+          {success && <div className="bg-green-50 border border-green-200 text-green-700 rounded-md p-3 text-sm">Пароль успешно изменён!</div>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Отмена</Button>
+            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={loading}>
+              {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Сменить
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

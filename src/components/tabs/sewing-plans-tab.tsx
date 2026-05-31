@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -77,6 +78,9 @@ export function SewingPlansTab() {
   const [supplementDialogOpen, setSupplementDialogOpen] = useState(false)
   const [supplementPlanId, setSupplementPlanId] = useState('')
   const [supplementPlanName, setSupplementPlanName] = useState('')
+
+  // Delete confirmation state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
 
   // Plan detail dialog state
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
@@ -638,7 +642,7 @@ export function SewingPlansTab() {
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => deleteMutation.mutate(plan.id)}
+                            onClick={() => setDeleteConfirmId(plan.id)}
                             disabled={deleteMutation.isPending}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -1288,6 +1292,32 @@ export function SewingPlansTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить план пошива?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Это действие нельзя отменить. План будет удалён навсегда вместе со всеми связанными данными.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (deleteConfirmId) {
+                  deleteMutation.mutate(deleteConfirmId)
+                  setDeleteConfirmId(null)
+                }
+              }}
+            >
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

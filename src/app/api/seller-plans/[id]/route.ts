@@ -115,15 +115,19 @@ export const DELETE = withAuth(async (_req, ctx, _user) => {
     if ('error' in p) return p.error
     const { id } = p.data
 
-    await db.sellerPlanCity.deleteMany({
-      where: { sellerPlanItem: { sellerPlanId: id } },
+    // Delete all related records in a single transaction
+    await db.$transaction(async (tx) => {
+      await tx.sellerPlanCity.deleteMany({
+        where: { sellerPlanItem: { sellerPlanId: id } },
+      })
+      await tx.sellerPlanItem.deleteMany({ where: { sellerPlanId: id } })
+      await tx.boxItem.deleteMany({
+        where: { box: { sellerPlanId: id } },
+      })
+      await tx.box.deleteMany({ where: { sellerPlanId: id } })
+      await tx.sellerPlan.delete({ where: { id } })
     })
-    await db.sellerPlanItem.deleteMany({ where: { sellerPlanId: id } })
-    await db.boxItem.deleteMany({
-      where: { box: { sellerPlanId: id } },
-    })
-    await db.box.deleteMany({ where: { sellerPlanId: id } })
-    await db.sellerPlan.delete({ where: { id } })
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Delete seller plan error:', error)

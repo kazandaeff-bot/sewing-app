@@ -110,7 +110,7 @@ export async function getSessionUser(req: NextRequest): Promise<SessionUser | nu
 
     if (!token) return null
 
-    const payload = verifyToken(token)
+    const payload = await verifyToken(token)
     if (!payload) return null
 
     return {

@@ -155,36 +155,44 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
         // Get all cutting plan items with their quantities
         const freshItems = await db.cuttingPlanItem.findMany({ where: { cuttingPlanId: id } })
 
-        // For each cutting plan item, find material norms and create consumed entries
+        // Collect all material operations first (read phase)
+        const materialOps: Array<{ materialId: string; totalConsumed: number; note: string }> = []
         for (const item of freshItems) {
           const actualQty = item.actualQty ?? item.plannedQty
-
-          // Find all material norms for this product
           const norms = await db.materialNorm.findMany({
             where: { productId: item.productId },
           })
-
           for (const norm of norms) {
             if (norm.consumptionPerUnit > 0) {
               const totalConsumed = norm.consumptionPerUnit * actualQty
-
-              await db.materialEntry.create({
-                data: {
-                  materialId: norm.materialId,
-                  type: 'consumed',
-                  qty: totalConsumed,
-                  cuttingPlanId: id,
-                  note: `Автосписание: ${norm.unit} × ${actualQty} шт (норма: ${norm.consumptionPerUnit} ${norm.unit}/шт)`,
-                },
-              })
-
-              // Update material totalQty
-              await db.material.update({
-                where: { id: norm.materialId },
-                data: { totalQty: { decrement: totalConsumed } },
+              materialOps.push({
+                materialId: norm.materialId,
+                totalConsumed,
+                note: `Автосписание: ${norm.unit} × ${actualQty} шт (норма: ${norm.consumptionPerUnit} ${norm.unit}/шт)`,
               })
             }
           }
+        }
+
+        // Execute all writes in a single transaction
+        if (materialOps.length > 0) {
+          await db.$transaction(async (tx) => {
+            for (const op of materialOps) {
+              await tx.materialEntry.create({
+                data: {
+                  materialId: op.materialId,
+                  type: 'consumed',
+                  qty: op.totalConsumed,
+                  cuttingPlanId: id,
+                  note: op.note,
+                },
+              })
+              await tx.material.update({
+                where: { id: op.materialId },
+                data: { totalQty: { decrement: op.totalConsumed } },
+              })
+            }
+          })
         }
       }
     }

@@ -208,16 +208,18 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
         return NextResponse.json({ error: 'Нельзя вернуть в черновик: план уже раскроен' }, { status: 400 })
       }
 
-      // Delete all cutting plans (they were in_work, not cut yet)
-      for (const cp of existing.cuttingPlans) {
-        await db.cuttingLeftover.deleteMany({ where: { cuttingPlanId: cp.id } })
-        await db.cuttingPlanItem.deleteMany({ where: { cuttingPlanId: cp.id } })
-        await db.cuttingPlan.delete({ where: { id: cp.id } })
-      }
+      // Delete all cutting plans in a transaction (they were in_work, not cut yet)
+      await db.$transaction(async (tx) => {
+        for (const cp of existing.cuttingPlans) {
+          await tx.cuttingLeftover.deleteMany({ where: { cuttingPlanId: cp.id } })
+          await tx.cuttingPlanItem.deleteMany({ where: { cuttingPlanId: cp.id } })
+          await tx.cuttingPlan.delete({ where: { id: cp.id } })
+        }
+        await tx.plan.update({ where: { id }, data: { status: 'draft' } })
+      })
 
-      const updatedPlan = await db.plan.update({
+      const updatedPlan = await db.plan.findUnique({
         where: { id },
-        data: { status: 'draft' },
         include: {
           customer: { select: { id: true, name: true } },
           items: { include: { product: true } },
@@ -300,11 +302,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
       const existingCuttingPlan = await db.cuttingPlan.findFirst({ where: { planId: id } })
 
       if (!existingCuttingPlan) {
-        await db.plan.update({
-          where: { id },
-          data: { status: 'approved', ...(name ? { name } : {}) },
-        })
-
+        // Build cutting items BEFORE the transaction (read-heavy operations)
         const cuttingItems = await buildCuttingItems(
           currentItems.map((item: Record<string, unknown>) => ({
             productId: item.productId as string,
@@ -316,13 +314,21 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
           }))
         )
 
-        await db.cuttingPlan.create({
-          data: {
-            planId: id,
-            label: 'Основной',
-            status: 'in_work',
-            items: { create: cuttingItems },
-          },
+        // Execute both writes in a transaction
+        await db.$transaction(async (tx) => {
+          await tx.plan.update({
+            where: { id },
+            data: { status: 'approved', ...(name ? { name } : {}) },
+          })
+
+          await tx.cuttingPlan.create({
+            data: {
+              planId: id,
+              label: 'Основной',
+              status: 'in_work',
+              items: { create: cuttingItems },
+            },
+          })
         })
 
         const planResult = await db.plan.findUnique({

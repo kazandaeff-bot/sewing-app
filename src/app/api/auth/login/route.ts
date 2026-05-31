@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Неверный логин или пароль' }, { status: 401 })
     }
 
-    const token = signToken({
+    const token = await signToken({
       id: employee.id,
       name: employee.name,
       role: employee.role,

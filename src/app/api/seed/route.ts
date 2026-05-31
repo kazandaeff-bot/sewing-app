@@ -1,9 +1,18 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { hashPassword } from '@/lib/auth'
+import { withAuth } from '@/lib/api-auth'
 
-export async function GET(request: NextRequest) {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
+    // Block seed endpoint in production
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Seed endpoint недоступен в production' },
+        { status: 403 },
+      )
+    }
+
     const force = new URL(request.url).searchParams.get('force')
     const existingEmployees = await db.employee.count()
     if (existingEmployees > 0 && force !== 'true') {
@@ -99,4 +108,4 @@ export async function GET(request: NextRequest) {
     console.error('Seed error:', error)
     return NextResponse.json({ error: 'Ошибка инициализации данных' }, { status: 500 })
   }
-}
+}, ['supervisor'])

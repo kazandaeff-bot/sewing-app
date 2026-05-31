@@ -2,6 +2,7 @@
 // Single source of truth for API request validation
 
 import { z } from 'zod'
+import { validateINN, validateKPP, validateBIK, validateCheckingAccount, validateCorrAccount } from './russian-requisites'
 
 // --- Reusable primitives ---
 
@@ -248,36 +249,75 @@ export const CustomerType = z.enum(['organization', 'ip', 'individual'])
 export const CreateCustomerSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название'),
   type: CustomerType.default('organization'),
-  inn: z.string().trim().optional(),
-  kpp: z.string().trim().optional(),
+  inn: z.string().trim()
+    .refine((val) => !val || validateINN(val).valid, (val) => ({ message: validateINN(val).error || 'Неверный ИНН' }))
+    .optional(),
+  kpp: z.string().trim()
+    .refine((val) => !val || validateKPP(val).valid, (val) => ({ message: validateKPP(val).error || 'Неверный КПП' }))
+    .optional(),
   legalAddress: z.string().trim().optional(),
   postalAddress: z.string().trim().optional(),
   phone: z.string().trim().optional(),
   email: z.string().trim().optional(),
   bankName: z.string().trim().optional(),
-  bik: z.string().trim().optional(),
+  bik: z.string().trim()
+    .refine((val) => !val || validateBIK(val).valid, (val) => ({ message: validateBIK(val).error || 'Неверный БИК' }))
+    .optional(),
   checkingAccount: z.string().trim().optional(),
   corrAccount: z.string().trim().optional(),
   bankCity: z.string().trim().optional(),
   contactInfo: z.string().trim().optional(),
+}).superRefine((data, ctx) => {
+  // Cross-field validation: checking account depends on BIK
+  if (data.checkingAccount && data.bik) {
+    const result = validateCheckingAccount(data.checkingAccount, data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный расчётный счёт', path: ['checkingAccount'] })
+    }
+  }
+  // Cross-field validation: corr account depends on BIK
+  if (data.corrAccount && data.bik) {
+    const result = validateCorrAccount(data.corrAccount, data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный корр. счёт', path: ['corrAccount'] })
+    }
+  }
 })
 
 export const UpdateCustomerSchema = z.object({
   name: z.string().trim().min(1).optional(),
   type: CustomerType.optional(),
-  inn: z.string().trim().nullable().optional(),
-  kpp: z.string().trim().nullable().optional(),
+  inn: z.string().trim().nullable().optional()
+    .refine((val) => val === null || val === undefined || !val || validateINN(val).valid, (val) => ({ message: validateINN(val || '').error || 'Неверный ИНН' })),
+  kpp: z.string().trim().nullable().optional()
+    .refine((val) => val === null || val === undefined || !val || validateKPP(val).valid, (val) => ({ message: validateKPP(val || '').error || 'Неверный КПП' })),
   legalAddress: z.string().trim().nullable().optional(),
   postalAddress: z.string().trim().nullable().optional(),
   phone: z.string().trim().nullable().optional(),
   email: z.string().trim().nullable().optional(),
   bankName: z.string().trim().nullable().optional(),
-  bik: z.string().trim().nullable().optional(),
+  bik: z.string().trim().nullable().optional()
+    .refine((val) => val === null || val === undefined || !val || validateBIK(val).valid, (val) => ({ message: validateBIK(val || '').error || 'Неверный БИК' })),
   checkingAccount: z.string().trim().nullable().optional(),
   corrAccount: z.string().trim().nullable().optional(),
   bankCity: z.string().trim().nullable().optional(),
   contactInfo: z.string().trim().nullable().optional(),
   showMaterialBalance: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  // For update, we need the BIK to validate accounts — but BIK might be in the DB already
+  // We only validate if BOTH bik and account are provided in this update
+  if (data.checkingAccount && data.bik) {
+    const result = validateCheckingAccount(data.checkingAccount, data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный расчётный счёт', path: ['checkingAccount'] })
+    }
+  }
+  if (data.corrAccount && data.bik) {
+    const result = validateCorrAccount(data.corrAccount, data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный корр. счёт', path: ['corrAccount'] })
+    }
+  }
 })
 
 // --- Material Types ---
