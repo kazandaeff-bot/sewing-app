@@ -101,7 +101,7 @@ function Sidebar({
     }
   }
 
-  const groupOrder = ['Планирование', 'Производство', 'Менеджер', 'Справочники']
+  const groupOrder = ['Планирование', 'Производство', 'Финансы', 'Справочники']
 
   return (
     <div
@@ -232,21 +232,20 @@ function SidebarItem({
 
 const SUPERVISOR_MENU: MenuItem[] = [
   { id: 'plans', label: 'Планы пошива', icon: FileText, group: 'Планирование' },
-  { id: 'cutting', label: 'Раскрой', icon: Scissors, group: 'Планирование' },
-  { id: 'leftovers', label: 'Остатки раскроя', icon: AlertTriangle, group: 'Планирование' },
+  { id: 'cutting', label: 'Раскрой', icon: Scissors, group: 'Производство' },
+  { id: 'leftovers', label: 'Остатки раскроя', icon: AlertTriangle, group: 'Производство' },
   { id: 'sewing-tasks', label: 'Задания швеям', icon: ListTodo, group: 'Производство' },
-  { id: 'sewers', label: 'Швеи', icon: Scissors, group: 'Производство' },
+  { id: 'sewers', label: 'Работа швей', icon: Scissors, group: 'Производство' },
   { id: 'qc', label: 'ОТК', icon: ClipboardCheck, group: 'Производство' },
   { id: 'ironing', label: 'ВТО', icon: Heater, group: 'Производство' },
-  { id: 'distribution', label: 'Города', icon: MapPin, group: 'Производство' },
-  { id: 'boxes', label: 'Короба', icon: Box, group: 'Производство' },
-  { id: 'contracts', label: 'Договоры', icon: ScrollText, group: 'Менеджер' },
-  { id: 'invoices', label: 'Счета', icon: Receipt, group: 'Менеджер' },
-  { id: 'upd', label: 'УПД', icon: FileSpreadsheet, group: 'Менеджер' },
-  { id: 'crm', label: 'Сделки', icon: Handshake, group: 'Менеджер' },
+  { id: 'boxes', label: 'Упаковка', icon: Box, group: 'Производство' },
+  { id: 'contracts', label: 'Договоры', icon: ScrollText, group: 'Финансы' },
+  { id: 'invoices', label: 'Счета', icon: Receipt, group: 'Финансы' },
+  { id: 'upd', label: 'УПД', icon: FileSpreadsheet, group: 'Финансы' },
+  { id: 'crm', label: 'Сделки', icon: Handshake, group: 'Финансы' },
   { id: 'products', label: 'Изделия', icon: Package, group: 'Справочники' },
   { id: 'employees', label: 'Сотрудники', icon: Users, group: 'Справочники' },
-  { id: 'references', label: 'Справочники', icon: BookOpen, group: 'Справочники' },
+  { id: 'references', label: 'Прочее', icon: BookOpen, group: 'Справочники' },
 ]
 
 const CUSTOMER_MENU: MenuItem[] = [

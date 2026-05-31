@@ -72,3 +72,23 @@ Stage Summary:
 - Добавлена кнопка расторжения (оранжевая, иконка Ban) в детальном просмотре и на карточках
 - «Без НДС» корректно хранится как -1 и отображается везде правильно
 - Приложение компилируется и запускается без ошибок
+---
+Task ID: 1
+Agent: main
+Task: Sidebar refactoring + quick plan input
+
+Work Log:
+- Analyzed current sidebar structure: 16 items in 4 groups (Планирование, Производство, Менеджер, Справочники)
+- Identified duplications: Изделия and Сотрудники exist both as sidebar items AND inside Справочники tab
+- Identified logical issues: Раскрой in Планирование (it's production), Города in Производство (it's a reference), Швеи not a production operation
+- Refactored sidebar: moved Раскрой/Остатки to Производство, renamed Менеджер→Финансы, renamed Короба→Упаковка, renamed Швеи→Работа швей, renamed Справочники inner→Прочее
+- Removed Изделия and Сотрудники sections from references-tab.tsx (they have dedicated tabs now)
+- Added quick input mode to plan creation dialog: toggle between "Простой ввод" and "Табличный ввод"
+- Quick mode: select product → see all sizes×colors as a grid → enter quantities in cells → add more products
+- Quick mode flattens grid into plan items on submit, skipping zero-quantity cells
+- Build passes successfully
+
+Stage Summary:
+- Sidebar restructured: Планирование(1) + Производство(7) + Финансы(4) + Справочники(3)
+- Quick plan input mode implemented with size×color grid
+- No more duplication of Изделия/Сотрудники

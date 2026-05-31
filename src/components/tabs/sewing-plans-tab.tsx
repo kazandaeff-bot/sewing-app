@@ -48,6 +48,10 @@ export function SewingPlansTab() {
   const [planPriority, setPlanPriority] = useState<string>('normal')
   const [planDeadline, setPlanDeadline] = useState<string>('')
 
+  // Quick mode state for create dialog
+  const [quickMode, setQuickMode] = useState(true)
+  const [quickGroups, setQuickGroups] = useState<Array<{ productId: string; quantities: Record<string, number>; colorHexMap: Record<string, string> }>>([])
+
   // Use shared hooks for item row management
   const createRows = useItemRows()
   const editRows = useItemRows([])
@@ -172,6 +176,7 @@ export function SewingPlansTab() {
       setPlanPriority('normal')
       setPlanDeadline('')
       createRows.resetRows()
+      setQuickGroups([])
       toast({ title: 'План создан', description: 'Новый план пошива создан' })
     },
     onError: () => {
@@ -251,13 +256,33 @@ export function SewingPlansTab() {
       toast({ title: 'Ошибка', description: 'Выберите заказчика', variant: 'destructive' })
       return
     }
-    const validItems = createRows.rows.filter((i) => i.productId && i.size && i.color && i.quantity > 0)
-    if (validItems.length === 0) {
-      toast({ title: 'Ошибка', description: 'Добавьте хотя бы одну позицию', variant: 'destructive' })
-      return
+    let validItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }>
+    if (quickMode) {
+      if (quickGroups.some(g => !g.productId)) {
+        toast({ title: 'Ошибка', description: 'Выберите изделие для всех групп', variant: 'destructive' })
+        return
+      }
+      validItems = quickGroups.flatMap(group =>
+        Object.entries(group.quantities)
+          .filter(([, qty]) => qty > 0)
+          .map(([key, qty]) => {
+            const [size, color] = key.split('|')
+            return { productId: group.productId, size, color, colorHex: group.colorHexMap[key] || '#9ca3af', quantity: qty }
+          })
+      )
+      if (validItems.length === 0) {
+        toast({ title: 'Ошибка', description: 'Укажите количество хотя бы для одной позиции', variant: 'destructive' })
+        return
+      }
+    } else {
+      validItems = createRows.rows.filter((i) => i.productId && i.size && i.color && i.quantity > 0)
+      if (validItems.length === 0) {
+        toast({ title: 'Ошибка', description: 'Добавьте хотя бы одну позицию', variant: 'destructive' })
+        return
+      }
     }
     createMutation.mutate({ customerId: planCustomerId, priority: planPriority, deadline: planDeadline || undefined, items: validItems })
-  }, [planCustomerId, planPriority, planDeadline, createRows.rows, createMutation, toast])
+  }, [planCustomerId, planPriority, planDeadline, quickMode, quickGroups, createRows.rows, createMutation, toast])
 
   const handleEdit = useCallback((plan: Plan) => {
     setEditingPlanId(plan.id)
@@ -469,7 +494,12 @@ export function SewingPlansTab() {
           </Select>
           <Button
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            onClick={() => setCreateDialogOpen(true)}
+            onClick={() => {
+              setCreateDialogOpen(true)
+              if (quickGroups.length === 0) {
+                setQuickGroups([{ productId: '', quantities: {}, colorHexMap: {} }])
+              }
+            }}
           >
             <Plus className="h-4 w-4 mr-1" />
             Создать план
@@ -692,19 +722,180 @@ export function SewingPlansTab() {
 
               <Separator />
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Позиции</Label>
-                  <Button size="sm" variant="outline" onClick={createRows.addRow}>
+              {/* Mode toggle */}
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                <Button
+                  size="sm"
+                  variant={quickMode ? 'default' : 'ghost'}
+                  className={`flex-1 ${quickMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                  onClick={() => setQuickMode(true)}
+                >
+                  Простой ввод
+                </Button>
+                <Button
+                  size="sm"
+                  variant={!quickMode ? 'default' : 'ghost'}
+                  className={`flex-1 ${!quickMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                  onClick={() => setQuickMode(false)}
+                >
+                  Табличный ввод
+                </Button>
+              </div>
+
+              {quickMode ? (
+                /* Quick input mode: product selection + size×color grid */
+                <div className="space-y-3">
+                  {quickGroups.map((group, gi) => {
+                    const product = products.find((p: Product) => p.id === group.productId)
+                    const sizes = product?.sizes?.map(s => s.size) || []
+                    const colors = product?.colors?.map(c => ({ color: c.color, colorHex: c.colorHex })) || []
+                    if (product?.isKit) {
+                      const kitCombo = parseKitComboColors(product.kitComboColors)
+                      Object.keys(kitCombo).forEach(key => {
+                        if (!colors.find(c => c.color === key)) {
+                          colors.push({ color: key, colorHex: '#808080' })
+                        }
+                      })
+                    }
+
+                    return (
+                      <Card key={gi} className="border border-emerald-200 bg-emerald-50/30">
+                        <CardHeader className="py-2 px-3">
+                          <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm font-medium">
+                              {product ? `${product.name} (${product.article})${getKitLabel(product)}` : 'Выберите изделие'}
+                            </CardTitle>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7"
+                              onClick={() => setQuickGroups(prev => prev.filter((_, i) => i !== gi))}
+                              disabled={quickGroups.length <= 1}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="py-2 px-3 space-y-3">
+                          <Select
+                            value={group.productId}
+                            onValueChange={(v) => {
+                              const p = products.find((pp: Product) => pp.id === v)
+                              if (!p) return
+                              const sList = p.sizes.map(s => s.size)
+                              const cList = p.colors.map(c => ({ color: c.color, colorHex: c.colorHex }))
+                              if (p.isKit) {
+                                const kitCombo = parseKitComboColors(p.kitComboColors)
+                                Object.keys(kitCombo).forEach(key => {
+                                  if (!cList.find(c => c.color === key)) {
+                                    cList.push({ color: key, colorHex: '#808080' })
+                                  }
+                                })
+                              }
+                              const quantities: Record<string, number> = {}
+                              const colorHexMap: Record<string, string> = {}
+                              const finalSizes = sList.length > 0 ? sList : ['—']
+                              const finalColors = cList.length > 0 ? cList : [{ color: '—', colorHex: '#9ca3af' }]
+                              for (const size of finalSizes) {
+                                for (const c of finalColors) {
+                                  const key = `${size}|${c.color}`
+                                  quantities[key] = 0
+                                  colorHexMap[key] = c.colorHex
+                                }
+                              }
+                              setQuickGroups(prev => prev.map((g, i) => i === gi ? { productId: v, quantities, colorHexMap } : g))
+                            }}
+                          >
+                            <SelectTrigger><SelectValue placeholder="Выберите изделие" /></SelectTrigger>
+                            <SelectContent>
+                              {products.map((p: Product) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.name} ({p.article}){getKitLabel(p)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+
+                          {product && sizes.length > 0 && colors.length > 0 && (
+                            <div className="overflow-x-auto -mx-1">
+                              <table className="w-full text-sm border-collapse">
+                                <thead>
+                                  <tr className="border-b">
+                                    <th className="text-left p-1.5 text-xs text-muted-foreground min-w-[80px] whitespace-nowrap">Цвет \ Размер</th>
+                                    {sizes.map(size => (
+                                      <th key={size} className="text-center p-1.5 text-xs text-muted-foreground min-w-[60px]">{size}</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {colors.map(c => (
+                                    <tr key={c.color} className="border-b last:border-0">
+                                      <td className="p-1.5">
+                                        <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+                                          <span
+                                            className="inline-block w-3 h-3 rounded-full border border-gray-200 shrink-0"
+                                            style={{ backgroundColor: c.colorHex }}
+                                          />
+                                          {c.color}
+                                        </span>
+                                      </td>
+                                      {sizes.map(size => {
+                                        const key = `${size}|${c.color}`
+                                        return (
+                                          <td key={key} className="p-1 text-center">
+                                            <Input
+                                              type="number"
+                                              min="0"
+                                              className="w-16 h-8 text-center text-sm mx-auto"
+                                              value={group.quantities[key] || ''}
+                                              onChange={(e) => setQuickGroups(prev => prev.map((g, i) =>
+                                                i === gi ? { ...g, quantities: { ...g.quantities, [key]: parseInt(e.target.value) || 0 } } : g
+                                              ))}
+                                            />
+                                          </td>
+                                        )
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                          {product && (sizes.length === 0 || colors.length === 0) && (
+                            <p className="text-xs text-muted-foreground italic">
+                              У изделия не заданы размеры или цвета. Используйте табличный ввод.
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 w-full"
+                    onClick={() => setQuickGroups(prev => [...prev, { productId: '', quantities: {}, colorHexMap: {} }])}
+                  >
                     <Plus className="h-4 w-4 mr-1" />
-                    Добавить
+                    Добавить изделие
                   </Button>
                 </div>
+              ) : (
+                /* Table mode (existing one-by-one input) */
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-medium">Позиции</Label>
+                    <Button size="sm" variant="outline" onClick={createRows.addRow}>
+                      <Plus className="h-4 w-4 mr-1" />
+                      Добавить
+                    </Button>
+                  </div>
 
-                <div className="space-y-2">
-                  {createRows.rows.map((item, index) => renderItemRow(item, index, createRows, createColorSelect))}
+                  <div className="space-y-2">
+                    {createRows.rows.map((item, index) => renderItemRow(item, index, createRows, createColorSelect))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </ScrollArea>
           <DialogFooter>
@@ -713,6 +904,7 @@ export function SewingPlansTab() {
               setPlanCustomerId('')
               setPlanPriority('normal')
               setPlanDeadline('')
+              setQuickGroups([])
             }}>
               Отмена
             </Button>
