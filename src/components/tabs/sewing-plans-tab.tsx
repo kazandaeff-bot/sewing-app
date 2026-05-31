@@ -31,6 +31,7 @@ import {
   BarChart3,
   Scissors,
   Users,
+  Zap,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { authFetch } from '@/components/auth-provider'
@@ -64,6 +65,12 @@ export function SewingPlansTab() {
 
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editingPlanId, setEditingPlanId] = useState('')
+
+  // Quick create dialog state
+  const [quickCreateDialogOpen, setQuickCreateDialogOpen] = useState(false)
+  const [quickCustomerId, setQuickCustomerId] = useState('')
+  const [quickPriority, setQuickPriority] = useState<string>('normal')
+  const [quickDeadline, setQuickDeadline] = useState<string>('')
 
   const [filterCustomerId, setFilterCustomerId] = useState('all')
 
@@ -190,14 +197,18 @@ export function SewingPlansTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const data = await r.json()
+        if (!r.ok) throw new Error(data.error || 'Ошибка обновления статуса')
+        return data
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
       toast({ title: 'Статус обновлён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить статус', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -248,6 +259,27 @@ export function SewingPlansTab() {
     },
     onError: () => {
       toast({ title: 'Ошибка', description: 'Не удалось дополнить план', variant: 'destructive' })
+    },
+  })
+
+  // Quick create: plan with no items (draft)
+  const quickCreateMutation = useMutation({
+    mutationFn: (data: { customerId: string; priority?: string; deadline?: string }) =>
+      authFetch('/api/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...data, items: [] }),
+      }).then((r) => r.json()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['plans'] })
+      setQuickCreateDialogOpen(false)
+      setQuickCustomerId('')
+      setQuickPriority('normal')
+      setQuickDeadline('')
+      toast({ title: 'Черновик создан', description: 'Пустой план создан. Добавьте позиции через редактирование.' })
+    },
+    onError: () => {
+      toast({ title: 'Ошибка', description: 'Не удалось создать план', variant: 'destructive' })
     },
   })
 
@@ -493,6 +525,16 @@ export function SewingPlansTab() {
             </SelectContent>
           </Select>
           <Button
+            variant="outline"
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+            onClick={() => {
+              setQuickCreateDialogOpen(true)
+            }}
+          >
+            <Zap className="h-4 w-4 mr-1" />
+            Быстрое создание
+          </Button>
+          <Button
             className="bg-emerald-600 hover:bg-emerald-700 text-white"
             onClick={() => {
               setCreateDialogOpen(true)
@@ -547,7 +589,9 @@ export function SewingPlansTab() {
                     {plan.customer?.name || <Badge variant="outline" className="text-amber-600 border-amber-300">Не указан</Badge>}
                   </TableCell>
                   <TableCell>{getPlanStatusBadge(plan.status)}</TableCell>
-                  <TableCell>{plan.items.length}</TableCell>
+                  <TableCell>{plan.items.length === 0 ? (
+                    <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">нет позиций</Badge>
+                  ) : plan.items.length}</TableCell>
                   <TableCell>
                     {plan.cuttingPlans && plan.cuttingPlans.length > 0 ? (
                       plan.cuttingPlans.length > 1 ? (
@@ -915,6 +959,88 @@ export function SewingPlansTab() {
             >
               {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Создать
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Create Dialog — minimal fields, no items required */}
+      <Dialog open={quickCreateDialogOpen} onOpenChange={setQuickCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-500" />
+              Быстрое создание плана
+            </DialogTitle>
+            <DialogDescription>
+              Создайте пустой черновик плана — позиции можно добавить позже через редактирование.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Заказчик <span className="text-red-500">*</span></Label>
+              <Select value={quickCustomerId} onValueChange={setQuickCustomerId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Выберите заказчика" />
+                </SelectTrigger>
+                <SelectContent>
+                  {customers.map((c: { id: string; name: string }) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Приоритет</Label>
+                <Select value={quickPriority} onValueChange={setQuickPriority}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="urgent"><span className="flex items-center gap-1"><Flame className="h-3 w-3 text-red-500" />Срочный</span></SelectItem>
+                    <SelectItem value="normal">Обычный</SelectItem>
+                    <SelectItem value="low">Низкий</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Дедлайн</Label>
+                <Input type="date" value={quickDeadline} onChange={(e) => setQuickDeadline(e.target.value)} />
+              </div>
+            </div>
+            <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/50 p-3 text-sm text-muted-foreground">
+              Позиции будут добавлены позже через кнопку <Pencil className="h-3 w-3 inline" /> редактирования.
+              Название генерируется автоматически.
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setQuickCreateDialogOpen(false)
+              setQuickCustomerId('')
+              setQuickPriority('normal')
+              setQuickDeadline('')
+            }}>
+              Отмена
+            </Button>
+            <Button
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              onClick={() => {
+                if (!quickCustomerId) {
+                  toast({ title: 'Ошибка', description: 'Выберите заказчика', variant: 'destructive' })
+                  return
+                }
+                quickCreateMutation.mutate({
+                  customerId: quickCustomerId,
+                  priority: quickPriority,
+                  deadline: quickDeadline || undefined,
+                })
+              }}
+              disabled={quickCreateMutation.isPending}
+            >
+              {quickCreateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Zap className="h-4 w-4 mr-1" />
+              Создать черновик
             </Button>
           </DialogFooter>
         </DialogContent>

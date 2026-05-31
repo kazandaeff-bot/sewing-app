@@ -92,3 +92,26 @@ Stage Summary:
 - Sidebar restructured: Планирование(1) + Производство(7) + Финансы(4) + Справочники(3)
 - Quick plan input mode implemented with size×color grid
 - No more duplication of Изделия/Сотрудники
+---
+Task ID: 1
+Agent: main
+Task: Sidebar refactoring + simplified plan input
+
+Work Log:
+- Updated CUSTOMER_MENU: "Короба" → "Упаковка" in page.tsx
+- Updated CreatePlanSchema: items now optional (default []) instead of min(1)
+- Updated POST /api/plans: handles empty items array with conditional spread
+- Added quickCreateMutation in sewing-plans-tab.tsx (creates draft with no items)
+- Added "Быстрое создание" button with Zap icon next to "Создать план"
+- Added Quick Create Dialog (compact: customer + priority + deadline only)
+- Updated statusMutation to show API error messages (e.g. "Нельзя утвердить план без позиций")
+- Added validation in PATCH /api/plans/[id]: prevent approving plan with no items
+- Updated useItemRows: setRowsFromPlanItems([]) now creates 1 empty row instead of 0
+- Added visual indicator "нет позиций" badge for empty plans in table
+- Build verified: no errors
+
+Stage Summary:
+- Sidebar fully consistent (Упаковка everywhere)
+- Quick create feature implemented: creates empty draft plan in 2 clicks
+- API supports empty items, prevents approve without items
+- UX: error messages from API shown in toasts, visual indicators for empty plans

@@ -251,7 +251,7 @@ const SUPERVISOR_MENU: MenuItem[] = [
 const CUSTOMER_MENU: MenuItem[] = [
   { id: 'plans', label: 'Планы пошива', icon: FileText, group: 'Планирование' },
   { id: 'distribution', label: 'Города', icon: MapPin, group: 'Планирование' },
-  { id: 'boxes', label: 'Короба', icon: Box, group: 'Планирование' },
+  { id: 'boxes', label: 'Упаковка', icon: Box, group: 'Планирование' },
   { id: 'materials', label: 'Материалы', icon: Package, group: 'Планирование' },
 ]
 

@@ -292,6 +292,11 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
     if (status === 'approved' && existing.status !== 'approved') {
       const currentItems = items || existing.items
 
+      // Prevent approving a plan with no items
+      if (!currentItems || currentItems.length === 0) {
+        return NextResponse.json({ error: 'Нельзя утвердить план без позиций. Добавьте изделия через редактирование.' }, { status: 400 })
+      }
+
       const existingCuttingPlan = await db.cuttingPlan.findFirst({ where: { planId: id } })
 
       if (!existingCuttingPlan) {

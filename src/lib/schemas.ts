@@ -100,7 +100,7 @@ const PlanItemInput = z.object({
 
 export const CreatePlanSchema = z.object({
   customerId: cuid,
-  items: z.array(PlanItemInput).min(1, 'Добавьте хотя бы одну позицию'),
+  items: z.array(PlanItemInput).default([]),  // empty = quick create (draft without items)
   priority: PlanPriority.default('normal'),
   deadline: z.string().nullable().optional(),
 })

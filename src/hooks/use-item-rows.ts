@@ -27,13 +27,17 @@ export function useItemRows(initialRows?: PlanItemRow[]) {
   }, [])
 
   const setRowsFromPlanItems = useCallback((items: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }>) => {
-    setRows(items.map(item => ({
-      productId: item.productId,
-      size: item.size,
-      color: item.color,
-      colorHex: item.colorHex,
-      quantity: item.quantity,
-    })))
+    if (items.length === 0) {
+      setRows([{ ...EMPTY_ROW }])
+    } else {
+      setRows(items.map(item => ({
+        productId: item.productId,
+        size: item.size,
+        color: item.color,
+        colorHex: item.colorHex,
+        quantity: item.quantity,
+      })))
+    }
   }, [])
 
   return {

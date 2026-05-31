@@ -71,15 +71,17 @@ export const POST = withAuth(async (req, ctx, user) => {
         customerId,
         priority,
         deadline: deadline ? new Date(deadline) : null,
-        items: {
-          create: items.map((item) => ({
-            productId: item.productId,
-            size: item.size,
-            color: item.color,
-            colorHex: item.colorHex || '#9ca3af',
-            quantity: item.quantity,
-          })),
-        },
+        ...(items.length > 0 && {
+          items: {
+            create: items.map((item) => ({
+              productId: item.productId,
+              size: item.size,
+              color: item.color,
+              colorHex: item.colorHex || '#9ca3af',
+              quantity: item.quantity,
+            })),
+          },
+        }),
       },
       include: {
         customer: { select: { id: true, name: true } },
