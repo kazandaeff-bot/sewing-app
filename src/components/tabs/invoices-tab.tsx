@@ -154,7 +154,7 @@ function ItemsTable({
   return (
     <div className="space-y-3">
       <Label className="text-sm font-medium">Позиции счёта</Label>
-      <div className="border rounded-lg overflow-hidden">
+      <div className="border rounded-lg overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

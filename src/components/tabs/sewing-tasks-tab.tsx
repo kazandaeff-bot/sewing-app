@@ -264,7 +264,7 @@ export function SewingTasksTab() {
 
           {selectedPlan && (
             <>
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>

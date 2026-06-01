@@ -514,9 +514,9 @@ export function SewingPlansTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Планы пошива</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <Select value={filterCustomerId} onValueChange={setFilterCustomerId}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Все заказчики" />
@@ -561,7 +561,7 @@ export function SewingPlansTab() {
           </CardContent>
         </Card>
       ) : (
-        <div className="border rounded-lg">
+        <div className="border rounded-lg overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1202,7 +1202,7 @@ export function SewingPlansTab() {
                 {/* Per-position progress */}
                 <div>
                   <h4 className="text-sm font-semibold mb-3">Прогресс по позициям</h4>
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>

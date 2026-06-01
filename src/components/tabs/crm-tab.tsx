@@ -601,7 +601,7 @@ export function CRMTab() {
         {/* Contacts / Meeting History */}
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle className="text-base flex items-center gap-2">
                 <Users className="h-5 w-5 text-emerald-600" />
                 История контактов

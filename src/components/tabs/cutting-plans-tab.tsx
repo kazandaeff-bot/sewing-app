@@ -91,7 +91,7 @@ export function CuttingPlansTab() {
           {cuttingPlans.map((cp: CuttingPlan) => (
             <Card key={cp.id} className="overflow-hidden">
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <CardTitle className="text-base">{cp.plan.name}</CardTitle>
                     <p className="text-xs text-muted-foreground mt-1">{formatDate(cp.createdAt)}</p>
@@ -129,7 +129,7 @@ export function CuttingPlansTab() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-3 sm:mx-0">
                   <Table>
                     <TableHeader>
                       <TableRow>

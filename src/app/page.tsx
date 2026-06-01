@@ -16,6 +16,8 @@ import { Label } from '@/components/ui/label'
 import { Loader2 } from 'lucide-react'
 import { getRoleLabel } from '@/lib/formatters'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 
 // Tab components — extracted to separate files
 import { SewerTab } from '@/components/tabs/sewer-tab'
@@ -60,6 +62,7 @@ import {
   Handshake,
   ScrollText,
   KeyRound,
+  Menu,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -73,8 +76,8 @@ interface MenuItem {
   group?: string
 }
 
-// ---- Sidebar navigation component ----
-function Sidebar({
+// ---- Sidebar navigation component (desktop) ----
+function SidebarContent({
   items,
   activeId,
   onSelect,
@@ -84,6 +87,7 @@ function Sidebar({
   userRole,
   onLogout,
   onChangePassword,
+  isMobileSheet = false,
 }: {
   items: MenuItem[]
   activeId: string
@@ -94,6 +98,7 @@ function Sidebar({
   userRole: string
   onLogout: () => void
   onChangePassword: () => void
+  isMobileSheet?: boolean
 }) {
   // Group items
   const groups: Record<string, MenuItem[]> = {}
@@ -109,19 +114,21 @@ function Sidebar({
 
   const groupOrder = ['Планирование', 'Производство', 'Финансы', 'Справочники']
 
+  // In mobile sheet, always show full labels (never collapsed)
+  const showLabels = isMobileSheet || !collapsed
+
   return (
-    <div
-      className={cn(
-        'flex flex-col h-screen bg-white border-r border-gray-200 transition-all duration-300 shrink-0',
-        collapsed ? 'w-[62px]' : 'w-[240px]'
-      )}
-    >
+    <div className={cn(
+      'flex flex-col h-full bg-white',
+      !isMobileSheet && 'border-r border-gray-200 transition-all duration-300 shrink-0',
+      !isMobileSheet && (collapsed ? 'w-[62px]' : 'w-[240px]')
+    )}>
       {/* Logo / App title */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
         <div className="bg-emerald-600 text-white rounded-lg p-2 shrink-0">
           <Scissors className="h-5 w-5" />
         </div>
-        {!collapsed && (
+        {showLabels && (
           <div className="overflow-hidden">
             <div className="text-sm font-bold text-gray-900 truncate">Швейное Производство</div>
             <div className="text-[11px] text-muted-foreground truncate">{getRoleLabel(userRole)}</div>
@@ -138,7 +145,7 @@ function Sidebar({
               item={item}
               active={activeId === item.id}
               onSelect={onSelect}
-              collapsed={collapsed}
+              showLabels={showLabels}
             />
           ))}
 
@@ -146,19 +153,19 @@ function Sidebar({
             if (!groups[groupName]) return null
             return (
               <div key={groupName}>
-                {!collapsed && (
+                {showLabels && (
                   <div className="px-3 pt-4 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
                     {groupName}
                   </div>
                 )}
-                {collapsed && <div className="my-2"><Separator className="mx-2" /></div>}
+                {!showLabels && <div className="my-2"><Separator className="mx-2" /></div>}
                 {groups[groupName].map((item) => (
                   <SidebarItem
                     key={item.id}
                     item={item}
                     active={activeId === item.id}
                     onSelect={onSelect}
-                    collapsed={collapsed}
+                    showLabels={showLabels}
                   />
                 ))}
               </div>
@@ -169,7 +176,7 @@ function Sidebar({
 
       {/* Bottom section: user + collapse */}
       <div className="border-t border-gray-100 p-2 space-y-1">
-        {!collapsed && (
+        {showLabels && (
           <div className="flex items-center gap-2 px-2 py-2 rounded-lg bg-gray-50 mb-1">
             <div className="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold shrink-0">
               {userName.charAt(0).toUpperCase()}
@@ -183,32 +190,34 @@ function Sidebar({
           onClick={onChangePassword}
           className={cn(
             'flex items-center gap-3 w-full rounded-lg text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors',
-            collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
+            showLabels ? 'px-3 py-2' : 'justify-center px-0 py-2'
           )}
         >
           <KeyRound className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="text-sm">Сменить пароль</span>}
+          {showLabels && <span className="text-sm">Сменить пароль</span>}
         </button>
         <button
           onClick={onLogout}
           className={cn(
             'flex items-center gap-3 w-full rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors',
-            collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
+            showLabels ? 'px-3 py-2' : 'justify-center px-0 py-2'
           )}
         >
           <LogOut className="h-4 w-4 shrink-0" />
-          {!collapsed && <span className="text-sm">Выйти</span>}
+          {showLabels && <span className="text-sm">Выйти</span>}
         </button>
-        <button
-          onClick={onToggleCollapse}
-          className={cn(
-            'flex items-center gap-3 w-full rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors',
-            collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
-          )}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 shrink-0" />}
-          {!collapsed && <span className="text-sm">Свернуть</span>}
-        </button>
+        {!isMobileSheet && (
+          <button
+            onClick={onToggleCollapse}
+            className={cn(
+              'flex items-center gap-3 w-full rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors',
+              collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'
+            )}
+          >
+            {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4 shrink-0" />}
+            {!collapsed && <span className="text-sm">Свернуть</span>}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -218,12 +227,12 @@ function SidebarItem({
   item,
   active,
   onSelect,
-  collapsed,
+  showLabels,
 }: {
   item: MenuItem
   active: boolean
   onSelect: (id: string) => void
-  collapsed: boolean
+  showLabels: boolean
 }) {
   const Icon = item.icon
   return (
@@ -231,16 +240,52 @@ function SidebarItem({
       onClick={() => onSelect(item.id)}
       className={cn(
         'flex items-center gap-3 w-full rounded-lg transition-colors text-sm',
-        collapsed ? 'justify-center px-0 py-2.5' : 'px-3 py-2.5',
+        showLabels ? 'px-3 py-2.5' : 'justify-center px-0 py-2.5',
         active
           ? 'bg-emerald-50 text-emerald-700 font-medium'
           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
       )}
-      title={collapsed ? item.label : undefined}
+      title={!showLabels ? item.label : undefined}
     >
       <Icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-emerald-600' : 'text-gray-400')} />
-      {!collapsed && <span className="truncate">{item.label}</span>}
+      {showLabels && <span className="truncate">{item.label}</span>}
     </button>
+  )
+}
+
+// ---- Mobile Header ----
+function MobileHeader({
+  userName,
+  onMenuOpen,
+  onLogout,
+}: {
+  userName: string
+  onMenuOpen: () => void
+  onLogout: () => void
+}) {
+  return (
+    <header className="sticky top-0 z-40 flex items-center justify-between bg-white border-b border-gray-200 px-3 py-2 md:hidden">
+      <button
+        onClick={onMenuOpen}
+        className="p-2 rounded-lg hover:bg-gray-100 text-gray-600"
+        aria-label="Открыть меню"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+      <div className="flex items-center gap-2">
+        <div className="bg-emerald-600 text-white rounded-md p-1.5">
+          <Scissors className="h-4 w-4" />
+        </div>
+        <span className="text-sm font-bold text-gray-900">Швейное Производство</span>
+      </div>
+      <button
+        onClick={onLogout}
+        className="p-2 rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-600"
+        aria-label="Выйти"
+      >
+        <LogOut className="h-5 w-5" />
+      </button>
+    </header>
   )
 }
 
@@ -279,10 +324,17 @@ export default function HomePage() {
   const [activeSection, setActiveSection] = useState('plans')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const isMobile = useIsMobile()
 
   const handleLogout = async () => { await logout(); router.push('/login') }
 
   const handleChangePassword = () => setShowChangePassword(true)
+
+  const handleSelect = (id: string) => {
+    setActiveSection(id)
+    if (isMobile) setMobileMenuOpen(false)
+  }
 
   if (loading) {
     return (
@@ -335,12 +387,12 @@ export default function HomePage() {
   if (userRole === 'seller') {
     return (
       <div className="min-h-screen bg-gray-50/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between mb-6">
-            <div><h1 className="text-2xl font-bold text-gray-900">{user.name}</h1><p className="text-sm text-muted-foreground">{getRoleLabel(userRole)}</p></div>
-            <Button variant="outline" onClick={handleLogout}><LogOut className="h-4 w-4 mr-2" />Выйти</Button>
+            <div><h1 className="text-xl sm:text-2xl font-bold text-gray-900">{user.name}</h1><p className="text-sm text-muted-foreground">{getRoleLabel(userRole)}</p></div>
+            <Button variant="outline" onClick={handleLogout} size={isMobile ? 'sm' : 'default'}><LogOut className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Выйти</span></Button>
           </div>
-          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><Store className="h-16 w-16 mb-4 opacity-20" /><p className="text-lg font-medium">Ваш раздел — Производство</p><p className="text-sm mt-1 mb-4">Перейдите в раздел Производство для работы</p><Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { router.push('/') }}><Factory className="h-4 w-4 mr-2" />Производство →</Button></CardContent></Card>
+          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 sm:py-16 text-muted-foreground"><Store className="h-12 w-12 sm:h-16 sm:w-16 mb-4 opacity-20" /><p className="text-base sm:text-lg font-medium">Ваш раздел — Производство</p><p className="text-sm mt-1 mb-4">Перейдите в раздел Производство для работы</p><Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { router.push('/') }}><Factory className="h-4 w-4 mr-2" />Производство →</Button></CardContent></Card>
         </div>
       </div>
     )
@@ -351,135 +403,34 @@ export default function HomePage() {
     const RoleIcon = userRole === 'technologist' ? FlaskConical : Scissors
     return (
       <div className="min-h-screen bg-gray-50/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-center justify-between mb-6">
-            <div><h1 className="text-2xl font-bold text-gray-900">{user.name}</h1><p className="text-sm text-muted-foreground">{getRoleLabel(userRole)}</p></div>
-            <Button variant="outline" onClick={handleLogout}><LogOut className="h-4 w-4 mr-2" />Выйти</Button>
+            <div><h1 className="text-xl sm:text-2xl font-bold text-gray-900">{user.name}</h1><p className="text-sm text-muted-foreground">{getRoleLabel(userRole)}</p></div>
+            <Button variant="outline" onClick={handleLogout} size={isMobile ? 'sm' : 'default'}><LogOut className="h-4 w-4 sm:mr-2" /><span className="hidden sm:inline">Выйти</span></Button>
           </div>
-          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground"><RoleIcon className="h-16 w-16 mb-4 opacity-20" /><p className="text-lg font-medium">Раздел в разработке</p><p className="text-sm mt-1">Данный раздел будет доступен позже</p></CardContent></Card>
+          <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 sm:py-16 text-muted-foreground"><RoleIcon className="h-12 w-12 sm:h-16 sm:w-16 mb-4 opacity-20" /><p className="text-base sm:text-lg font-medium">Раздел в разработке</p><p className="text-sm mt-1">Данный раздел будет доступен позже</p></CardContent></Card>
         </div>
       </div>
     )
   }
 
-  // ---- Single-tab roles with minimal sidebar ----
+  // ---- Roles with sidebar navigation ----
 
-  // Ironing
-  if (userRole === 'ironing') {
-    return (
-      <div className="flex h-screen">
-        <Sidebar
-          items={[{ id: 'ironing', label: 'ВТО', icon: Heater }]}
-          activeId="ironing"
-          onSelect={() => {}}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          userName={user.name}
-          userRole={userRole}
-          onLogout={handleLogout}
-          onChangePassword={handleChangePassword}
-        />
-        <main className="flex-1 overflow-y-auto bg-gray-50/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <IroningTab />
-          </div>
-        </main>
-      </div>
-    )
+  const getSidebarItems = (): MenuItem[] => {
+    if (userRole === 'customer') return CUSTOMER_MENU
+    if (userRole === 'ironing') return [{ id: 'ironing', label: 'ВТО', icon: Heater }]
+    if (userRole === 'sewer') return [{ id: 'sewers', label: 'Швеи', icon: Scissors }]
+    if (userRole === 'qc') return [{ id: 'qc', label: 'ОТК', icon: ClipboardCheck }]
+    return SUPERVISOR_MENU
   }
 
-  // Sewer
-  if (userRole === 'sewer') {
-    return (
-      <div className="flex h-screen">
-        <Sidebar
-          items={[{ id: 'sewers', label: 'Швеи', icon: Scissors }]}
-          activeId="sewers"
-          onSelect={() => {}}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          userName={user.name}
-          userRole={userRole}
-          onLogout={handleLogout}
-          onChangePassword={handleChangePassword}
-        />
-        <main className="flex-1 overflow-y-auto bg-gray-50/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <SewerTab preselectedEmployeeId={user.id} />
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // QC
-  if (userRole === 'qc') {
-    return (
-      <div className="flex h-screen">
-        <Sidebar
-          items={[{ id: 'qc', label: 'ОТК', icon: ClipboardCheck }]}
-          activeId="qc"
-          onSelect={() => {}}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          userName={user.name}
-          userRole={userRole}
-          onLogout={handleLogout}
-          onChangePassword={handleChangePassword}
-        />
-        <main className="flex-1 overflow-y-auto bg-gray-50/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <QCTab />
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // ---- Multi-tab roles with full sidebar ----
-
-  // Customer
-  if (userRole === 'customer') {
-    const renderContent = () => {
-      switch (activeSection) {
-        case 'plans': return <SewingPlansTab />
-        case 'distribution': return <CityDistributionTab />
-        case 'boxes': return <BoxesTab />
-        case 'materials': return <CustomerMaterialsTab customerId={user.customerId!} />
-        default: return <SewingPlansTab />
-      }
-    }
-
-    return (
-      <div className="flex h-screen">
-        <Sidebar
-          items={CUSTOMER_MENU}
-          activeId={activeSection}
-          onSelect={setActiveSection}
-          collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          userName={user.name}
-          userRole={userRole}
-          onLogout={handleLogout}
-          onChangePassword={handleChangePassword}
-        />
-        <main className="flex-1 overflow-y-auto bg-gray-50/50">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            {renderContent()}
-          </div>
-        </main>
-      </div>
-    )
-  }
-
-  // Supervisor: full menu with all sections
   const renderContent = () => {
     switch (activeSection) {
       case 'plans': return <SewingPlansTab />
       case 'cutting': return <CuttingPlansTab />
       case 'leftovers': return <CuttingLeftoversTab />
       case 'sewing-tasks': return <SewingTasksTab />
-      case 'sewers': return <SewerTab />
+      case 'sewers': return <SewerTab preselectedEmployeeId={userRole === 'sewer' ? user.id : undefined} />
       case 'qc': return <QCTab />
       case 'ironing': return <IroningTab />
       case 'distribution': return <CityDistributionTab />
@@ -491,16 +442,61 @@ export default function HomePage() {
       case 'invoices': return <InvoicesTab />
       case 'upd': return <UPDTab />
       case 'crm': return <CRMTab />
+      case 'materials': return <CustomerMaterialsTab customerId={user.customerId!} />
       default: return <SewingPlansTab />
     }
   }
 
+  const sidebarItems = getSidebarItems()
+
+  // ---- Mobile Layout ----
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-50/50">
+        <MobileHeader
+          userName={user.name}
+          onMenuOpen={() => setMobileMenuOpen(true)}
+          onLogout={handleLogout}
+        />
+
+        {/* Mobile Sidebar Sheet */}
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetContent side="left" className="w-[280px] p-0">
+            <SheetTitle className="sr-only">Навигация</SheetTitle>
+            <SidebarContent
+              items={sidebarItems}
+              activeId={activeSection}
+              onSelect={handleSelect}
+              collapsed={false}
+              onToggleCollapse={() => {}}
+              userName={user.name}
+              userRole={userRole}
+              onLogout={handleLogout}
+              onChangePassword={handleChangePassword}
+              isMobileSheet={true}
+            />
+          </SheetContent>
+        </Sheet>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="px-3 py-4">
+            {renderContent()}
+          </div>
+        </main>
+
+        <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
+      </div>
+    )
+  }
+
+  // ---- Desktop Layout ----
   return (
     <div className="flex h-screen">
-      <Sidebar
-        items={SUPERVISOR_MENU}
+      <SidebarContent
+        items={sidebarItems}
         activeId={activeSection}
-        onSelect={setActiveSection}
+        onSelect={handleSelect}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         userName={user.name}
@@ -568,7 +564,7 @@ function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenCha
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-w-[calc(100%-2rem)]">
         <DialogHeader>
           <DialogTitle>Сменить пароль</DialogTitle>
         </DialogHeader>

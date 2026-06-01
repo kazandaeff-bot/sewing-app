@@ -153,7 +153,7 @@ export function ProductsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Изделия</h2>
         <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { resetCreateForm(); setCreateOpen(true) }}><Plus className="h-4 w-4 mr-1" />Добавить изделие</Button>
       </div>
@@ -328,7 +328,7 @@ export function ProductsTab() {
               {editSizes.length > 0 && selectedProduct && (
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Нормы по размерам</Label>
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-lg overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>

@@ -111,7 +111,7 @@ export function CuttingLeftoversTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-xl font-semibold">Свободный крой (остатки)</h2>
         <div className="flex items-center gap-2">
           <Select value={filterCustomerId} onValueChange={(v) => setFilterCustomerId(v === '_all' ? '' : v)}>
@@ -137,8 +137,7 @@ export function CuttingLeftoversTab() {
           </CardContent>
         </Card>
       ) : (
-        <div className="border rounded-lg overflow-hidden">
-          <div className="overflow-x-auto">
+        <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -191,7 +190,6 @@ export function CuttingLeftoversTab() {
               </TableBody>
             </Table>
           </div>
-        </div>
       )}
 
       {/* Edit leftover dialog */}

@@ -642,7 +642,7 @@ export function ReferencesTab() {
         {customers.length === 0 ? (
           <Card className="border-dashed"><CardContent className="py-8 text-center text-muted-foreground">Нет заказчиков</CardContent></Card>
         ) : (
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-x-auto">
             <div className="overflow-x-auto max-h-96">
               <Table>
                 <TableHeader>
@@ -778,7 +778,7 @@ export function ReferencesTab() {
           {materialNorms.length === 0 ? (
             <Card className="border-dashed"><CardContent className="py-6 text-center text-muted-foreground text-sm">Нет норм расходов</CardContent></Card>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
               <div className="overflow-x-auto max-h-64">
                 <Table>
                   <TableHeader>

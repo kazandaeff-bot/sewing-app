@@ -384,7 +384,7 @@ export function CityDistributionTab() {
               </div>
 
               {/* Distribution items table */}
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <ScrollArea className="max-h-[500px]">
                   <Table>
                     <TableHeader>
