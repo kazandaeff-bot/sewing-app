@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
     })
 
     // Return token in response body so the client can store it
-    // and send via Authorization header (more reliable than cookies in sandbox)
-    const response = NextResponse.json({
+    // and send via Authorization header
+    return NextResponse.json({
       user: {
         id: employee.id,
         name: employee.name,
@@ -62,17 +62,6 @@ export async function POST(request: NextRequest) {
       },
       token,
     })
-
-    // Also set as cookie as fallback
-    response.cookies.set('token', token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 60 * 60 * 24 * 7,
-      path: '/',
-    })
-
-    return response
   } catch (error) {
     console.error('Login error:', error)
     return NextResponse.json({ error: 'Ошибка входа' }, { status: 500 })

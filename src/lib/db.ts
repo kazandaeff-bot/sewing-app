@@ -19,12 +19,14 @@ export const db =
 globalForPrisma.prisma = db
 
 // Graceful shutdown — close Prisma connection pool on process exit
+// NOTE: We only listen for SIGINT/SIGTERM, NOT beforeExit.
+// beforeExit fires when the event loop is empty, which can happen
+// between requests and would kill the server prematurely.
 if (typeof process !== 'undefined') {
   const shutdown = async () => {
     try { await db.$disconnect() } catch {}
     process.exit(0)
   }
-  process.on('beforeExit', shutdown)
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }
