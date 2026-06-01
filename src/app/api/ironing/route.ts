@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuth, validateBody } from '@/lib/api-auth'
 import { IroningUpdateSchema } from '@/lib/schemas'
@@ -12,7 +12,7 @@ export const GET = withAuth(async (req, ctx, user) => {
         product: true,
         sewingTask: {
           include: {
-            employee: true,
+            employee: EMPLOYEE_PUBLIC_INCLUDE,
             cuttingPlan: { include: { plan: true } },
           },
         },

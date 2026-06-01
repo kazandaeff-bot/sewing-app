@@ -22,7 +22,11 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
     if (password !== undefined && password !== '') updateData.password = await hashPassword(password)
     if (customerId !== undefined) updateData.customerId = customerId || null
 
-    const employee = await db.employee.update({ where: { id }, data: updateData })
+    const employee = await db.employee.update({
+      where: { id },
+      data: updateData,
+      select: { id: true, name: true, code: true, role: true, username: true, customerId: true, createdAt: true, updatedAt: true },
+    })
     return NextResponse.json(employee)
   } catch (error) {
     console.error('Update employee error:', error)

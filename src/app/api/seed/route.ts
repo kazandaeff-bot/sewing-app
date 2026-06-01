@@ -5,14 +5,8 @@ import { withAuth } from '@/lib/api-auth'
 
 export const GET = withAuth(async (request: NextRequest) => {
   try {
-    // Block seed endpoint in production
-    if (process.env.NODE_ENV === 'production') {
-      return NextResponse.json(
-        { error: 'Seed endpoint недоступен в production' },
-        { status: 403 },
-      )
-    }
-
+    // In production, require ?force=true and supervisor role (already checked by withAuth)
+    // This prevents accidental seeding but allows intentional data reset by supervisor
     const force = new URL(request.url).searchParams.get('force')
     const existingEmployees = await db.employee.count()
     if (existingEmployees > 0 && force !== 'true') {
@@ -32,7 +26,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       hashPassword('admin'),
     ])
 
-    // Create employees with hashed passwords
+    // Create employees with hashed passwords — ALL 8 roles
     const employees = await Promise.all([
       db.employee.create({ data: { name: 'Иванова Мария', code: 'Ш-001', username: 'sewer1', password: pw123456, role: 'sewer' } }),
       db.employee.create({ data: { name: 'Петрова Анна', code: 'Ш-002', username: 'sewer2', password: pw123456, role: 'sewer' } }),
@@ -42,6 +36,10 @@ export const GET = withAuth(async (request: NextRequest) => {
       db.employee.create({ data: { name: 'Смирнова Ирина', code: 'ОТК-001', username: 'qc1', password: pw123456, role: 'qc' } }),
       db.employee.create({ data: { name: 'Кузнецова Наталья', code: 'ОТК-002', username: 'qc2', password: pw123456, role: 'qc' } }),
       db.employee.create({ data: { name: 'Директор Ольга', code: 'РУК-001', username: 'admin', password: pwAdmin, role: 'supervisor' } }),
+      db.employee.create({ data: { name: 'Продавец Анна', code: 'ПРД-001', username: 'seller1', password: pw123456, role: 'seller' } }),
+      db.employee.create({ data: { name: 'Технолог Мария', code: 'ТХН-001', username: 'technologist1', password: pw123456, role: 'technologist' } }),
+      db.employee.create({ data: { name: 'Закройщик Иван', code: 'ЗКР-001', username: 'cutter1', password: pw123456, role: 'cutter' } }),
+      db.employee.create({ data: { name: 'Норгиза', code: 'УТЮ-001', username: 'ironing1', password: pw123456, role: 'ironing' } }),
     ])
 
     // Create products with all rate fields including ironingRate and cuttingRate

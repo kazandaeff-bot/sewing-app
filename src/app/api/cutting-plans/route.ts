@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -13,7 +13,7 @@ export const GET = withAuth(async (req, ctx, user) => {
           orderBy: { id: 'asc' },
         },
         sewingTasks: {
-          include: { employee: true },
+          include: { employee: EMPLOYEE_PUBLIC_INCLUDE },
         },
         leftovers: {
           include: { product: true },

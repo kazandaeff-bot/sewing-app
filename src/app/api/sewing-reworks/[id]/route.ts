@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
 import { UpdateSewingReworkSchema, IdParamSchema } from '@/lib/schemas'
 import { NextResponse } from 'next/server'
@@ -40,12 +40,12 @@ export const PATCH = withAuth(async (req, ctx) => {
           include: {
             product: true,
             sewingTask: {
-              include: { employee: true },
+              include: { employee: EMPLOYEE_PUBLIC_INCLUDE },
             },
           },
         },
         sewingTask: {
-          include: { employee: true },
+          include: { employee: EMPLOYEE_PUBLIC_INCLUDE },
         },
       },
     })

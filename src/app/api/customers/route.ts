@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth, validateBody } from '@/lib/api-auth'
 import { CreateCustomerSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
@@ -7,7 +7,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   try {
     const customers = await db.customer.findMany({
       orderBy: { name: 'asc' },
-      include: { customerProducts: { include: { product: true } }, employees: true, plans: true, sellerPlans: true },
+      include: { customerProducts: { include: { product: true } }, employees: EMPLOYEE_PUBLIC_INCLUDE, plans: true, sellerPlans: true },
     })
     return NextResponse.json(customers, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
@@ -38,7 +38,7 @@ export const POST = withAuth(async (req, ctx, user) => {
         bankCity: bankCity || null,
         contactInfo: contactInfo || null,
       },
-      include: { customerProducts: true, employees: true },
+      include: { customerProducts: true, employees: EMPLOYEE_PUBLIC_INCLUDE },
     })
     return NextResponse.json(customer, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error: any) {

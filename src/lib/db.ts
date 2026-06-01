@@ -28,3 +28,26 @@ if (typeof process !== 'undefined') {
   process.on('SIGINT', shutdown)
   process.on('SIGTERM', shutdown)
 }
+
+/**
+ * Reusable Prisma select object for Employee — ALWAYS exclude password.
+ * Use this wherever you include employee data in API responses.
+ */
+export const EMPLOYEE_PUBLIC_SELECT = {
+  id: true,
+  name: true,
+  code: true,
+  role: true,
+  username: true,
+  customerId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const
+
+/**
+ * Reusable Prisma include object for Employee — ALWAYS exclude password.
+ * Use this wherever you include employee data in nested queries.
+ */
+export const EMPLOYEE_PUBLIC_INCLUDE = {
+  select: EMPLOYEE_PUBLIC_SELECT,
+} as const

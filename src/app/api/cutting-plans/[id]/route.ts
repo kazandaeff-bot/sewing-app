@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { NextResponse } from 'next/server'
 import { withAuth, validateBody, validateParams } from '@/lib/api-auth'
 import { UpdateCuttingPlanSchema, IdParamSchema } from '@/lib/schemas'
@@ -16,7 +16,7 @@ export const GET = withAuth(async (_req, ctx, _user) => {
         items: { include: { product: true } },
         sewingTasks: {
           include: {
-            employee: true,
+            employee: EMPLOYEE_PUBLIC_INCLUDE,
             items: { include: { product: true } },
           },
         },
@@ -204,7 +204,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
         plan: true,
         items: { include: { product: true } },
         sewingTasks: {
-          include: { employee: true },
+          include: { employee: EMPLOYEE_PUBLIC_INCLUDE },
         },
         leftovers: {
           include: { product: true },

@@ -489,7 +489,7 @@ export function SewingTasksTab() {
                       <Button
                         size="sm"
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
-                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'done' })}
+                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'completed' })}
                         disabled={updateStatusMutation.isPending}
                       >
                         <CheckCircle2 className="h-4 w-4 mr-1" />

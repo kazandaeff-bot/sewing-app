@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
 import { CreateTaskSchema, TasksQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,7 +16,7 @@ export const GET = withAuth(async (req, ctx, user) => {
     const tasks = await db.task.findMany({
       where,
       include: {
-        employee: true,
+        employee: EMPLOYEE_PUBLIC_INCLUDE,
         product: true,
       },
       orderBy: { createdAt: 'desc' },
@@ -45,7 +45,7 @@ export const POST = withAuth(async (req, ctx, user) => {
         quantity,
       },
       include: {
-        employee: true,
+        employee: EMPLOYEE_PUBLIC_INCLUDE,
         product: true,
       },
     })

@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_SELECT } from '@/lib/db'
 import { withAuth } from '@/lib/api-auth'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -24,7 +24,8 @@ export const GET = withAuth(async (req, ctx, user) => {
       db.sewingRework.count({ where: { status: 'pending' } }),
       db.task.aggregate({ _sum: { fabricDefect: true } }),
       db.employee.findMany({
-        include: {
+        select: {
+          ...EMPLOYEE_PUBLIC_SELECT,
           tasks: true,
         },
         orderBy: { code: 'asc' },

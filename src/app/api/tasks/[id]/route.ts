@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth, validateParams, validateBody } from '@/lib/api-auth'
 import { IdParamSchema, UpdateTaskSchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
@@ -37,7 +37,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
       where: { id },
       data: updateData,
       include: {
-        employee: true,
+        employee: EMPLOYEE_PUBLIC_INCLUDE,
         product: true,
       },
     })

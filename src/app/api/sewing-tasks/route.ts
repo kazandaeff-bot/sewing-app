@@ -1,4 +1,4 @@
-import { db } from '@/lib/db'
+import { db, EMPLOYEE_PUBLIC_INCLUDE } from '@/lib/db'
 import { withAuth, validateBody, validateQuery } from '@/lib/api-auth'
 import { CreateSewingTaskSchema, SewingTasksQuerySchema } from '@/lib/schemas'
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,7 +18,7 @@ export const GET = withAuth(async (req, ctx, user) => {
       orderBy: { createdAt: 'desc' },
       include: {
         cuttingPlan: { include: { plan: true } },
-        employee: true,
+        employee: EMPLOYEE_PUBLIC_INCLUDE,
         items: {
           include: { product: true, reworks: true },
           orderBy: { id: 'asc' },
@@ -103,7 +103,7 @@ export const POST = withAuth(async (req, ctx, user) => {
       },
       include: {
         cuttingPlan: { include: { plan: true } },
-        employee: true,
+        employee: EMPLOYEE_PUBLIC_INCLUDE,
         items: { include: { product: true } },
       },
     })
