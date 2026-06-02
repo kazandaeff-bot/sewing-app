@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  turbopack: {
+    root: '/home/z/my-project', 
+  },
   allowedDevOrigins: [
     // Wildcard patterns for preview subdomains
     // These match any subdomain of space-z.ai and chatglm.site

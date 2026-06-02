@@ -14,7 +14,7 @@ const handle = app.getRequestHandler();
 // Some container runtimes kill processes when the event loop is empty
 setInterval(() => {
   // Heartbeat to keep the event loop active
-}, 30000);
+}, 5000);
 
 app.prepare().then(() => {
   const server = http.createServer((req, res) => {

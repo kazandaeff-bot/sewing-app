@@ -679,3 +679,89 @@ export const UpdateContractSchema = z.object({
   planId: cuid.nullable().optional(),
   invoiceId: cuid.nullable().optional(),
 })
+
+// --- Rework Reasons ---
+
+export const CreateReworkReasonSchema = z.object({
+  productId: cuid,
+  text: z.string().min(1, 'Укажите причину переделки'),
+})
+
+export const ReworkReasonsQuerySchema = z.object({
+  productId: cuid.optional(),
+})
+
+// --- Reworks (Legacy) ---
+
+export const CreateReworkSchema = z.object({
+  taskId: cuid,
+  quantity: positiveInt,
+  reason: z.string().min(1, 'Укажите причину переделки'),
+})
+
+export const ReworksQuerySchema = z.object({
+  status: z.string().optional(),
+})
+
+export const UpdateReworkSchema = z.object({
+  status: z.string().min(1),
+})
+
+// --- Pattern Pieces ---
+
+export const CreatePatternPieceSchema = z.object({
+  name: z.string().min(1, 'Укажите название детали'),
+  size: z.string().nullable().optional(),
+  points: z.array(z.any()),  // Array of {x, y} coordinate objects
+  width: z.coerce.number().nonnegative().default(0),
+  height: z.coerce.number().nonnegative().default(0),
+  grainAngle: z.coerce.number().default(0),
+  seamAllowance: z.coerce.number().default(0),
+  quantity: z.coerce.number().int().positive().default(1),
+  notches: z.array(z.any()).nullable().optional(),
+  scaleCalibration: z.any().nullable().optional(),
+})
+
+export const UpdatePatternPieceSchema = z.object({
+  name: z.string().min(1).optional(),
+  size: z.string().nullable().optional(),
+  points: z.array(z.any()).optional(),
+  width: z.coerce.number().nonnegative().optional(),
+  height: z.coerce.number().nonnegative().optional(),
+  grainAngle: z.coerce.number().optional(),
+  seamAllowance: z.coerce.number().optional(),
+  quantity: z.coerce.number().int().positive().optional(),
+  notches: z.array(z.any()).nullable().optional(),
+  scaleCalibration: z.any().nullable().optional(),
+})
+
+export const PatternPieceIdParamSchema = z.object({
+  id: cuid,
+  pieceId: cuid,
+})
+
+// --- Nesting Layouts ---
+
+const NestingItemInput = z.object({
+  patternPieceId: cuid,
+  x: z.coerce.number().default(0),
+  y: z.coerce.number().default(0),
+  rotation: z.coerce.number().default(0),
+  flipped: z.boolean().default(false),
+})
+
+export const CreateNestingLayoutSchema = z.object({
+  name: z.string().min(1, 'Укажите название раскладки'),
+  patternId: cuid.optional(),
+  fabricWidth: z.coerce.number().positive('Укажите ширину ткани'),
+  items: z.array(NestingItemInput).default([]),
+})
+
+export const UpdateNestingLayoutSchema = z.object({
+  name: z.string().min(1).optional(),
+  fabricWidth: z.coerce.number().positive().optional(),
+  fabricLength: z.coerce.number().positive().optional(),
+  utilization: z.coerce.number().min(0).max(100).optional(),
+  status: z.string().optional(),
+  items: z.array(NestingItemInput).optional(),
+})
