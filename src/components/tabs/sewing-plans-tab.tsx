@@ -179,7 +179,11 @@ export function SewingPlansTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось создать план')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       setCreateDialogOpen(false)
@@ -190,8 +194,8 @@ export function SewingPlansTab() {
       setQuickGroups([])
       toast({ title: 'План создан', description: 'Новый план пошива создан' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось создать план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -218,13 +222,17 @@ export function SewingPlansTab() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      authFetch(`/api/plans/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetch(`/api/plans/${id}`, { method: 'DELETE' }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось удалить план')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       toast({ title: 'План удалён', description: 'План пошива удалён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось удалить план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -234,14 +242,18 @@ export function SewingPlansTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось обновить план')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       setEditDialogOpen(false)
       toast({ title: 'План обновлён', description: 'Позиции плана обновлены' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -251,7 +263,11 @@ export function SewingPlansTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ addItems }),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось дополнить план')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
@@ -261,8 +277,8 @@ export function SewingPlansTab() {
       supplementRows.resetRows()
       toast({ title: 'План дополнен', description: 'Новые позиции добавлены в план' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось дополнить план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -273,7 +289,11 @@ export function SewingPlansTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, items: [] }),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось создать план')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       setQuickCreateDialogOpen(false)
@@ -282,8 +302,8 @@ export function SewingPlansTab() {
       setQuickDeadline('')
       toast({ title: 'Черновик создан', description: 'Пустой план создан. Добавьте позиции через редактирование.' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось создать план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
@@ -388,8 +408,8 @@ export function SewingPlansTab() {
     const availableColors = selectedProduct?.colors || []
 
     return (
-      <div key={index} className="flex items-end gap-2 flex-wrap">
-        <div className="flex-1 min-w-[140px]">
+      <div key={index} className="flex flex-col sm:flex-row sm:items-end gap-2">
+        <div className="flex-1 sm:min-w-[140px]">
           <Label className="text-xs text-muted-foreground">Изделие</Label>
           <Select
             value={item.productId}
@@ -407,7 +427,7 @@ export function SewingPlansTab() {
             </SelectContent>
           </Select>
         </div>
-        <div className="w-24">
+        <div className="sm:w-24">
           <Label className="text-xs text-muted-foreground">Размер</Label>
           {availableSizes.length > 0 ? (
             <Select
@@ -433,7 +453,7 @@ export function SewingPlansTab() {
             />
           )}
         </div>
-        <div className="w-28">
+        <div className="sm:w-28">
           <Label className="text-xs text-muted-foreground">Цвет</Label>
           {availableColors.length > 0 || (selectedProduct?.isKit) ? (
             <Select
@@ -479,7 +499,7 @@ export function SewingPlansTab() {
             />
           )}
         </div>
-        <div className="w-16">
+        <div className="sm:w-16">
           <Label className="text-xs text-muted-foreground">Hex</Label>
           <div className="flex items-center gap-1">
             <input
@@ -490,7 +510,7 @@ export function SewingPlansTab() {
             />
           </div>
         </div>
-        <div className="w-20">
+        <div className="sm:w-20">
           <Label className="text-xs text-muted-foreground">Кол-во</Label>
           <Input
             type="number"
@@ -565,13 +585,13 @@ export function SewingPlansTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Название</TableHead>
-                <TableHead>Заказчик</TableHead>
-                <TableHead>Статус</TableHead>
-                <TableHead>Позиций</TableHead>
-                <TableHead>Раскрой</TableHead>
-                <TableHead>Дата</TableHead>
-                <TableHead className="text-right">Действия</TableHead>
+                <TableHead className="text-xs sm:text-sm">Название</TableHead>
+                <TableHead className="hidden md:table-cell">Заказчик</TableHead>
+                <TableHead className="text-xs sm:text-sm">Статус</TableHead>
+                <TableHead className="hidden sm:table-cell">Позиций</TableHead>
+                <TableHead className="hidden lg:table-cell">Раскрой</TableHead>
+                <TableHead className="hidden md:table-cell text-xs sm:text-sm">Дата</TableHead>
+                <TableHead className="text-right text-xs sm:text-sm">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -589,14 +609,14 @@ export function SewingPlansTab() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {plan.customer?.name || <Badge variant="outline" className="text-amber-600 border-amber-300">Не указан</Badge>}
                   </TableCell>
                   <TableCell>{getPlanStatusBadge(plan.status)}</TableCell>
-                  <TableCell>{plan.items.length === 0 ? (
+                  <TableCell className="hidden sm:table-cell">{plan.items.length === 0 ? (
                     <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">нет позиций</Badge>
                   ) : plan.items.length}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden lg:table-cell">
                     {plan.cuttingPlans && plan.cuttingPlans.length > 0 ? (
                       plan.cuttingPlans.length > 1 ? (
                         <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-100">
@@ -609,7 +629,7 @@ export function SewingPlansTab() {
                       )
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs">{formatDate(plan.createdAt)}
+                  <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{formatDate(plan.createdAt)}
                     {plan.deadline && (
                       <div className={`text-[10px] mt-0.5 ${new Date(plan.deadline) < new Date() && plan.status !== 'shipped' && plan.status !== 'shipped_paid' ? 'text-red-600 font-semibold' : 'text-amber-600'}`}>
                         <CalendarClock className="h-3 w-3 inline mr-0.5" />
@@ -619,7 +639,7 @@ export function SewingPlansTab() {
                     )}
                   </TableCell>
                   <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1 sm:gap-2">
                       {plan.status === 'draft' && (
                         <>
                           <Button
@@ -636,8 +656,8 @@ export function SewingPlansTab() {
                             onClick={() => statusMutation.mutate({ id: plan.id, status: 'approved' })}
                             disabled={statusMutation.isPending}
                           >
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Утвердить
+                            <CheckCircle2 className="h-4 w-4 sm:mr-1" />
+                            <span className="hidden sm:inline">Утвердить</span>
                           </Button>
                           <Button
                             size="sm"
@@ -657,8 +677,8 @@ export function SewingPlansTab() {
                             onClick={() => statusMutation.mutate({ id: plan.id, status: 'in_work' })}
                             disabled={statusMutation.isPending}
                           >
-                            <Play className="h-4 w-4 mr-1" />
-                            В работу
+                            <Play className="h-4 w-4 sm:mr-1" />
+                            <span className="hidden sm:inline">В работу</span>
                           </Button>
                           {!plan.cuttingPlans?.some((cp) => cp.status === 'cut') && (
                             <Button
@@ -668,8 +688,8 @@ export function SewingPlansTab() {
                               onClick={() => statusMutation.mutate({ id: plan.id, status: 'draft' })}
                               disabled={statusMutation.isPending}
                             >
-                              <Undo2 className="h-4 w-4 mr-1" />
-                              Вернуть в черновик
+                              <Undo2 className="h-4 w-4 sm:mr-1" />
+                              <span className="hidden sm:inline">Вернуть</span>
                             </Button>
                           )}
                           <Button
@@ -679,8 +699,8 @@ export function SewingPlansTab() {
                             onClick={() => handleOpenSupplement(plan)}
                             disabled={supplementMutation.isPending}
                           >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Дополнить
+                            <Plus className="h-4 w-4 sm:mr-1" />
+                            <span className="hidden sm:inline">Дополнить</span>
                           </Button>
                         </>
                       )}
@@ -692,8 +712,8 @@ export function SewingPlansTab() {
                             onClick={() => statusMutation.mutate({ id: plan.id, status: 'shipped' })}
                             disabled={statusMutation.isPending}
                           >
-                            <Ship className="h-4 w-4 mr-1" />
-                            Отгружен
+                            <Ship className="h-4 w-4 sm:mr-1" />
+                            <span className="hidden sm:inline">Отгружен</span>
                           </Button>
                           <Button
                             size="sm"
@@ -702,8 +722,8 @@ export function SewingPlansTab() {
                             onClick={() => handleOpenSupplement(plan)}
                             disabled={supplementMutation.isPending}
                           >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Дополнить
+                            <Plus className="h-4 w-4 sm:mr-1" />
+                            <span className="hidden sm:inline">Дополнить</span>
                           </Button>
                         </>
                       )}
@@ -714,8 +734,8 @@ export function SewingPlansTab() {
                           onClick={() => statusMutation.mutate({ id: plan.id, status: 'shipped_paid' })}
                           disabled={statusMutation.isPending}
                         >
-                          <Banknote className="h-4 w-4 mr-1" />
-                          Отгружен и оплачен
+                          <Banknote className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Оплачен</span>
                         </Button>
                       )}
                     </div>
@@ -729,11 +749,11 @@ export function SewingPlansTab() {
 
       {/* Create Plan Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Создать план пошива</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
+          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Заказчик <span className="text-red-500">*</span></Label>
@@ -1052,13 +1072,13 @@ export function SewingPlansTab() {
 
       {/* Edit Plan Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>
               Редактирование: {(plans as Plan[]).find((p) => p.id === editingPlanId)?.name || 'План'}
             </DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
+          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
             <div className="space-y-4">
               <Separator />
 
@@ -1095,11 +1115,11 @@ export function SewingPlansTab() {
 
       {/* Supplement Plan Dialog */}
       <Dialog open={supplementDialogOpen} onOpenChange={setSupplementDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh]">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Дополнить план: {supplementPlanName}</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-[70vh] pr-4">
+          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
             <div className="space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -1134,7 +1154,7 @@ export function SewingPlansTab() {
 
       {/* Plan Detail Dialog */}
       <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh]">
+        <DialogContent className="sm:max-w-4xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-emerald-600" />
@@ -1153,7 +1173,7 @@ export function SewingPlansTab() {
               <span className="ml-2 text-muted-foreground">Загрузка...</span>
             </div>
           ) : detailData && detailData.progress ? (
-            <ScrollArea className="max-h-[70vh] pr-4">
+            <ScrollArea className="max-h-[60vh] sm:max-h-[70vh] pr-2 sm:pr-4">
               <div className="space-y-6">
                 {/* Overall progress */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">

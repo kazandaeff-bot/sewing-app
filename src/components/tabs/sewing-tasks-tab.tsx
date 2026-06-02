@@ -203,13 +203,17 @@ export function SewingTasksTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось обновить статус')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
       toast({ title: 'Статус обновлён', description: 'Статус задания изменён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить статус', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 

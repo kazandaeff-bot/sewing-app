@@ -34,13 +34,17 @@ export function CuttingPlansTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось обновить план раскроя')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
       toast({ title: 'Обновлено', description: 'План раскроя обновлён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить план раскроя', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 

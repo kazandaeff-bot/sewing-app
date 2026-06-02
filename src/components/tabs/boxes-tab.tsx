@@ -79,13 +79,17 @@ export function BoxesTab() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }).then(async (r) => {
+        const result = await r.json()
+        if (!r.ok) throw new Error(result.error || 'Не удалось обновить короб')
+        return result
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['boxes'] })
       toast({ title: 'Обновлено', description: 'Короб обновлён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить короб', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
