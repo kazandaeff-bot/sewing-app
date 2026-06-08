@@ -227,12 +227,12 @@ export function ReferencesTab() {
 
   // ---- Customer mutations ----
   const createCustomerMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => authFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: (data: Record<string, unknown>) => authFetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { const details = d.details ? d.details.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ') : ''; throw new Error(details || d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const updateCustomerMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => authFetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => authFetch(`/api/customers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { const details = d.details ? d.details.map((i: { path: string; message: string }) => `${i.path}: ${i.message}`).join('; ') : ''; throw new Error(details || d.error || 'Ошибка') }); return r.json() }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['customers'] }); closeCustomerDialog(); toast({ title: 'Заказчик обновлён' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
@@ -511,24 +511,21 @@ export function ReferencesTab() {
     if (!customerForm.name.trim()) {
       toast({ title: 'Ошибка', description: 'Заполните название', variant: 'destructive' }); return
     }
-    if (!customerForm.inn.trim()) {
-      toast({ title: 'Ошибка', description: 'Заполните ИНН', variant: 'destructive' }); return
-    }
     const data: Record<string, unknown> = {
       name: customerForm.name,
       type: customerForm.type,
-      inn: customerForm.inn || null,
-      kpp: customerForm.type === 'organization' ? (customerForm.kpp || null) : null,
-      legalAddress: customerForm.legalAddress || null,
-      postalAddress: customerForm.postalAddress || null,
-      phone: customerForm.phone || null,
-      email: customerForm.email || null,
-      bankName: customerForm.bankName || null,
-      bik: customerForm.bik || null,
-      checkingAccount: customerForm.checkingAccount || null,
-      corrAccount: customerForm.corrAccount || null,
-      bankCity: customerForm.bankCity || null,
-      contactInfo: customerForm.contactInfo || null,
+      inn: customerForm.inn.trim() || null,
+      kpp: customerForm.type === 'organization' ? (customerForm.kpp.trim() || null) : null,
+      legalAddress: customerForm.legalAddress.trim() || null,
+      postalAddress: customerForm.postalAddress.trim() || null,
+      phone: customerForm.phone.trim() || null,
+      email: customerForm.email.trim() || null,
+      bankName: customerForm.bankName.trim() || null,
+      bik: customerForm.bik.trim() || null,
+      checkingAccount: customerForm.checkingAccount.trim() || null,
+      corrAccount: customerForm.corrAccount.trim() || null,
+      bankCity: customerForm.bankCity.trim() || null,
+      contactInfo: customerForm.contactInfo.trim() || null,
     }
     if (editingCustomer) {
       updateCustomerMutation.mutate({ id: editingCustomer.id, data: { ...data, showMaterialBalance: customerForm.showMaterialBalance } })
@@ -1218,8 +1215,8 @@ export function ReferencesTab() {
                   <Input value={customerForm.name} onChange={(e) => setCustomerForm(p => ({ ...p, name: e.target.value }))} placeholder="ООО «Текстиль»" />
                 </div>
                 <div className="space-y-2">
-                  <Label>ИНН *</Label>
-                  <Input value={customerForm.inn} onChange={(e) => setCustomerForm(p => ({ ...p, inn: e.target.value }))} placeholder="1234567890" />
+                  <Label>ИНН</Label>
+                  <Input value={customerForm.inn} onChange={(e) => setCustomerForm(p => ({ ...p, inn: e.target.value }))} placeholder="10 или 12 цифр" />
                 </div>
                 {customerForm.type === 'organization' && (
                   <div className="space-y-2">

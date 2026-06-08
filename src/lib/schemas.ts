@@ -249,25 +249,40 @@ export const CustomerType = z.enum(['organization', 'ip', 'individual'])
 export const CreateCustomerSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название'),
   type: CustomerType.default('organization'),
-  inn: z.string().trim()
-    .refine((val) => !val || validateINN(val).valid, (val) => ({ message: validateINN(val).error || 'Неверный ИНН' }))
-    .optional(),
-  kpp: z.string().trim()
-    .refine((val) => !val || validateKPP(val).valid, (val) => ({ message: validateKPP(val).error || 'Неверный КПП' }))
-    .optional(),
-  legalAddress: z.string().trim().optional(),
-  postalAddress: z.string().trim().optional(),
-  phone: z.string().trim().optional(),
-  email: z.string().trim().optional(),
-  bankName: z.string().trim().optional(),
-  bik: z.string().trim()
-    .refine((val) => !val || validateBIK(val).valid, (val) => ({ message: validateBIK(val).error || 'Неверный БИК' }))
-    .optional(),
-  checkingAccount: z.string().trim().optional(),
-  corrAccount: z.string().trim().optional(),
-  bankCity: z.string().trim().optional(),
-  contactInfo: z.string().trim().optional(),
+  inn: z.string().trim().nullable().optional(),
+  kpp: z.string().trim().nullable().optional(),
+  legalAddress: z.string().trim().nullable().optional(),
+  postalAddress: z.string().trim().nullable().optional(),
+  phone: z.string().trim().nullable().optional(),
+  email: z.string().trim().nullable().optional(),
+  bankName: z.string().trim().nullable().optional(),
+  bik: z.string().trim().nullable().optional(),
+  checkingAccount: z.string().trim().nullable().optional(),
+  corrAccount: z.string().trim().nullable().optional(),
+  bankCity: z.string().trim().nullable().optional(),
+  contactInfo: z.string().trim().nullable().optional(),
 }).superRefine((data, ctx) => {
+  // INN validation: if provided, must pass checksum
+  if (data.inn && data.inn.trim()) {
+    const result = validateINN(data.inn)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный ИНН', path: ['inn'] })
+    }
+  }
+  // KPP validation: if provided, must be valid
+  if (data.kpp && data.kpp.trim()) {
+    const result = validateKPP(data.kpp)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный КПП', path: ['kpp'] })
+    }
+  }
+  // BIK validation: if provided, must be valid
+  if (data.bik && data.bik.trim()) {
+    const result = validateBIK(data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный БИК', path: ['bik'] })
+    }
+  }
   // Cross-field validation: checking account depends on BIK
   if (data.checkingAccount && data.bik) {
     const result = validateCheckingAccount(data.checkingAccount, data.bik)
@@ -287,23 +302,41 @@ export const CreateCustomerSchema = z.object({
 export const UpdateCustomerSchema = z.object({
   name: z.string().trim().min(1).optional(),
   type: CustomerType.optional(),
-  inn: z.string().trim().nullable().optional()
-    .refine((val) => val === null || val === undefined || !val || validateINN(val).valid, (val) => ({ message: validateINN(val || '').error || 'Неверный ИНН' })),
-  kpp: z.string().trim().nullable().optional()
-    .refine((val) => val === null || val === undefined || !val || validateKPP(val).valid, (val) => ({ message: validateKPP(val || '').error || 'Неверный КПП' })),
+  inn: z.string().trim().nullable().optional(),
+  kpp: z.string().trim().nullable().optional(),
   legalAddress: z.string().trim().nullable().optional(),
   postalAddress: z.string().trim().nullable().optional(),
   phone: z.string().trim().nullable().optional(),
   email: z.string().trim().nullable().optional(),
   bankName: z.string().trim().nullable().optional(),
-  bik: z.string().trim().nullable().optional()
-    .refine((val) => val === null || val === undefined || !val || validateBIK(val).valid, (val) => ({ message: validateBIK(val || '').error || 'Неверный БИК' })),
+  bik: z.string().trim().nullable().optional(),
   checkingAccount: z.string().trim().nullable().optional(),
   corrAccount: z.string().trim().nullable().optional(),
   bankCity: z.string().trim().nullable().optional(),
   contactInfo: z.string().trim().nullable().optional(),
   showMaterialBalance: z.boolean().optional(),
 }).superRefine((data, ctx) => {
+  // INN validation: if provided and non-empty, must pass checksum
+  if (data.inn && data.inn.trim()) {
+    const result = validateINN(data.inn)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный ИНН', path: ['inn'] })
+    }
+  }
+  // KPP validation
+  if (data.kpp && data.kpp.trim()) {
+    const result = validateKPP(data.kpp)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный КПП', path: ['kpp'] })
+    }
+  }
+  // BIK validation
+  if (data.bik && data.bik.trim()) {
+    const result = validateBIK(data.bik)
+    if (!result.valid) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.error || 'Неверный БИК', path: ['bik'] })
+    }
+  }
   // For update, we need the BIK to validate accounts — but BIK might be in the DB already
   // We only validate if BOTH bik and account are provided in this update
   if (data.checkingAccount && data.bik) {
