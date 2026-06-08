@@ -18,6 +18,8 @@ import { useToast } from '@/hooks/use-toast'
 import { authFetch } from '@/components/auth-provider'
 import {
   Camera,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   Package,
   Pencil,
@@ -29,6 +31,7 @@ import {
 import type { Product } from '@/types'
 import { parseKitComboColors } from '@/lib/formatters'
 import { getColorDot } from '@/lib/status-badges'
+import { STANDARD_SIZE_GRIDS, STANDARD_COLORS } from '@/lib/constants'
 
 // ============ TAB 5: ИЗДЕЛИЯ ============
 export function ProductsTab() {
@@ -259,15 +262,96 @@ export function ProductsTab() {
                 )}
               </div>
               <Separator />
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Размеры</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{newSizes.map((s, i) => (<Badge key={i} variant="secondary" className="gap-1">{s}<X className="h-3 w-3 cursor-pointer" onClick={() => setNewSizes((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2"><Input value={newSizeInput} onChange={(e) => setNewSizeInput(e.target.value)} placeholder="S, M, L..." onKeyDown={(e) => { if (e.key === 'Enter' && newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }} /><Button size="sm" variant="outline" onClick={() => { if (newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }}><Plus className="h-4 w-4" /></Button></div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Label className="text-sm font-medium">Размеры</Label>
+                  <Select onValueChange={(label) => { const grid = STANDARD_SIZE_GRIDS.find(g => g.label === label); if (grid) setNewSizes(grid.sizes) }}>
+                    <SelectTrigger className="w-48"><SelectValue placeholder="Применить сетку..." /></SelectTrigger>
+                    <SelectContent>
+                      {STANDARD_SIZE_GRIDS.map(g => <SelectItem key={g.label} value={g.label}>{g.label} ({g.sizes.join(', ')})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {newSizes.length > 0 && (
+                    <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs h-7 ml-auto" onClick={() => setNewSizes([])}>
+                      <Trash2 className="h-3 w-3 mr-1" />Удалить все
+                    </Button>
+                  )}
+                </div>
+                {newSizes.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {newSizes.map((size, idx) => (
+                      <div key={size + idx} className="flex items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 pr-1">
+                        <div className="flex flex-col">
+                          <button type="button" className={`p-0 leading-none ${idx === 0 ? 'text-gray-300 cursor-default' : 'text-emerald-500 hover:text-emerald-700'}`} onClick={() => setNewSizes(prev => { const n = [...prev]; if (idx > 0) { [n[idx - 1], n[idx]] = [n[idx], n[idx - 1]] } return n })} disabled={idx === 0} title="Переместить вверх">
+                            <ChevronUp className="h-3 w-3" />
+                          </button>
+                          <button type="button" className={`p-0 leading-none ${idx === newSizes.length - 1 ? 'text-gray-300 cursor-default' : 'text-emerald-500 hover:text-emerald-700'}`} onClick={() => setNewSizes(prev => { const n = [...prev]; if (idx < n.length - 1) { [n[idx], n[idx + 1]] = [n[idx + 1], n[idx]] } return n })} disabled={idx === newSizes.length - 1} title="Переместить вниз">
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <span className="text-sm font-medium text-emerald-700 px-1">{size}</span>
+                        <button type="button" className="inline-flex items-center justify-center rounded-sm p-0.5 hover:bg-red-100 hover:text-red-600 text-gray-400 transition-colors" title={`Удалить размер ${size}`} onClick={() => setNewSizes(prev => prev.filter((_, j) => j !== idx))}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Размеры не добавлены — выберите сетку или введите вручную</span>
+                )}
+                <div className="flex gap-2">
+                  <Input value={newSizeInput} onChange={(e) => setNewSizeInput(e.target.value)} placeholder="Новый размер" className="w-36" onKeyDown={(e) => { if (e.key === 'Enter' && newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }} />
+                  <Button size="sm" variant="outline" onClick={() => { if (newSizeInput.trim()) { setNewSizes((prev) => [...prev, newSizeInput.trim()]); setNewSizeInput('') } }}><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Цвета</Label>
-                <div className="flex flex-wrap gap-1 mb-2">{newColors.map((c, i) => (<Badge key={i} variant="secondary" className="gap-1">{getColorDot(c.colorHex)}{c.color}<X className="h-3 w-3 cursor-pointer" onClick={() => setNewColors((prev) => prev.filter((_, j) => j !== i))} /></Badge>))}</div>
-                <div className="flex gap-2 items-end"><div className="flex-1"><Input value={newColorName} onChange={(e) => setNewColorName(e.target.value)} placeholder="Название цвета" /></div><input type="color" value={newColorHex} onChange={(e) => setNewColorHex(e.target.value)} className="w-10 h-10 rounded cursor-pointer border p-0" /><Button size="sm" variant="outline" onClick={() => { if (newColorName.trim()) { setNewColors((prev) => [...prev, { color: newColorName.trim(), colorHex: newColorHex }]); setNewColorName(''); setNewColorHex('#9ca3af') } }}><Plus className="h-4 w-4" /></Button></div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Label className="text-sm font-medium">Цвета</Label>
+                  {newColors.length > 0 && (
+                    <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 text-xs h-7 ml-auto" onClick={() => setNewColors([])}>
+                      <Trash2 className="h-3 w-3 mr-1" />Удалить все
+                    </Button>
+                  )}
+                </div>
+                {/* Standard color presets */}
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Стандартные цвета — нажмите, чтобы добавить:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STANDARD_COLORS.map(sc => (
+                      <button
+                        key={sc.color}
+                        type="button"
+                        className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs border transition-colors ${newColors.find(c => c.color === sc.color) ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-200 hover:border-emerald-300'}`}
+                        onClick={() => { if (!newColors.find(c => c.color === sc.color)) { setNewColors(prev => [...prev, { color: sc.color, colorHex: sc.hex }]) } }}
+                      >
+                        <span className="inline-block w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: sc.hex }} />
+                        {sc.color}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* Current colors */}
+                {newColors.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {newColors.map((c, i) => (
+                      <div key={c.color + i} className="flex items-center gap-1 bg-emerald-50 rounded-md border border-emerald-200 py-1 px-2">
+                        <span className="inline-block w-3 h-3 rounded-full border border-gray-200" style={{ backgroundColor: c.colorHex }} />
+                        <span className="text-sm font-medium text-emerald-700">{c.color}</span>
+                        <button type="button" className="inline-flex items-center justify-center rounded-sm p-0.5 hover:bg-red-100 hover:text-red-600 text-gray-400 transition-colors" title={`Удалить цвет ${c.color}`} onClick={() => setNewColors(prev => prev.filter((_, j) => j !== i))}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Цвета не добавлены — выберите из списка или введите свой</span>
+                )}
+                {/* Custom color input */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1 max-w-[200px]"><Input value={newColorName} onChange={(e) => setNewColorName(e.target.value)} placeholder="Свой цвет" onKeyDown={(e) => { if (e.key === 'Enter' && newColorName.trim()) { setNewColors(prev => [...prev, { color: newColorName.trim(), colorHex: newColorHex }]); setNewColorName(''); setNewColorHex('#9ca3af') } }} /></div>
+                  <div className="flex items-center gap-1"><input type="color" value={newColorHex} onChange={(e) => setNewColorHex(e.target.value)} className="w-7 h-8 rounded cursor-pointer border-0 p-0" /></div>
+                  <Button size="sm" variant="outline" onClick={() => { if (newColorName.trim()) { setNewColors(prev => [...prev, { color: newColorName.trim(), colorHex: newColorHex }]); setNewColorName(''); setNewColorHex('#9ca3af') } }}><Plus className="h-4 w-4" /></Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Причины переделок</Label>
