@@ -380,7 +380,7 @@ export interface IroningGroup {
 export interface MaterialType {
   id: string
   name: string
-  unit: string
+  category: 'fabric' | 'furniture'
   materials: Material[]
   createdAt: string
   updatedAt: string
@@ -391,13 +391,15 @@ export interface Material {
   materialTypeId: string
   name: string
   totalQty: number
-  unit: string
+  baseUnit: string
+  inputUnit: string
+  conversionRate: number
   ownershipType: 'own' | 'customer'
   customerId: string | null
   customer: { id: string; name: string } | null
   entries: MaterialEntry[]
   norms: MaterialNorm[]
-  materialType: { id: string; name: string; unit: string }
+  materialType: { id: string; name: string; category: string }
   createdAt: string
   updatedAt: string
 }
@@ -407,10 +409,13 @@ export interface MaterialEntry {
   materialId: string
   type: 'incoming' | 'consumed'
   qty: number
+  inputQty: number
+  inputUnit: string | null
+  conversionRate: number
   date: string
   cuttingPlanId: string | null
   note: string | null
-  material: { id: string; name: string; unit: string; materialType: { id: string; name: string; unit: string } }
+  material: { id: string; name: string; baseUnit: string; materialType: { id: string; name: string; category: string } }
   createdAt: string
 }
 
@@ -424,5 +429,5 @@ export interface MaterialNorm {
   unit: string
   autoCalculated: boolean
   product: { id: string; name: string; article: string }
-  material: { id: string; name: string; unit: string; ownershipType: string; customerId: string | null; customer: { id: string; name: string } | null }
+  material: { id: string; name: string; baseUnit: string; ownershipType: string; customerId: string | null; customer: { id: string; name: string } | null }
 }

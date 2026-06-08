@@ -59,7 +59,7 @@ export function CustomerMaterialsTab({ customerId }: { customerId: string }) {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="p-3 text-left font-medium">Материал</th>
-                <th className="p-3 text-left font-medium">Ед.</th>
+                <th className="p-3 text-left font-medium">Ед. изм.</th>
                 <th className="p-3 text-right font-medium">Остаток</th>
                 <th className="p-3 text-right font-medium">Списано</th>
                 <th className="p-3 text-right font-medium">Нормы расхода</th>
@@ -69,7 +69,7 @@ export function CustomerMaterialsTab({ customerId }: { customerId: string }) {
               {materials.map((mat: any) => (
                 <tr key={mat.id} className="border-b last:border-0 hover:bg-muted/30">
                   <td className="p-3 font-medium">{mat.name}</td>
-                  <td className="p-3 text-muted-foreground">{mat.unit}</td>
+                  <td className="p-3 text-muted-foreground">{mat.baseUnit || mat.unit}</td>
                   <td className="p-3 text-right font-semibold">{mat.totalQty.toLocaleString('ru-RU')}</td>
                   <td className="p-3 text-right text-red-600">{mat.consumed.toLocaleString('ru-RU')}</td>
                   <td className="p-3 text-right">

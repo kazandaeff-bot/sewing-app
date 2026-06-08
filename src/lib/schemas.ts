@@ -324,12 +324,12 @@ export const UpdateCustomerSchema = z.object({
 
 export const CreateMaterialTypeSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название'),
-  unit: z.string().default('шт'),
+  category: z.enum(['fabric', 'furniture']).default('fabric'),
 })
 
 export const UpdateMaterialTypeSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  unit: z.string().optional(),
+  category: z.enum(['fabric', 'furniture']).optional(),
 })
 
 // --- Material Norms ---
@@ -354,6 +354,9 @@ export const CreateMaterialEntrySchema = z.object({
   materialId: cuid,
   type: MaterialEntryType,
   qty: z.coerce.number().positive('Количество должно быть > 0'),
+  inputQty: z.coerce.number().nonnegative().default(0),
+  inputUnit: z.string().optional(),
+  conversionRate: z.coerce.number().positive().default(1),
   date: z.string().optional(),
   cuttingPlanId: cuid.optional(),
   note: z.string().optional(),
@@ -385,7 +388,9 @@ export const UpdateCuttingLeftoverSchema = z.object({
 export const CreateMaterialSchema = z.object({
   materialTypeId: cuid,
   name: z.string().trim().min(1, 'Укажите название'),
-  unit: z.string().default('шт'),
+  baseUnit: z.string().default('шт'),
+  inputUnit: z.string().default('шт'),
+  conversionRate: z.coerce.number().positive().default(1),
   totalQty: z.coerce.number().nonnegative().default(0),
   ownershipType: z.enum(['own', 'customer']).default('own'),
   customerId: cuid.optional().nullable(),
@@ -393,7 +398,9 @@ export const CreateMaterialSchema = z.object({
 
 export const UpdateMaterialSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  unit: z.string().optional(),
+  baseUnit: z.string().optional(),
+  inputUnit: z.string().optional(),
+  conversionRate: z.coerce.number().positive().optional(),
   totalQty: z.coerce.number().nonnegative().optional(),
   materialTypeId: cuid.optional(),
   ownershipType: z.enum(['own', 'customer']).optional(),

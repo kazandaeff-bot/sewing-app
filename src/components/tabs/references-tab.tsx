@@ -81,14 +81,16 @@ export function ReferencesTab() {
 
   // ---- Material types state ----
   const [newMaterialTypeName, setNewMaterialTypeName] = useState('')
-  const [newMaterialTypeUnit, setNewMaterialTypeUnit] = useState('шт')
+  const [newMaterialTypeCategory, setNewMaterialTypeCategory] = useState<'fabric' | 'furniture'>('fabric')
   const [expandedMaterialTypeIds, setExpandedMaterialTypeIds] = useState<Set<string>>(new Set())
   const [newMaterialName, setNewMaterialName] = useState('')
-  const [newMaterialUnit, setNewMaterialUnit] = useState('шт')
+  const [newMaterialBaseUnit, setNewMaterialBaseUnit] = useState('пм')
+  const [newMaterialInputUnit, setNewMaterialInputUnit] = useState('пм')
+  const [newMaterialConversionRate, setNewMaterialConversionRate] = useState('1')
   const [addingMaterialToTypeId, setAddingMaterialToTypeId] = useState<string | null>(null)
   const [newMaterialOwnership, setNewMaterialOwnership] = useState<'own' | 'customer'>('own')
   const [newMaterialCustomerId, setNewMaterialCustomerId] = useState('')
-  const [newMaterialQty, setNewMaterialQty] = useState('')
+  const [newMaterialInputQty, setNewMaterialInputQty] = useState('')
 
   // ---- Material norms state ----
   const [newNormProductId, setNewNormProductId] = useState('')
@@ -97,7 +99,9 @@ export function ReferencesTab() {
   const [entryDialogOpen, setEntryDialogOpen] = useState(false)
   const [entryMaterialId, setEntryMaterialId] = useState('')
   const [entryType, setEntryType] = useState<'incoming' | 'consumed'>('incoming')
-  const [entryQty, setEntryQty] = useState('')
+  const [entryInputQty, setEntryInputQty] = useState('')
+  const [entryInputUnit, setEntryInputUnit] = useState('')
+  const [entryConversionRate, setEntryConversionRate] = useState('1')
   const [entryNote, setEntryNote] = useState('')
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
   const [historyMaterialId, setHistoryMaterialId] = useState('')
@@ -240,8 +244,8 @@ export function ReferencesTab() {
 
   // ---- Material type mutations ----
   const createMaterialTypeMutation = useMutation({
-    mutationFn: (data: { name: string; unit?: string }) => authFetch('/api/material-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); setNewMaterialTypeName(''); setNewMaterialTypeUnit('шт'); toast({ title: 'Тип материала добавлен' }) },
+    mutationFn: (data: { name: string; category: 'fabric' | 'furniture' }) => authFetch('/api/material-types', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); setNewMaterialTypeName(''); setNewMaterialTypeCategory('fabric'); toast({ title: 'Тип материала добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialTypeMutation = useMutation({
@@ -252,8 +256,8 @@ export function ReferencesTab() {
 
   // ---- Material mutations ----
   const createMaterialMutation = useMutation({
-    mutationFn: (data: { name: string; materialTypeId: string; unit?: string; totalQty?: number; ownershipType?: string; customerId?: string }) => authFetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-norms'] }); setNewMaterialName(''); setNewMaterialUnit('шт'); setNewMaterialQty(''); setNewMaterialOwnership('own'); setNewMaterialCustomerId(''); setAddingMaterialToTypeId(null); toast({ title: 'Материал добавлен' }) },
+    mutationFn: (data: { name: string; materialTypeId: string; baseUnit: string; inputUnit: string; conversionRate: number; totalQty: number; ownershipType?: string; customerId?: string }) => authFetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-norms'] }); setNewMaterialName(''); setNewMaterialBaseUnit('пм'); setNewMaterialInputUnit('пм'); setNewMaterialConversionRate('1'); setNewMaterialInputQty(''); setNewMaterialOwnership('own'); setNewMaterialCustomerId(''); setAddingMaterialToTypeId(null); toast({ title: 'Материал добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialMutation = useMutation({
@@ -276,8 +280,8 @@ export function ReferencesTab() {
 
   // ---- Material entry mutations ----
   const createEntryMutation = useMutation({
-    mutationFn: (data: { materialId: string; type: 'incoming' | 'consumed'; qty: number; note?: string }) => authFetch('/api/material-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-entries'] }); setEntryDialogOpen(false); setEntryQty(''); setEntryNote(''); toast({ title: entryType === 'incoming' ? 'Приход добавлен' : 'Расход списан' }) },
+    mutationFn: (data: { materialId: string; type: 'incoming' | 'consumed'; qty: number; inputQty: number; inputUnit: string; conversionRate: number; note?: string }) => authFetch('/api/material-entries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-entries'] }); setEntryDialogOpen(false); setEntryInputQty(''); setEntryInputUnit(''); setEntryConversionRate('1'); setEntryNote(''); toast({ title: entryType === 'incoming' ? 'Приход добавлен' : 'Расход списан' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
 
@@ -549,15 +553,18 @@ export function ReferencesTab() {
     if (newMaterialOwnership === 'customer' && !newMaterialCustomerId) {
       toast({ title: 'Ошибка', description: 'Выберите заказчика для давальческого материала', variant: 'destructive' }); return
     }
+    const convRate = newMaterialInputUnit !== newMaterialBaseUnit ? (parseFloat(newMaterialConversionRate) || 1) : 1
     createMaterialMutation.mutate({
       name: newMaterialName,
       materialTypeId,
-      unit: newMaterialUnit || undefined,
-      totalQty: parseFloat(newMaterialQty) || 0,
+      baseUnit: newMaterialBaseUnit,
+      inputUnit: newMaterialInputUnit,
+      conversionRate: convRate,
+      totalQty: parseFloat(newMaterialInputQty) || 0,
       ownershipType: newMaterialOwnership,
       customerId: newMaterialOwnership === 'customer' ? newMaterialCustomerId : undefined,
     })
-  }, [newMaterialName, newMaterialUnit, newMaterialQty, newMaterialOwnership, newMaterialCustomerId, createMaterialMutation, toast])
+  }, [newMaterialName, newMaterialBaseUnit, newMaterialInputUnit, newMaterialConversionRate, newMaterialInputQty, newMaterialOwnership, newMaterialCustomerId, createMaterialMutation, toast])
 
   const handleAddMaterialNorm = useCallback(() => {
     if (!newNormProductId || !newNormMaterialId || !newNormConsumption) {
@@ -573,7 +580,7 @@ export function ReferencesTab() {
 
   // ---- All materials flat list (for norm select) ----
   const allMaterials = useMemo(() => {
-    return (materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; materialTypeId: string; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).flatMap(mt => mt.materials || [])
+    return (materialTypes as Array<{ id: string; name: string; category: string; materials: Array<{ id: string; name: string; baseUnit: string; inputUnit: string; conversionRate: number; materialTypeId: string; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).flatMap(mt => mt.materials || [])
   }, [materialTypes])
 
   // ---- Loading state ----
@@ -716,9 +723,17 @@ export function ReferencesTab() {
 
         {/* Add material type */}
         <div className="flex gap-2 mb-4 items-end">
-          <div className="flex-1 max-w-[200px]"><Label className="text-xs text-muted-foreground">Тип материала</Label><Input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)} placeholder="Ткань, Фурнитура..." onKeyDown={(e) => { if (e.key === 'Enter' && newMaterialTypeName.trim()) createMaterialTypeMutation.mutate({ name: newMaterialTypeName, unit: newMaterialTypeUnit }) }} /></div>
-          <div className="w-24"><Label className="text-xs text-muted-foreground">Ед. изм.</Label><Input value={newMaterialTypeUnit} onChange={(e) => setNewMaterialTypeUnit(e.target.value)} placeholder="шт" /></div>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { if (newMaterialTypeName.trim()) createMaterialTypeMutation.mutate({ name: newMaterialTypeName, unit: newMaterialTypeUnit }) }} disabled={createMaterialTypeMutation.isPending}><Plus className="h-4 w-4 mr-1" />Добавить</Button>
+          <div className="flex-1 max-w-[200px]"><Label className="text-xs text-muted-foreground">Тип материала</Label><Input value={newMaterialTypeName} onChange={(e) => setNewMaterialTypeName(e.target.value)} placeholder="Ткань, Фурнитура..." onKeyDown={(e) => { if (e.key === 'Enter' && newMaterialTypeName.trim()) createMaterialTypeMutation.mutate({ name: newMaterialTypeName, category: newMaterialTypeCategory }) }} /></div>
+          <div className="w-40"><Label className="text-xs text-muted-foreground">Категория</Label>
+            <Select value={newMaterialTypeCategory} onValueChange={(v: 'fabric' | 'furniture') => setNewMaterialTypeCategory(v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fabric">Ткань</SelectItem>
+                <SelectItem value="furniture">Фурнитура</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => { if (newMaterialTypeName.trim()) createMaterialTypeMutation.mutate({ name: newMaterialTypeName, category: newMaterialTypeCategory }) }} disabled={createMaterialTypeMutation.isPending}><Plus className="h-4 w-4 mr-1" />Добавить</Button>
         </div>
 
         {/* Material Types with nested Materials */}
@@ -726,20 +741,29 @@ export function ReferencesTab() {
           <Card className="border-dashed"><CardContent className="py-6 text-center text-muted-foreground text-sm">Нет типов материалов</CardContent></Card>
         ) : (
           <div className="space-y-2 mb-6">
-            {(materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; totalQty: number; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).map((mt) => {
+            {(materialTypes as Array<{ id: string; name: string; category: string; materials: Array<{ id: string; name: string; baseUnit: string; inputUnit: string; conversionRate: number; totalQty: number; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).map((mt) => {
               const isExpanded = expandedMaterialTypeIds.has(mt.id)
               const isAdding = addingMaterialToTypeId === mt.id
+              const mtCategory = mt.category || 'fabric'
+              const FABRIC_BASE_UNITS = ['пм', 'кг']
+              const FABRIC_INPUT_UNITS = ['пм', 'кг']
+              const FURNITURE_BASE_UNITS = ['шт', 'м']
+              const FURNITURE_INPUT_UNITS = ['шт', 'упак', 'бобина', 'м']
+              const baseUnits = mtCategory === 'furniture' ? FURNITURE_BASE_UNITS : FABRIC_BASE_UNITS
+              const inputUnits = mtCategory === 'furniture' ? FURNITURE_INPUT_UNITS : FABRIC_INPUT_UNITS
+              const categoryLabel = mtCategory === 'fabric' ? 'Ткань' : 'Фурнитура'
+              const needsConversion = newMaterialInputUnit !== newMaterialBaseUnit
               return (
                 <Card key={mt.id} className="p-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleMaterialTypeExpand(mt.id)}>
                       {isExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
                       <span className="font-medium">{mt.name}</span>
-                      <Badge variant="outline" className="text-xs">{mt.unit}</Badge>
+                      <Badge variant="outline" className="text-xs">{categoryLabel}</Badge>
                       <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 hover:bg-emerald-50">{mt.materials.length} мат.</Badge>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7" onClick={() => { setAddingMaterialToTypeId(isAdding ? null : mt.id); setNewMaterialName(''); setNewMaterialUnit(mt.unit) }}><Plus className="h-3.5 w-3.5 mr-0.5" />Материал</Button>
+                      <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7" onClick={() => { setAddingMaterialToTypeId(isAdding ? null : mt.id); setNewMaterialName(''); setNewMaterialBaseUnit(baseUnits[0]); setNewMaterialInputUnit(baseUnits[0]); setNewMaterialConversionRate('1'); setNewMaterialInputQty('') }}><Plus className="h-3.5 w-3.5 mr-0.5" />Материал</Button>
                       <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7" onClick={() => deleteMaterialTypeMutation.mutate(mt.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                     </div>
                   </div>
@@ -749,12 +773,35 @@ export function ReferencesTab() {
                     <div className="mt-3 border-t pt-3 space-y-2">
                       <div className="flex gap-2 items-end flex-wrap">
                         <div className="flex-1 min-w-[160px]"><Label className="text-xs text-muted-foreground">Название</Label><Input value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)} placeholder="Название материала" onKeyDown={(e) => { if (e.key === 'Enter') handleAddMaterial(mt.id) }} /></div>
-                        <div className="w-24"><Label className="text-xs text-muted-foreground">Ед. изм.</Label><Input value={newMaterialUnit} onChange={(e) => setNewMaterialUnit(e.target.value)} /></div>
-                        <div className="w-28"><Label className="text-xs text-muted-foreground">Кол-во</Label><Input type="number" min="0" step="0.01" value={newMaterialQty} onChange={(e) => setNewMaterialQty(e.target.value)} placeholder="0" /></div>
+                        <div className="w-36"><Label className="text-xs text-muted-foreground">Базовая единица</Label>
+                          <Select value={newMaterialBaseUnit} onValueChange={(v) => { setNewMaterialBaseUnit(v); if (!inputUnits.includes(v)) { setNewMaterialInputUnit(v); setNewMaterialConversionRate('1') } }}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {baseUnits.map((u) => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-36"><Label className="text-xs text-muted-foreground">Ед. поступления</Label>
+                          <Select value={newMaterialInputUnit} onValueChange={(v) => { setNewMaterialInputUnit(v); if (v === newMaterialBaseUnit) setNewMaterialConversionRate('1') }}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {inputUnits.map((u) => (<SelectItem key={u} value={u}>{u}</SelectItem>))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {needsConversion && (
+                          <div className="w-40"><Label className="text-xs text-muted-foreground">Коэфф. конвертации (1 {newMaterialInputUnit} = ? {newMaterialBaseUnit})</Label><Input type="number" min="0.01" step="0.01" value={newMaterialConversionRate} onChange={(e) => setNewMaterialConversionRate(e.target.value)} placeholder="1" /></div>
+                        )}
+                        <div className="w-28"><Label className="text-xs text-muted-foreground">Кол-во ({newMaterialInputUnit})</Label><Input type="number" min="0" step="0.01" value={newMaterialInputQty} onChange={(e) => setNewMaterialInputQty(e.target.value)} placeholder="0" /></div>
                       </div>
+                      {needsConversion && newMaterialInputQty && parseFloat(newMaterialInputQty) > 0 && (
+                        <div className="text-xs text-muted-foreground bg-emerald-50 rounded px-2 py-1">
+                          {newMaterialInputQty} {newMaterialInputUnit} × {newMaterialConversionRate} = {(parseFloat(newMaterialInputQty) * (parseFloat(newMaterialConversionRate) || 1)).toLocaleString('ru-RU')} {newMaterialBaseUnit}
+                        </div>
+                      )}
                       <div className="flex gap-2 items-end flex-wrap">
                         <div className="w-44">
-                          <Label className="text-xs text-muted-foreground">Тип материала</Label>
+                          <Label className="text-xs text-muted-foreground">Тип собственности</Label>
                           <Select value={newMaterialOwnership} onValueChange={(v: 'own' | 'customer') => { setNewMaterialOwnership(v); if (v === 'own') setNewMaterialCustomerId('') }}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
@@ -785,25 +832,40 @@ export function ReferencesTab() {
                   {/* Nested materials list */}
                   {isExpanded && mt.materials.length > 0 && (
                     <div className="mt-3 border-t pt-3 space-y-1">
-                      {mt.materials.map((m) => (
-                        <div key={m.id} className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-1.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium">{m.name}</span>
-                            <Badge variant="outline" className="text-xs">{m.unit}</Badge>
-                            <Badge className={`text-xs ${m.totalQty > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>{m.totalQty} {m.unit}</Badge>
-                            <Badge className={`text-xs ${m.ownershipType === 'customer' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-blue-100 text-blue-700 hover:bg-blue-100'}`}>{m.ownershipType === 'customer' ? 'Давальческий' : 'Свой'}</Badge>
-                            {m.ownershipType === 'customer' && m.customer && (
-                              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{m.customer.name}</Badge>
-                            )}
+                      {mt.materials.map((m) => {
+                        const mNeedsConversion = m.inputUnit !== m.baseUnit && m.conversionRate !== 1
+                        const inputQty = mNeedsConversion && m.conversionRate > 0 ? m.totalQty / m.conversionRate : 0
+                        return (
+                          <div key={m.id} className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-1.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">{m.name}</span>
+                              <Badge variant="outline" className="text-xs">{m.baseUnit}</Badge>
+                              {mNeedsConversion && (
+                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">{m.inputUnit}</Badge>
+                              )}
+                              <Badge className={`text-xs ${m.totalQty > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>
+                                {mNeedsConversion && inputQty > 0
+                                  ? `${inputQty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${m.inputUnit} → ${m.totalQty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${m.baseUnit}`
+                                  : `${m.totalQty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ${m.baseUnit}`
+                                }
+                              </Badge>
+                              {mNeedsConversion && (
+                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-200">1 {m.inputUnit} = {m.conversionRate} {m.baseUnit}</Badge>
+                              )}
+                              <Badge className={`text-xs ${m.ownershipType === 'customer' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-blue-100 text-blue-700 hover:bg-blue-100'}`}>{m.ownershipType === 'customer' ? 'Давальческий' : 'Свой'}</Badge>
+                              {m.ownershipType === 'customer' && m.customer && (
+                                <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{m.customer.name}</Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-0.5">
+                              <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-6 px-1.5" title="Приход" onClick={() => { setEntryMaterialId(m.id); setEntryType('incoming'); setEntryInputUnit(m.inputUnit); setEntryConversionRate(String(m.conversionRate)); setEntryDialogOpen(true) }}><ArrowDownCircle className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-6 px-1.5" title="Расход" onClick={() => { setEntryMaterialId(m.id); setEntryType('consumed'); setEntryInputUnit(m.inputUnit); setEntryConversionRate(String(m.conversionRate)); setEntryDialogOpen(true) }}><ArrowUpCircle className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-6 px-1.5" title="История" onClick={() => { setHistoryMaterialId(m.id); setHistoryDialogOpen(true) }}><History className="h-3.5 w-3.5" /></Button>
+                              <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6 px-1.5" onClick={() => deleteMaterialMutation.mutate(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-0.5">
-                            <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-6 px-1.5" title="Приход" onClick={() => { setEntryMaterialId(m.id); setEntryType('incoming'); setEntryDialogOpen(true) }}><ArrowDownCircle className="h-3.5 w-3.5" /></Button>
-                            <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-6 px-1.5" title="Расход" onClick={() => { setEntryMaterialId(m.id); setEntryType('consumed'); setEntryDialogOpen(true) }}><ArrowUpCircle className="h-3.5 w-3.5" /></Button>
-                            <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 h-6 px-1.5" title="История" onClick={() => { setHistoryMaterialId(m.id); setHistoryDialogOpen(true) }}><History className="h-3.5 w-3.5" /></Button>
-                            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-6 px-1.5" onClick={() => deleteMaterialMutation.mutate(m.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                   {isExpanded && mt.materials.length === 0 && (
@@ -836,7 +898,7 @@ export function ReferencesTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(materialNorms as Array<{ id: string; consumptionPerUnit: number; unit: string; material: { name: string; ownershipType?: string; customer?: { id: string; name: string } | null }; product: { name: string } }>).map((norm) => (
+                    {(materialNorms as Array<{ id: string; consumptionPerUnit: number; unit: string; material: { name: string; baseUnit: string; ownershipType?: string; customer?: { id: string; name: string } | null }; product: { name: string } }>).map((norm) => (
                       <TableRow key={norm.id}>
                         <TableCell className="font-medium">{norm.product.name}</TableCell>
                         <TableCell>
@@ -882,8 +944,8 @@ export function ReferencesTab() {
               <Select value={newNormMaterialId} onValueChange={setNewNormMaterialId}>
                 <SelectTrigger><SelectValue placeholder="Выберите материал" /></SelectTrigger>
                 <SelectContent>
-                  {allMaterials.map((m: { id: string; name: string; unit: string; ownershipType?: string; customer?: { id: string; name: string } | null }) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name} ({m.unit}){m.ownershipType === 'customer' ? ' — Давальч.' : ''}{m.ownershipType === 'customer' && m.customer ? ` (${m.customer.name})` : ''}</SelectItem>
+                  {allMaterials.map((m: { id: string; name: string; baseUnit: string; ownershipType?: string; customer?: { id: string; name: string } | null }) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name} ({m.baseUnit}){m.ownershipType === 'customer' ? ' — Давальч.' : ''}{m.ownershipType === 'customer' && m.customer ? ` (${m.customer.name})` : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1292,7 +1354,10 @@ export function ReferencesTab() {
               {entryType === 'incoming' ? 'Приход материала' : 'Расход материала'}
             </DialogTitle>
             <DialogDescription>
-              {entryType === 'incoming' ? 'Добавить остаток ткани или фурнитуры на склад' : 'Списать материал со склада'}
+              {(() => {
+                const mat = allMaterials.find((m: { id: string }) => m.id === entryMaterialId)
+                return mat ? `${mat.name} — текущий остаток: ${(materialTypes as Array<{ materials: Array<{ id: string; totalQty: number; baseUnit: string }> }>).flatMap(mt => mt.materials).find((m: { id: string }) => m.id === entryMaterialId)?.totalQty?.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) ?? 0} ${mat.baseUnit}` : (entryType === 'incoming' ? 'Добавить остаток ткани или фурнитуры на склад' : 'Списать материал со склада')
+              })()}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -1306,18 +1371,60 @@ export function ReferencesTab() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Количество *</Label>
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={entryQty}
-                onChange={(e) => setEntryQty(e.target.value)}
-                placeholder="Введите количество"
-                autoFocus
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Ед. поступления</Label>
+                <Select value={entryInputUnit} onValueChange={(v) => setEntryInputUnit(v)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(['пм', 'кг', 'шт', 'упак', 'бобина', 'м'] as const).map((u) => (
+                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Количество ({entryInputUnit || 'ед.'}) *</Label>
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={entryInputQty}
+                  onChange={(e) => setEntryInputQty(e.target.value)}
+                  placeholder="Введите количество"
+                  autoFocus
+                />
+              </div>
             </div>
+            {entryInputUnit && (() => {
+              const mat = allMaterials.find((m: { id: string; baseUnit: string; inputUnit: string }) => m.id === entryMaterialId)
+              const baseUnit = mat?.baseUnit || 'шт'
+              const needsConversion = entryInputUnit !== baseUnit
+              return needsConversion ? (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Коэфф. конвертации (1 {entryInputUnit} = ? {baseUnit})</Label>
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={entryConversionRate}
+                    onChange={(e) => setEntryConversionRate(e.target.value)}
+                    placeholder="1"
+                  />
+                </div>
+              ) : null
+            })()}
+            {entryInputQty && parseFloat(entryInputQty) > 0 && (() => {
+              const mat = allMaterials.find((m: { id: string; baseUnit: string }) => m.id === entryMaterialId)
+              const baseUnit = mat?.baseUnit || 'шт'
+              const needsConversion = entryInputUnit !== baseUnit
+              const baseQty = needsConversion ? parseFloat(entryInputQty) * (parseFloat(entryConversionRate) || 1) : parseFloat(entryInputQty)
+              return needsConversion ? (
+                <div className="text-xs text-muted-foreground bg-emerald-50 rounded px-2 py-1">
+                  {entryInputQty} {entryInputUnit} × {entryConversionRate} = {baseQty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {baseUnit}
+                </div>
+              ) : null
+            })()}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Комментарий</Label>
               <Input
@@ -1331,12 +1438,21 @@ export function ReferencesTab() {
             <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>Отмена</Button>
             <Button
               className={entryType === 'incoming' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-orange-600 hover:bg-orange-700 text-white'}
-              disabled={createEntryMutation.isPending || !entryQty || parseFloat(entryQty) <= 0}
+              disabled={createEntryMutation.isPending || !entryInputQty || parseFloat(entryInputQty) <= 0}
               onClick={() => {
+                const mat = allMaterials.find((m: { id: string; baseUnit: string }) => m.id === entryMaterialId)
+                const baseUnit = mat?.baseUnit || 'шт'
+                const needsConversion = entryInputUnit !== baseUnit
+                const convRate = needsConversion ? (parseFloat(entryConversionRate) || 1) : 1
+                const inputQty = parseFloat(entryInputQty)
+                const baseQty = inputQty * convRate
                 createEntryMutation.mutate({
                   materialId: entryMaterialId,
                   type: entryType,
-                  qty: parseFloat(entryQty),
+                  qty: baseQty,
+                  inputQty,
+                  inputUnit: entryInputUnit,
+                  conversionRate: convRate,
                   note: entryNote || undefined,
                 })
               }}
@@ -1372,26 +1488,36 @@ export function ReferencesTab() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(materialEntries as Array<{ id: string; type: string; qty: number; date: string; note: string | null }>).map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {new Date(entry.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                      </TableCell>
-                      <TableCell>
-                        {entry.type === 'incoming' ? (
-                          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Приход</Badge>
-                        ) : (
-                          <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">Расход</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        <span className={entry.type === 'incoming' ? 'text-emerald-700' : 'text-orange-700'}>
-                          {entry.type === 'incoming' ? '+' : '-'}{entry.qty}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{entry.note || '—'}</TableCell>
-                    </TableRow>
-                  ))}
+                  {(materialEntries as Array<{ id: string; type: string; qty: number; inputQty: number; inputUnit: string | null; conversionRate: number; date: string; note: string | null }>).map((entry) => {
+                    const hasConversion = entry.inputUnit && entry.conversionRate > 1
+                    return (
+                      <TableRow key={entry.id}>
+                        <TableCell className="text-xs whitespace-nowrap">
+                          {new Date(entry.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </TableCell>
+                        <TableCell>
+                          {entry.type === 'incoming' ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Приход</Badge>
+                          ) : (
+                            <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100 text-xs">Расход</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          <div className="flex flex-col items-end">
+                            <span className={entry.type === 'incoming' ? 'text-emerald-700' : 'text-orange-700'}>
+                              {entry.type === 'incoming' ? '+' : '-'}{entry.qty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}
+                            </span>
+                            {hasConversion && entry.inputQty > 0 && entry.inputUnit && (
+                              <span className="text-xs text-muted-foreground">
+                                {entry.inputQty.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} {entry.inputUnit}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{entry.note || '—'}</TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             )}

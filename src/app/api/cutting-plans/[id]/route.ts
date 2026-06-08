@@ -178,11 +178,16 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
         if (materialOps.length > 0) {
           await db.$transaction(async (tx) => {
             for (const op of materialOps) {
+              // Get material info for conversion data
+              const mat = await tx.material.findUnique({ where: { id: op.materialId } })
               await tx.materialEntry.create({
                 data: {
                   materialId: op.materialId,
                   type: 'consumed',
                   qty: op.totalConsumed,
+                  inputQty: op.totalConsumed,
+                  inputUnit: mat?.baseUnit || 'шт',
+                  conversionRate: 1,
                   cuttingPlanId: id,
                   note: op.note,
                 },

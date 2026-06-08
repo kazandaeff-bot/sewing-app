@@ -49,7 +49,9 @@ export const GET = withAuth(async (request: NextRequest) => {
     const materialMap = new Map<string, {
       id: string
       name: string
-      unit: string
+      baseUnit: string
+      inputUnit: string
+      conversionRate: number
       totalQty: number
       consumed: number
       norms: Array<{ productName: string; consumptionPerUnit: number; unit: string }>
@@ -62,7 +64,9 @@ export const GET = withAuth(async (request: NextRequest) => {
         materialMap.set(matId, {
           id: norm.materialId,
           name: norm.material.name,
-          unit: norm.material.unit,
+          baseUnit: norm.material.baseUnit,
+          inputUnit: norm.material.inputUnit,
+          conversionRate: norm.material.conversionRate,
           totalQty: norm.material.totalQty,
           consumed: totalConsumed,
           norms: [],

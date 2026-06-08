@@ -57,13 +57,20 @@ export const POST = withAuth(async (request: NextRequest) => {
   try {
     const result = await validateBody(request, CreateMaterialSchema)
     if ('error' in result) return result.error
-    const { materialTypeId, name, unit, totalQty, ownershipType, customerId } = result.data
+    const { materialTypeId, name, baseUnit, inputUnit, conversionRate, totalQty, ownershipType, customerId } = result.data
+
+    // Calculate base quantity from input quantity
+    // totalQty here is the quantity in INPUT units — convert to base units
+    const baseQty = totalQty * conversionRate
+
     const material = await db.material.create({
       data: {
         materialTypeId,
         name,
-        unit,
-        totalQty: totalQty ?? 0,
+        baseUnit,
+        inputUnit,
+        conversionRate,
+        totalQty: baseQty,
         ownershipType: ownershipType || 'own',
         customerId: ownershipType === 'customer' ? customerId : null,
       },

@@ -20,9 +20,9 @@ export const POST = withAuth(async (req, ctx, user) => {
   try {
     const result = await validateBody(req, CreateMaterialTypeSchema)
     if ('error' in result) return result.error
-    const { name, unit } = result.data
+    const { name, category } = result.data
     const type = await db.materialType.create({
-      data: { name, unit },
+      data: { name, category },
       include: { materials: true },
     })
     return NextResponse.json(type, { status: 201, headers: { 'Cache-Control': 'no-store' } })

@@ -383,41 +383,47 @@ model BoxItem {
 }
 
 // ============ МОДУЛЬ 6: Учёт материалов ============
+// Категория типа материала: fabric (ткань) или furniture (фурнитура)
 model MaterialType {
   id        String         @id @default(cuid())
   name      String         @unique
-  unit      String         @default("шт")
+  category  String         @default("fabric") // "fabric" = ткань, "furniture" = фурнитура
   materials Material[]
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
 }
 
 model Material {
-  id             String         @id @default(cuid())
-  materialTypeId String
-  name           String
-  totalQty       Float          @default(0)
-  unit           String         @default("шт")
-  ownershipType  String         @default("own")   // "own" = свой, "customer" = давальческий
-  customerId     String?                             // заказчик для давальческого материала
-  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  entries        MaterialEntry[]
-  norms          MaterialNorm[]
-  materialType   MaterialType   @relation(fields: [materialTypeId], references: [id], onDelete: Cascade)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  materialTypeId  String
+  name            String
+  totalQty        Float          @default(0)         // Кол-во в базовой единице
+  baseUnit        String         @default("шт")      // Базовая единица: пм, кг, м, шт
+  inputUnit       String         @default("шт")      // Единица поступления: пм, кг, упак, бобина, шт
+  conversionRate  Float          @default(1)         // Коэфф. конвертации: базовых ед. в 1 ед. поступления
+  ownershipType   String         @default("own")     // "own" = свой, "customer" = давальческий
+  customerId      String?                             // заказчик для давальческого материала
+  customer        Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  entries         MaterialEntry[]
+  norms           MaterialNorm[]
+  materialType    MaterialType   @relation(fields: [materialTypeId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model MaterialEntry {
-  id             String     @id @default(cuid())
-  materialId     String
-  type           String     // incoming | consumed
-  qty            Float
-  date           DateTime   @default(now())
-  cuttingPlanId  String?
-  note           String?
-  material       Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  createdAt      DateTime   @default(now())
+  id              String     @id @default(cuid())
+  materialId      String
+  type            String     // incoming | consumed
+  qty             Float      // Кол-во в базовой единице
+  inputQty        Float      @default(0) // Кол-во в единице поступления (5 бобин, 3 упак)
+  inputUnit       String?    // Единица поступления
+  conversionRate  Float      @default(1) // Коэфф. конвертации на момент записи
+  date            DateTime   @default(now())
+  cuttingPlanId   String?
+  note            String?
+  material        Material   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  createdAt       DateTime   @default(now())
 }
 
 model MaterialNorm {
