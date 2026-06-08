@@ -14,8 +14,11 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
 
     const material = await db.material.update({
       where: { id },
-      data: result.data,
-      include: { materialType: true, norms: true },
+      data: {
+        ...result.data,
+        customerId: result.data.ownershipType === 'customer' ? result.data.customerId : (result.data.ownershipType === 'own' ? null : undefined),
+      },
+      include: { materialType: true, customer: true, norms: true },
     })
     return NextResponse.json(material, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

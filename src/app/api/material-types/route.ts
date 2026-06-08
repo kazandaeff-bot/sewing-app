@@ -7,7 +7,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   try {
     const types = await db.materialType.findMany({
       orderBy: { name: 'asc' },
-      include: { materials: { orderBy: { name: 'asc' }, include: { norms: true, entries: { orderBy: { date: 'desc' }, take: 1 } } } },
+      include: { materials: { orderBy: { name: 'asc' }, include: { customer: true, norms: true, entries: { orderBy: { date: 'desc' }, take: 1 } } } },
     })
     return NextResponse.json(types, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

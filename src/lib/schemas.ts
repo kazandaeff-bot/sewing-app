@@ -387,6 +387,8 @@ export const CreateMaterialSchema = z.object({
   name: z.string().trim().min(1, 'Укажите название'),
   unit: z.string().default('шт'),
   totalQty: z.coerce.number().nonnegative().default(0),
+  ownershipType: z.enum(['own', 'customer']).default('own'),
+  customerId: cuid.optional().nullable(),
 })
 
 export const UpdateMaterialSchema = z.object({
@@ -394,6 +396,8 @@ export const UpdateMaterialSchema = z.object({
   unit: z.string().optional(),
   totalQty: z.coerce.number().nonnegative().optional(),
   materialTypeId: cuid.optional(),
+  ownershipType: z.enum(['own', 'customer']).optional(),
+  customerId: cuid.optional().nullable(),
 })
 
 // --- Product Size Rates ---

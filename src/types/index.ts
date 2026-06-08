@@ -375,25 +375,42 @@ export interface IroningGroup {
   items: SewingTaskItemResponse[]
 }
 
-// --- Material Types & Entries ---
+// --- Material Types, Materials & Entries ---
 
 export interface MaterialType {
   id: string
   name: string
   unit: string
+  materials: Material[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Material {
+  id: string
+  materialTypeId: string
+  name: string
+  totalQty: number
+  unit: string
+  ownershipType: 'own' | 'customer'
+  customerId: string | null
+  customer: { id: string; name: string } | null
   entries: MaterialEntry[]
+  norms: MaterialNorm[]
+  materialType: { id: string; name: string; unit: string }
+  createdAt: string
+  updatedAt: string
 }
 
 export interface MaterialEntry {
   id: string
-  materialTypeId: string
+  materialId: string
+  type: 'incoming' | 'consumed'
+  qty: number
   date: string
-  quantity: number
-  pricePerUnit: number
-  totalCost: number
+  cuttingPlanId: string | null
   note: string | null
-  customerId: string | null
-  customer: { id: string; name: string } | null
+  material: { id: string; name: string; unit: string; materialType: { id: string; name: string; unit: string } }
   createdAt: string
 }
 
@@ -401,9 +418,11 @@ export interface MaterialEntry {
 
 export interface MaterialNorm {
   id: string
+  materialId: string
   productId: string
-  materialTypeId: string
-  quantityPerUnit: number
+  consumptionPerUnit: number
+  unit: string
+  autoCalculated: boolean
   product: { id: string; name: string; article: string }
-  materialType: { id: string; name: string; unit: string }
+  material: { id: string; name: string; unit: string; ownershipType: string; customerId: string | null; customer: { id: string; name: string } | null }
 }

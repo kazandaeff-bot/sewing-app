@@ -191,6 +191,7 @@ model Customer {
   upds                UPD[]
   deals               Deal[]
   contracts           Contract[]
+  materials           Material[]
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 }
@@ -397,6 +398,9 @@ model Material {
   name           String
   totalQty       Float          @default(0)
   unit           String         @default("шт")
+  ownershipType  String         @default("own")   // "own" = свой, "customer" = давальческий
+  customerId     String?                             // заказчик для давальческого материала
+  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   entries        MaterialEntry[]
   norms          MaterialNorm[]
   materialType   MaterialType   @relation(fields: [materialTypeId], references: [id], onDelete: Cascade)

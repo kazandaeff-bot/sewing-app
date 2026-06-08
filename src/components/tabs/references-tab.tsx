@@ -86,6 +86,9 @@ export function ReferencesTab() {
   const [newMaterialName, setNewMaterialName] = useState('')
   const [newMaterialUnit, setNewMaterialUnit] = useState('шт')
   const [addingMaterialToTypeId, setAddingMaterialToTypeId] = useState<string | null>(null)
+  const [newMaterialOwnership, setNewMaterialOwnership] = useState<'own' | 'customer'>('own')
+  const [newMaterialCustomerId, setNewMaterialCustomerId] = useState('')
+  const [newMaterialQty, setNewMaterialQty] = useState('')
 
   // ---- Material norms state ----
   const [newNormProductId, setNewNormProductId] = useState('')
@@ -249,8 +252,8 @@ export function ReferencesTab() {
 
   // ---- Material mutations ----
   const createMaterialMutation = useMutation({
-    mutationFn: (data: { name: string; materialTypeId: string; unit?: string }) => authFetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); setNewMaterialName(''); setNewMaterialUnit('шт'); setAddingMaterialToTypeId(null); toast({ title: 'Материал добавлен' }) },
+    mutationFn: (data: { name: string; materialTypeId: string; unit?: string; totalQty?: number; ownershipType?: string; customerId?: string }) => authFetch('/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }).then((r) => { if (!r.ok) return r.json().then((d) => { throw new Error(d.error || 'Ошибка') }); return r.json() }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['material-types'] }); queryClient.invalidateQueries({ queryKey: ['material-norms'] }); setNewMaterialName(''); setNewMaterialUnit('шт'); setNewMaterialQty(''); setNewMaterialOwnership('own'); setNewMaterialCustomerId(''); setAddingMaterialToTypeId(null); toast({ title: 'Материал добавлен' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
   const deleteMaterialMutation = useMutation({
@@ -543,8 +546,18 @@ export function ReferencesTab() {
     if (!newMaterialName.trim()) {
       toast({ title: 'Ошибка', description: 'Введите название материала', variant: 'destructive' }); return
     }
-    createMaterialMutation.mutate({ name: newMaterialName, materialTypeId, unit: newMaterialUnit || undefined })
-  }, [newMaterialName, newMaterialUnit, createMaterialMutation, toast])
+    if (newMaterialOwnership === 'customer' && !newMaterialCustomerId) {
+      toast({ title: 'Ошибка', description: 'Выберите заказчика для давальческого материала', variant: 'destructive' }); return
+    }
+    createMaterialMutation.mutate({
+      name: newMaterialName,
+      materialTypeId,
+      unit: newMaterialUnit || undefined,
+      totalQty: parseFloat(newMaterialQty) || 0,
+      ownershipType: newMaterialOwnership,
+      customerId: newMaterialOwnership === 'customer' ? newMaterialCustomerId : undefined,
+    })
+  }, [newMaterialName, newMaterialUnit, newMaterialQty, newMaterialOwnership, newMaterialCustomerId, createMaterialMutation, toast])
 
   const handleAddMaterialNorm = useCallback(() => {
     if (!newNormProductId || !newNormMaterialId || !newNormConsumption) {
@@ -560,7 +573,7 @@ export function ReferencesTab() {
 
   // ---- All materials flat list (for norm select) ----
   const allMaterials = useMemo(() => {
-    return (materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; materialTypeId: string }> }>).flatMap(mt => mt.materials || [])
+    return (materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; materialTypeId: string; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).flatMap(mt => mt.materials || [])
   }, [materialTypes])
 
   // ---- Loading state ----
@@ -713,7 +726,7 @@ export function ReferencesTab() {
           <Card className="border-dashed"><CardContent className="py-6 text-center text-muted-foreground text-sm">Нет типов материалов</CardContent></Card>
         ) : (
           <div className="space-y-2 mb-6">
-            {(materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; totalQty: number }> }>).map((mt) => {
+            {(materialTypes as Array<{ id: string; name: string; unit: string; materials: Array<{ id: string; name: string; unit: string; totalQty: number; ownershipType?: string; customer?: { id: string; name: string } | null }> }>).map((mt) => {
               const isExpanded = expandedMaterialTypeIds.has(mt.id)
               const isAdding = addingMaterialToTypeId === mt.id
               return (
@@ -733,11 +746,39 @@ export function ReferencesTab() {
 
                   {/* Add material inline */}
                   {isAdding && (
-                    <div className="flex gap-2 mt-3 items-end border-t pt-3">
-                      <div className="flex-1 max-w-[200px]"><Label className="text-xs text-muted-foreground">Название</Label><Input value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)} placeholder="Название материала" onKeyDown={(e) => { if (e.key === 'Enter') handleAddMaterial(mt.id) }} /></div>
-                      <div className="w-24"><Label className="text-xs text-muted-foreground">Ед. изм.</Label><Input value={newMaterialUnit} onChange={(e) => setNewMaterialUnit(e.target.value)} /></div>
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleAddMaterial(mt.id)} disabled={createMaterialMutation.isPending}>Добавить</Button>
-                      <Button size="sm" variant="ghost" onClick={() => setAddingMaterialToTypeId(null)}><X className="h-4 w-4" /></Button>
+                    <div className="mt-3 border-t pt-3 space-y-2">
+                      <div className="flex gap-2 items-end flex-wrap">
+                        <div className="flex-1 min-w-[160px]"><Label className="text-xs text-muted-foreground">Название</Label><Input value={newMaterialName} onChange={(e) => setNewMaterialName(e.target.value)} placeholder="Название материала" onKeyDown={(e) => { if (e.key === 'Enter') handleAddMaterial(mt.id) }} /></div>
+                        <div className="w-24"><Label className="text-xs text-muted-foreground">Ед. изм.</Label><Input value={newMaterialUnit} onChange={(e) => setNewMaterialUnit(e.target.value)} /></div>
+                        <div className="w-28"><Label className="text-xs text-muted-foreground">Кол-во</Label><Input type="number" min="0" step="0.01" value={newMaterialQty} onChange={(e) => setNewMaterialQty(e.target.value)} placeholder="0" /></div>
+                      </div>
+                      <div className="flex gap-2 items-end flex-wrap">
+                        <div className="w-44">
+                          <Label className="text-xs text-muted-foreground">Тип материала</Label>
+                          <Select value={newMaterialOwnership} onValueChange={(v: 'own' | 'customer') => { setNewMaterialOwnership(v); if (v === 'own') setNewMaterialCustomerId('') }}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="own">Свой</SelectItem>
+                              <SelectItem value="customer">Давальческий</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {newMaterialOwnership === 'customer' && (
+                          <div className="flex-1 min-w-[160px]">
+                            <Label className="text-xs text-muted-foreground">Заказчик</Label>
+                            <Select value={newMaterialCustomerId} onValueChange={setNewMaterialCustomerId}>
+                              <SelectTrigger><SelectValue placeholder="Выберите заказчика" /></SelectTrigger>
+                              <SelectContent>
+                                {(customers as CustomerEditData[]).map((c) => (
+                                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => handleAddMaterial(mt.id)} disabled={createMaterialMutation.isPending}>Добавить</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setAddingMaterialToTypeId(null)}><X className="h-4 w-4" /></Button>
+                      </div>
                     </div>
                   )}
 
@@ -746,10 +787,14 @@ export function ReferencesTab() {
                     <div className="mt-3 border-t pt-3 space-y-1">
                       {mt.materials.map((m) => (
                         <div key={m.id} className="flex items-center justify-between bg-gray-50 rounded-md px-3 py-1.5">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-medium">{m.name}</span>
                             <Badge variant="outline" className="text-xs">{m.unit}</Badge>
                             <Badge className={`text-xs ${m.totalQty > 0 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}`}>{m.totalQty} {m.unit}</Badge>
+                            <Badge className={`text-xs ${m.ownershipType === 'customer' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-blue-100 text-blue-700 hover:bg-blue-100'}`}>{m.ownershipType === 'customer' ? 'Давальческий' : 'Свой'}</Badge>
+                            {m.ownershipType === 'customer' && m.customer && (
+                              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">{m.customer.name}</Badge>
+                            )}
                           </div>
                           <div className="flex items-center gap-0.5">
                             <Button size="sm" variant="ghost" className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-6 px-1.5" title="Приход" onClick={() => { setEntryMaterialId(m.id); setEntryType('incoming'); setEntryDialogOpen(true) }}><ArrowDownCircle className="h-3.5 w-3.5" /></Button>
@@ -791,10 +836,18 @@ export function ReferencesTab() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(materialNorms as Array<{ id: string; consumptionPerUnit: number; unit: string; material: { name: string }; product: { name: string } }>).map((norm) => (
+                    {(materialNorms as Array<{ id: string; consumptionPerUnit: number; unit: string; material: { name: string; ownershipType?: string; customer?: { id: string; name: string } | null }; product: { name: string } }>).map((norm) => (
                       <TableRow key={norm.id}>
                         <TableCell className="font-medium">{norm.product.name}</TableCell>
-                        <TableCell>{norm.material.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {norm.material.name}
+                            <Badge className={`text-xs ${norm.material.ownershipType === 'customer' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100' : 'bg-blue-100 text-blue-700 hover:bg-blue-100'}`}>{norm.material.ownershipType === 'customer' ? 'Давальч.' : 'Свой'}</Badge>
+                            {norm.material.ownershipType === 'customer' && norm.material.customer && (
+                              <span className="text-xs text-amber-600">({norm.material.customer.name})</span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-center">{norm.consumptionPerUnit}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs">{norm.unit}</Badge></TableCell>
                         <TableCell className="text-right">
@@ -829,8 +882,8 @@ export function ReferencesTab() {
               <Select value={newNormMaterialId} onValueChange={setNewNormMaterialId}>
                 <SelectTrigger><SelectValue placeholder="Выберите материал" /></SelectTrigger>
                 <SelectContent>
-                  {allMaterials.map((m: { id: string; name: string; unit: string }) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name} ({m.unit})</SelectItem>
+                  {allMaterials.map((m: { id: string; name: string; unit: string; ownershipType?: string; customer?: { id: string; name: string } | null }) => (
+                    <SelectItem key={m.id} value={m.id}>{m.name} ({m.unit}){m.ownershipType === 'customer' ? ' — Давальч.' : ''}{m.ownershipType === 'customer' && m.customer ? ` (${m.customer.name})` : ''}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

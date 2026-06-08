@@ -44,7 +44,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     // Default: return all materials
     const materials = await db.material.findMany({
       orderBy: { name: 'asc' },
-      include: { materialType: true, norms: { include: { product: true } } },
+      include: { materialType: true, customer: true, norms: { include: { product: true } } },
     })
     return NextResponse.json(materials, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
@@ -57,15 +57,17 @@ export const POST = withAuth(async (request: NextRequest) => {
   try {
     const result = await validateBody(request, CreateMaterialSchema)
     if ('error' in result) return result.error
-    const { materialTypeId, name, unit, totalQty } = result.data
+    const { materialTypeId, name, unit, totalQty, ownershipType, customerId } = result.data
     const material = await db.material.create({
       data: {
         materialTypeId,
         name,
         unit,
-        totalQty,
+        totalQty: totalQty ?? 0,
+        ownershipType: ownershipType || 'own',
+        customerId: ownershipType === 'customer' ? customerId : null,
       },
-      include: { materialType: true, norms: true },
+      include: { materialType: true, customer: true, norms: true },
     })
     return NextResponse.json(material, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {

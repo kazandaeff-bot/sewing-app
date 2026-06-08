@@ -7,7 +7,7 @@ export const GET = withAuth(async (req, ctx, user) => {
   try {
     const norms = await db.materialNorm.findMany({
       orderBy: { productId: 'asc' },
-      include: { material: true, product: true },
+      include: { material: { include: { customer: true } }, product: true },
     })
     return NextResponse.json(norms, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
@@ -29,7 +29,7 @@ export const POST = withAuth(async (req, ctx, user) => {
         unit,
         autoCalculated,
       },
-      include: { material: true, product: true },
+      include: { material: { include: { customer: true } }, product: true },
     })
     return NextResponse.json(norm, { status: 201, headers: { 'Cache-Control': 'no-store' } })
   } catch (error: any) {
