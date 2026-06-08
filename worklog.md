@@ -1,35 +1,39 @@
 ---
 Task ID: 1
-Agent: main
-Task: Redesign materials system with unit conversion, ownership types, and auto-deduction
+Agent: Main
+Task: Fix customer creation validation error
 
 Work Log:
-- Studied current Prisma schema (Material, MaterialType, MaterialEntry, MaterialNorm models)
-- Studied current UI in references-tab.tsx and customer-materials-tab.tsx
-- Studied API routes for materials, material-types, material-entries, material-balance, cutting-plans
-
-Schema changes:
-- MaterialType: removed `unit` field, added `category` field ('fabric' | 'furniture')
-- Material: removed `unit` field, added `baseUnit`, `inputUnit`, `conversionRate` fields
-- MaterialEntry: added `inputQty`, `inputUnit`, `conversionRate` fields
-- Applied Prisma migration (reset DB)
-
-API changes:
-- POST /api/material-types: now accepts `category` instead of `unit`
-- POST /api/materials: now accepts `baseUnit`, `inputUnit`, `conversionRate`, `totalQty` (in input units, converts to base)
-- POST /api/material-entries: now accepts `inputQty`, `inputUnit`, `conversionRate`, calculates `qty` in base units
-- GET /api/material-balance: updated to use `baseUnit` instead of old `unit`
-- PATCH /api/cutting-plans/[id]: auto-deduction logic updated to include conversion fields
-
-UI changes:
-- Material Type creation: Category dropdown (Ткань/Фурнитура) instead of unit input
-- Material creation: baseUnit selector (пм,кг for fabric; шт,м for furniture), inputUnit selector (пм,кг for fabric; шт,упак,бобина,м for furniture), conditional conversionRate, inputQty with live preview
-- Material display: shows baseUnit, inputUnit, total qty with conversion info, ownership badges
-- Material entry dialog: input unit selector, conversion rate, live calculation preview
-- History dialog: shows both base and input quantities with conversion
-- Customer materials tab: updated to use baseUnit
+- Analyzed screenshot: error was "Ошибка валидации" when creating customer
+- Found root cause: Zod schema used `.optional()` but UI sent `null` for empty fields. Zod `.optional()` allows `undefined` but NOT `null`
+- Fixed `CreateCustomerSchema`: all optional string fields now use `.nullable().optional()`
+- Moved INN/KPP/BIK validation from `.refine()` to `.superRefine()` for better error messages
+- Made INN non-required in UI (removed mandatory check in `handleSaveCustomer`, removed `*` from label)
+- Updated `UpdateCustomerSchema` with same pattern
+- Enhanced mutation error handlers to show validation details (field path + message)
+- Created admin employee (username: admin, password: 123456) since DB was empty
+- Tested all 3 scenarios: without INN (OK), with invalid INN (proper error), with valid INN (OK)
 
 Stage Summary:
-- All schema, API, and UI changes completed successfully
-- App compiles and runs without errors on port 3000
-- Auto-deduction of materials after cutting already existed and was updated
+- Customer creation now works with or without INN
+- Validation errors now show specific messages instead of generic "Ошибка валидации"
+- Files modified: `src/lib/schemas.ts`, `src/components/tabs/references-tab.tsx`
+
+---
+Task ID: 2
+Agent: Main
+Task: Restore size grids and standard colors in product creation/edit dialogs
+
+Work Log:
+- Investigated: Two separate product dialogs exist — ProductsTab (simple, no grids/colors) and ReferencesTab (full-featured with grids/colors)
+- User was seeing ProductsTab which lacked size grid selection and standard color presets
+- Added `STANDARD_SIZE_GRIDS` and `STANDARD_COLORS` imports from `@/lib/constants`
+- Added `ChevronUp`/`ChevronDown` imports for size reordering
+- Enhanced Create dialog in ProductsTab: size grid dropdown, drag-reorderable sizes with ↑↓ buttons, standard color presets with colored dots, custom color with palette picker
+- Enhanced Edit dialog in ProductsTab: same full-featured size/color UI
+- Preserved all existing features: photo upload, rate fields, kit combos, rework reasons, size rates table
+- Verified compilation: no errors, dev server running fine
+
+Stage Summary:
+- Both create and edit product dialogs now have size grids (8 presets) and standard colors (12 presets with palette)
+- Files modified: `src/components/tabs/products-tab.tsx`
