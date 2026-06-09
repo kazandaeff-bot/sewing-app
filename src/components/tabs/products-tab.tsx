@@ -95,15 +95,29 @@ export function ProductsTab() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      authFetchJson('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+    mutationFn: async (data: Record<string, unknown>) => {
+      const r = await authFetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      const res = await r.json()
+      if (!r.ok) {
+        const msg = res.details ? res.details.map((d: { path: string; message: string }) => `${d.path}: ${d.message}`).join('; ') : (res.error || `Ошибка (${r.status})`)
+        throw new Error(msg)
+      }
+      return res
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setCreateOpen(false); resetCreateForm(); toast({ title: 'Изделие создано' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      authFetchJson(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, unknown> }) => {
+      const r = await authFetch(`/api/products/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      const res = await r.json()
+      if (!r.ok) {
+        const msg = res.details ? res.details.map((d: { path: string; message: string }) => `${d.path}: ${d.message}`).join('; ') : (res.error || `Ошибка (${r.status})`)
+        throw new Error(msg)
+      }
+      return res
+    },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); setEditOpen(false); setSelectedProduct(null); toast({ title: 'Изделие обновлено' }) },
     onError: (err: Error) => { toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }) },
   })

@@ -74,7 +74,7 @@ const ColorEntry = z.object({
 export const CreateProductSchema = z.object({
   name: z.string().min(1, 'Укажите название'),
   article: z.string().min(1, 'Укажите артикул'),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().nullable().optional(),
   sewerRate: rateField,
   homeRate: rateField,
   qcRate: rateField,

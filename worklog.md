@@ -62,3 +62,24 @@ Stage Summary:
 - Production server with auto-restart via .zscripts/dev.sh
 - Key fix: HOSTNAME=127.0.0.1 (not 0.0.0.0) for Caddy compatibility
 - Page component restructured: page.tsx → dynamic import → home-page.tsx (client-only)
+
+---
+Task ID: 6
+Agent: Main
+Task: Fix product creation validation error "Ошибка заполнения"
+
+Work Log:
+- Analyzed error screenshot via VLM: error was in "Новое изделие" dialog showing "Ошибка заполнения"
+- Tested API directly: confirmed the exact error was Zod validation: `imageUrl: "Invalid input: expected string, received null"`
+- Root cause: CreateProductSchema had `imageUrl: z.string().optional()` which accepts `undefined` but NOT `null`. The products-tab.tsx form sends `imageUrl: null` when no image is selected.
+- Fixed `CreateProductSchema`: changed `imageUrl: z.string().optional()` → `imageUrl: z.string().nullable().optional()`
+- UpdateProductSchema inherits from CreateProductSchema.partial(), so fix propagates automatically
+- Enhanced error handling in products-tab.tsx mutations: create and update mutations now parse validation details and show specific field-level error messages instead of generic "Ошибка валидации"
+- Verified fix: tested API with `imageUrl: null` — product creates successfully with sizes and colors
+- Cleaned up test data
+- Rebuilt and restarted server
+
+Stage Summary:
+- Product creation now works with or without image
+- Validation errors now show specific messages (e.g., "imageUrl: expected string, received null")
+- Files modified: `src/lib/schemas.ts`, `src/components/tabs/products-tab.tsx`
