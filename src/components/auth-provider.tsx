@@ -77,6 +77,19 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
   return fetch(url, { ...options, headers, credentials: 'include' as RequestCredentials })
 }
 
+/**
+ * Fetch + JSON parse with error checking.
+ * Throws on non-2xx responses so useMutation's onError fires correctly.
+ */
+export async function authFetchJson<T = unknown>(url: string, options: RequestInit = {}): Promise<T> {
+  const r = await authFetch(url, options)
+  const data = await r.json()
+  if (!r.ok) {
+    throw new Error(data.error || data.message || `Ошибка сервера (${r.status})`)
+  }
+  return data as T
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [token, setToken] = useState<string | null>(null)

@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Separator } from '@/components/ui/separator'
 import { Loader2, Plus, Trash2, Pencil, Layers, Play, CheckCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 
 interface PatternInfo { id: string; name: string; size: string; product: { id: string; name: string; article: string } }
 interface NestingItem { id: string; patternId: string; posX: number; posY: number; rotation: number; flipped: boolean; pattern: PatternInfo }
@@ -40,20 +40,20 @@ export function NestingTab() {
   // Fetch layouts
   const { data: layouts = [], isLoading } = useQuery<NestingLayout[]>({
     queryKey: ['nesting-layouts'],
-    queryFn: () => authFetch('/api/nesting-layouts').then(r => r.json()),
+    queryFn: () => authFetchJson('/api/nesting-layouts'),
   })
 
   // Fetch patterns for adding items
   const { data: patterns = [] } = useQuery<PatternInfo[]>({
     queryKey: ['patterns-quick'],
-    queryFn: () => authFetch('/api/patterns').then(r => r.json()),
+    queryFn: () => authFetchJson('/api/patterns'),
   })
 
   // Fetch cutting plans for linking
   const { data: cuttingPlans = [] } = useQuery({
     queryKey: ['cutting-plans-quick'],
     queryFn: async () => {
-      const plans = await authFetch('/api/plans').then(r => r.json())
+      const plans = await authFetchJson('/api/plans')
       const allCuttingPlans: Array<{ id: string; label: string | null; planName: string; planId: string }> = []
       for (const plan of plans) {
         if (plan.cuttingPlans) {
@@ -68,39 +68,39 @@ export function NestingTab() {
 
   // Create
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => authFetch('/api/nesting-layouts', {
+    mutationFn: (data: Record<string, unknown>) => authFetchJson('/api/nesting-layouts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-    }).then(r => r.json()),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nesting-layouts'] })
       setCreateOpen(false)
       resetForm()
       toast({ title: 'Раскладка создана' })
     },
-    onError: () => toast({ title: 'Ошибка', description: 'Не удалось создать раскладку', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Delete
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/nesting-layouts/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    mutationFn: (id: string) => authFetchJson(`/api/nesting-layouts/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nesting-layouts'] })
       setDeleteId(null)
       toast({ title: 'Раскладка удалена' })
     },
-    onError: () => toast({ title: 'Ошибка', description: 'Не удалось удалить раскладку', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Confirm layout
   const confirmMutation = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/nesting-layouts/${id}`, {
+    mutationFn: (id: string) => authFetchJson(`/api/nesting-layouts/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'confirmed' }),
-    }).then(r => r.json()),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nesting-layouts'] })
       toast({ title: 'Раскладка подтверждена' })
     },
-    onError: () => toast({ title: 'Ошибка', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Simple auto-nesting algorithm
@@ -136,7 +136,7 @@ export function NestingTab() {
       const fabricArea = fabricWidth * totalLength
       const utilization = fabricArea > 0 ? Math.round((totalArea / fabricArea) * 1000) / 10 : 0
 
-      return authFetch(`/api/nesting-layouts/${layoutId}`, {
+      return authFetchJson(`/api/nesting-layouts/${layoutId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,13 +146,13 @@ export function NestingTab() {
           utilization,
           items: updatedItems.map(i => ({ patternId: i.patternId, posX: i.posX, posY: i.posY, rotation: i.rotation, flipped: i.flipped })),
         }),
-      }).then(r => r.json())
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nesting-layouts'] })
       toast({ title: 'Раскладка рассчитана', description: 'Лекала размещены на ткани' })
     },
-    onError: () => toast({ title: 'Ошибка расчёта', description: 'Не удалось рассчитать раскладку', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка расчёта', description: err.message, variant: 'destructive' }),
   })
 
   const resetForm = useCallback(() => {

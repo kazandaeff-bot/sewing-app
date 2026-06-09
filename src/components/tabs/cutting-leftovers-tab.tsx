@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Loader2, Scissors, Pencil, Trash2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 import type { CuttingLeftover } from '@/types'
 
 export function CuttingLeftoversTab() {
@@ -29,8 +29,7 @@ export function CuttingLeftoversTab() {
     queryFn: async () => {
       const params = new URLSearchParams()
       if (filterCustomerId) params.set('customerId', filterCustomerId)
-      const r = await authFetch(`/api/cutting-leftovers?${params.toString()}`)
-      const data = await r.json()
+      const data = await authFetchJson(`/api/cutting-leftovers?${params.toString()}`)
       return Array.isArray(data) ? data : []
     },
   })
@@ -38,38 +37,37 @@ export function CuttingLeftoversTab() {
   const { data: customers = [] } = useQuery({
     queryKey: ['customers'],
     queryFn: async () => {
-      const r = await authFetch('/api/customers')
-      const data = await r.json()
+      const data = await authFetchJson('/api/customers')
       return Array.isArray(data) ? data : []
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      authFetch(`/api/cutting-leftovers/${id}`, {
+      authFetchJson(`/api/cutting-leftovers/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cutting-leftovers'] })
       setEditDialogOpen(false)
       toast({ title: 'Обновлено', description: 'Остаток кроя обновлён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить остаток', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      authFetch(`/api/cutting-leftovers/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetchJson(`/api/cutting-leftovers/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cutting-leftovers'] })
       toast({ title: 'Удалено', description: 'Остаток кроя удалён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось удалить остаток', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 

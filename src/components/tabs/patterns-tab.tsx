@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Loader2, Plus, Trash2, Pencil, Ruler, Upload, CheckCircle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 
 interface PatternProduct { id: string; name: string; article: string }
 interface Pattern {
@@ -38,36 +38,36 @@ export function PatternsTab() {
   // Fetch patterns
   const { data: patterns = [], isLoading } = useQuery<Pattern[]>({
     queryKey: ['patterns'],
-    queryFn: () => authFetch('/api/patterns').then(r => r.json()),
+    queryFn: () => authFetchJson('/api/patterns'),
   })
 
   // Fetch products for dropdown
   const { data: products = [] } = useQuery<PatternProduct[]>({
     queryKey: ['products-quick'],
-    queryFn: () => authFetch('/api/products').then(r => r.json()),
+    queryFn: () => authFetchJson('/api/products'),
   })
 
   const filtered = filterProduct === 'all' ? patterns : patterns.filter(p => p.productId === filterProduct)
 
   // Create
   const createMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) => authFetch('/api/patterns', {
+    mutationFn: (data: Record<string, unknown>) => authFetchJson('/api/patterns', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-    }).then(r => r.json()),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       setCreateOpen(false)
       resetForm()
       toast({ title: 'Лекало создано' })
     },
-    onError: () => toast({ title: 'Ошибка', description: 'Не удалось создать лекало', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Update
   const updateMutation = useMutation({
-    mutationFn: ({ id, ...data }: Record<string, unknown> & { id: string }) => authFetch(`/api/patterns/${id}`, {
+    mutationFn: ({ id, ...data }: Record<string, unknown> & { id: string }) => authFetchJson(`/api/patterns/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
-    }).then(r => r.json()),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       setEditOpen(false)
@@ -75,30 +75,30 @@ export function PatternsTab() {
       resetForm()
       toast({ title: 'Лекало обновлено' })
     },
-    onError: () => toast({ title: 'Ошибка', description: 'Не удалось обновить лекало', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Delete
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/patterns/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    mutationFn: (id: string) => authFetchJson(`/api/patterns/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       setDeleteId(null)
       toast({ title: 'Лекало удалено' })
     },
-    onError: () => toast({ title: 'Ошибка', description: 'Не удалось удалить лекало', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   // Mark as verified
   const verifyMutation = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/patterns/${id}`, {
+    mutationFn: (id: string) => authFetchJson(`/api/patterns/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'verified' }),
-    }).then(r => r.json()),
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       toast({ title: 'Лекало верифицировано' })
     },
-    onError: () => toast({ title: 'Ошибка', variant: 'destructive' }),
+    onError: (err: Error) => toast({ title: 'Ошибка', description: err.message, variant: 'destructive' }),
   })
 
   const resetForm = useCallback(() => {

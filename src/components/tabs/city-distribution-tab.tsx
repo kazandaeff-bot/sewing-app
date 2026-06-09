@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Loader2, Plus, X, CheckCircle2, MapPin, Truck, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 import type { Plan, SellerPlan } from '@/types'
 import { formatDate } from '@/lib/formatters'
 import { getColorDot, getSellerPlanStatusBadge } from '@/lib/status-badges'
@@ -39,8 +39,7 @@ export function CityDistributionTab() {
   const { data: plans = [] } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
-      const r = await authFetch('/api/plans')
-      const data = await r.json()
+      const data = await authFetchJson('/api/plans')
       return Array.isArray(data) ? data : []
     },
   })
@@ -48,8 +47,7 @@ export function CityDistributionTab() {
   const { data: sellerPlans = [], isLoading } = useQuery({
     queryKey: ['seller-plans'],
     queryFn: async () => {
-      const r = await authFetch('/api/seller-plans')
-      const data = await r.json()
+      const data = await authFetchJson('/api/seller-plans')
       return Array.isArray(data) ? data : []
     },
   })
@@ -57,8 +55,7 @@ export function CityDistributionTab() {
   const { data: cities = [] } = useQuery({
     queryKey: ['cities'],
     queryFn: async () => {
-      const r = await authFetch('/api/cities')
-      const data = await r.json()
+      const data = await authFetchJson('/api/cities')
       return Array.isArray(data) ? data : []
     },
   })
@@ -163,11 +160,11 @@ export function CityDistributionTab() {
         cities: Array<{ city: string; quantity: number }>
       }>
     }) =>
-      authFetch('/api/seller-plans', {
+      authFetchJson('/api/seller-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
       setSelectedPlanId('')
@@ -175,41 +172,41 @@ export function CityDistributionTab() {
       setSellerPlanName('')
       toast({ title: 'План создан', description: 'План распределения создан' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось создать план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   // --- Existing plan mutations ---
   const approveMutation = useMutation({
     mutationFn: (id: string) =>
-      authFetch(`/api/seller-plans/${id}`, {
+      authFetchJson(`/api/seller-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'approved' }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
       toast({ title: 'План утверждён', description: 'План распределения утверждён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось утвердить план', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   const markDistributedMutation = useMutation({
     mutationFn: (id: string) =>
-      authFetch(`/api/seller-plans/${id}`, {
+      authFetchJson(`/api/seller-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'distributed' }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
       toast({ title: 'Распределено', description: 'План отмечен как распределённый' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить статус', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 

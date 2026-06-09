@@ -35,7 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 import {
   Plus,
   Trash2,
@@ -1040,8 +1040,7 @@ export function TechnologistTab() {
   const { data: patterns = [], isLoading: patternsLoading } = useQuery({
     queryKey: ['patterns'],
     queryFn: async () => {
-      const r = await authFetch('/api/patterns')
-      const data = await r.json()
+      const data = await authFetchJson('/api/patterns')
       return (Array.isArray(data) ? data : []) as Pattern[]
     },
   })
@@ -1051,8 +1050,7 @@ export function TechnologistTab() {
     queryKey: ['pattern', selectedPatternId],
     queryFn: async () => {
       if (!selectedPatternId) return null
-      const r = await authFetch(`/api/patterns/${selectedPatternId}`)
-      const data = await r.json()
+      const data = await authFetchJson(`/api/patterns/${selectedPatternId}`)
       return data as Pattern
     },
     enabled: !!selectedPatternId && view === 'detail',
@@ -1062,8 +1060,7 @@ export function TechnologistTab() {
   const { data: products = [] } = useQuery({
     queryKey: ['products-for-patterns'],
     queryFn: async () => {
-      const r = await authFetch('/api/products')
-      const data = await r.json()
+      const data = await authFetchJson('/api/products')
       return Array.isArray(data) ? data : []
     },
   })
@@ -1071,11 +1068,11 @@ export function TechnologistTab() {
   // Create pattern mutation
   const createMutation = useMutation({
     mutationFn: (data: { name: string; productId: string; description?: string }) =>
-      authFetch('/api/patterns', {
+      authFetchJson('/api/patterns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...data, status: 'draft', pieces: [] }),
-      }).then((r) => r.json()),
+      }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       setCreateOpen(false)
@@ -1089,32 +1086,32 @@ export function TechnologistTab() {
         setView('detail')
       }
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось создать лекало', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   // Update pattern mutation
   const updatePatternMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      authFetch(`/api/patterns/${id}`, {
+      authFetchJson(`/api/patterns/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       queryClient.invalidateQueries({ queryKey: ['pattern', selectedPatternId] })
       toast({ title: 'Лекало обновлено' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить лекало', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   // Delete pattern mutation
   const deletePatternMutation = useMutation({
-    mutationFn: (id: string) => authFetch(`/api/patterns/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) => authFetchJson(`/api/patterns/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       setDeletePatternOpen(false)
@@ -1122,15 +1119,15 @@ export function TechnologistTab() {
       setSelectedPatternId(null)
       toast({ title: 'Лекало удалено' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось удалить лекало', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   // Delete piece mutation
   const deletePieceMutation = useMutation({
     mutationFn: ({ patternId, pieceId }: { patternId: string; pieceId: string }) =>
-      authFetch(`/api/patterns/${patternId}/pieces/${pieceId}`, { method: 'DELETE' }),
+      authFetchJson(`/api/patterns/${patternId}/pieces/${pieceId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['patterns'] })
       queryClient.invalidateQueries({ queryKey: ['pattern', selectedPatternId] })
@@ -1138,8 +1135,8 @@ export function TechnologistTab() {
       setPieceToDelete(null)
       toast({ title: 'Деталь удалена' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось удалить деталь', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 

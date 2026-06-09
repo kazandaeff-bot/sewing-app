@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
-import { authFetch } from '@/components/auth-provider'
+import { authFetch, authFetchJson } from '@/components/auth-provider'
 import {
   Loader2,
   Pencil,
@@ -66,11 +66,11 @@ export function EmployeesTab() {
 
   const createMutation = useMutation({
     mutationFn: (data: Record<string, string>) =>
-      authFetch('/api/employees', {
+      authFetchJson('/api/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setCreateOpen(false)
@@ -82,40 +82,40 @@ export function EmployeesTab() {
       setNewCustomerId('')
       toast({ title: 'Сотрудник добавлен', description: 'Новый сотрудник создан' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось добавить сотрудника', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Record<string, string> }) =>
-      authFetch(`/api/employees/${id}`, {
+      authFetchJson(`/api/employees/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
-      }).then((r) => r.json()),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setEditOpen(false)
       setEditPassword('')
       toast({ title: 'Сотрудник обновлён', description: 'Изменения сохранены' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось обновить сотрудника', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) =>
-      authFetch(`/api/employees/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+      authFetchJson(`/api/employees/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       setDeleteOpen(false)
       setSelectedEmployee(null)
       toast({ title: 'Сотрудник удалён', description: 'Сотрудник успешно удалён' })
     },
-    onError: () => {
-      toast({ title: 'Ошибка', description: 'Не удалось удалить сотрудника', variant: 'destructive' })
+    onError: (err: Error) => {
+      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
     },
   })
 
