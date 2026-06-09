@@ -2,10 +2,11 @@ import child_process from 'child_process'
 import http from 'http'
 
 function startServer() {
-  const server = child_process.spawn('node', ['server.js'], {
-    cwd: '/home/z/my-project/.next/standalone',
+  const server = child_process.spawn('node', ['run-robust.js'], {
+    cwd: '/home/z/my-project',
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
+    env: { ...process.env, NODE_ENV: 'production', PORT: '3000' }
   })
   
   server.stdout.on('data', (data) => {
