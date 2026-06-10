@@ -80,6 +80,7 @@ export interface CuttingPlanItem {
   colorHex: string
   plannedQty: number
   actualQty: number | null
+  bundleCount: number | null
   product: Product
 }
 

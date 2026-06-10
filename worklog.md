@@ -124,3 +124,29 @@ Stage Summary:
 - When plan is approved, buildCuttingItems expands combos into individual colors with quantity summation
 - Both products now have proper kitComboColors: базовый топ has ч/б, Майка скимс has ч/б/б
 - Files modified: DB data updated, src/proxy.ts deleted
+
+---
+Task ID: 9
+Agent: Main
+Task: Fix combo progress tracking + add bundle count (пачки) to cutting plan
+
+Work Log:
+- Fixed progress calculation for combo-coded plan items in GET /api/plans/[id]
+- Combo items (e.g. "ч/б") now correctly match expanded colors in cutting/sewing items
+- Progress for combos = min across all expanded colors (complete sets), capped at combo qty
+- Overall progress now computed from actual cutting plan items (physical items)
+- Added isComboItem and expandedColors fields to progress items
+- Updated plan-fact UI: combo rows highlighted amber, show expanded colors badge (ч/б → чёрный + белый)
+- Added bundleCount (пачки) field to CuttingPlanItem in Prisma schema
+- Ran prisma db push migration successfully
+- Updated types: CuttingPlanItem now includes bundleCount: number | null
+- Updated schema validation: UpdateCuttingPlanSchema accepts bundleCount
+- Updated PATCH /api/cutting-plans/[id] to handle bundleCount updates
+- Updated cutting-plans-tab.tsx: added "Пачки" column with input field
+- Updated print template: cutting plan now shows "Пачки" column
+- Build successful, server restarted
+
+Stage Summary:
+- Combo progress tracking works correctly — no more 0% for combo items
+- Bundle count (пачки) field added throughout the stack: DB → API → UI → Print
+- Files modified: prisma/schema.prisma, src/types/index.ts, src/lib/schemas.ts, src/app/api/plans/[id]/route.ts, src/app/api/cutting-plans/[id]/route.ts, src/app/api/print/route.ts, src/components/tabs/sewing-plans-tab.tsx, src/components/tabs/cutting-plans-tab.tsx

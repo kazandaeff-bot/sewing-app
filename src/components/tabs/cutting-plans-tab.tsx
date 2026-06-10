@@ -18,6 +18,7 @@ export function CuttingPlansTab() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [actualQtys, setActualQtys] = useState<Record<string, string>>({})
+  const [bundleCounts, setBundleCounts] = useState<Record<string, string>>({})
 
   const { data: cuttingPlans = [], isLoading } = useQuery({
     queryKey: ['cutting-plans'],
@@ -29,7 +30,7 @@ export function CuttingPlansTab() {
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { status?: string; items?: Array<{ id: string; actualQty: number | null }> } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { status?: string; items?: Array<{ id: string; actualQty: number | null; bundleCount?: number | null }> } }) =>
       authFetch(`/api/cutting-plans/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -53,10 +54,11 @@ export function CuttingPlansTab() {
       const items = plan.items.map((item) => ({
         id: item.id,
         actualQty: actualQtys[item.id] !== undefined ? parseInt(actualQtys[item.id]) || null : item.actualQty,
+        bundleCount: bundleCounts[item.id] !== undefined ? parseInt(bundleCounts[item.id]) || null : item.bundleCount,
       }))
       updateMutation.mutate({ id: plan.id, data: { items } })
     },
-    [actualQtys, updateMutation]
+    [actualQtys, bundleCounts, updateMutation]
   )
 
   const handleMarkCut = useCallback(
@@ -64,10 +66,11 @@ export function CuttingPlansTab() {
       const items = plan.items.map((item) => ({
         id: item.id,
         actualQty: actualQtys[item.id] !== undefined ? parseInt(actualQtys[item.id]) || null : item.actualQty,
+        bundleCount: bundleCounts[item.id] !== undefined ? parseInt(bundleCounts[item.id]) || null : item.bundleCount,
       }))
       updateMutation.mutate({ id: plan.id, data: { status: 'cut', items } })
     },
-    [actualQtys, updateMutation]
+    [actualQtys, bundleCounts, updateMutation]
   )
 
   if (isLoading) {
@@ -142,6 +145,7 @@ export function CuttingPlansTab() {
                         <TableHead>Размер</TableHead>
                         <TableHead>Цвет</TableHead>
                         <TableHead className="text-center">План</TableHead>
+                        <TableHead className="text-center">Пачки</TableHead>
                         <TableHead className="text-center">Факт</TableHead>
                         <TableHead className="text-center">Остаток</TableHead>
                       </TableRow>
@@ -162,6 +166,21 @@ export function CuttingPlansTab() {
                               </span>
                             </TableCell>
                             <TableCell className="text-center">{item.plannedQty}</TableCell>
+                            <TableCell className="text-center">
+                              <Input
+                                type="number"
+                                min="0"
+                                className="w-16 mx-auto text-center"
+                                placeholder="—"
+                                value={bundleCounts[item.id] !== undefined ? bundleCounts[item.id] : (item.bundleCount ?? '')}
+                                onChange={(e) =>
+                                  setBundleCounts((prev) => ({
+                                    ...prev,
+                                    [item.id]: e.target.value,
+                                  }))
+                                }
+                              />
+                            </TableCell>
                             <TableCell className="text-center">
                               <Input
                                 type="number"

@@ -215,6 +215,7 @@ async function generateCuttingPlan(id: string): Promise<string> {
         <td class="num">${item.size}</td>
         <td>${item.color}</td>
         <td class="num">${item.plannedQty}</td>
+        <td class="num">${item.bundleCount ?? '—'}</td>
         <td class="num">${item.actualQty ?? '—'}</td>
       </tr>`
     })
@@ -237,6 +238,7 @@ async function generateCuttingPlan(id: string): Promise<string> {
           <th>Размер</th>
           <th>Цвет</th>
           <th>План, шт</th>
+          <th>Пачки</th>
           <th>Факт, шт</th>
         </tr>
       </thead>
@@ -245,6 +247,7 @@ async function generateCuttingPlan(id: string): Promise<string> {
         <tr class="total-row">
           <td colspan="3"><strong>Итого</strong></td>
           <td class="num"><strong>${totalPlanned}</strong></td>
+          <td></td>
           <td class="num"><strong>${cuttingPlan.items.some(i => i.actualQty !== null) ? totalActual : '—'}</strong></td>
         </tr>
       </tbody>

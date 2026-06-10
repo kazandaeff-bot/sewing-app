@@ -62,10 +62,14 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
     // Process items sequentially to avoid race conditions
     if (items && Array.isArray(items)) {
       for (const item of items) {
-        if (item.actualQty !== undefined) {
+        const itemUpdateData: Record<string, unknown> = {}
+        if (item.actualQty !== undefined) itemUpdateData.actualQty = item.actualQty
+        if (item.bundleCount !== undefined) itemUpdateData.bundleCount = item.bundleCount
+
+        if (Object.keys(itemUpdateData).length > 0) {
           await db.cuttingPlanItem.update({
             where: { id: item.id },
-            data: { actualQty: item.actualQty },
+            data: itemUpdateData,
           })
 
           const existingItem = existing.items.find(i => i.id === item.id)

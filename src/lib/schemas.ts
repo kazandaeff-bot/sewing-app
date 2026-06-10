@@ -123,6 +123,7 @@ export const UpdateCuttingPlanSchema = z.object({
   items: z.array(z.object({
     id: cuid,
     actualQty: nonNegInt.optional(),
+    bundleCount: nonNegInt.optional(),
   })).optional(),
 })
 
