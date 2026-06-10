@@ -261,6 +261,7 @@ model CuttingPlanItem {
   colorHex       String       @default("#9ca3af")
   plannedQty     Int
   actualQty      Int?
+  bundleCount    Int?         // Кол-во пачек (настилов)
   cuttingPlan    CuttingPlan  @relation(fields: [cuttingPlanId], references: [id], onDelete: Cascade)
   product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
