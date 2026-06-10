@@ -104,3 +104,23 @@ Stage Summary:
 - Plan creation now supports adding combo codes for kit products in both quick and table modes
 - Users can define combos like "ч/б → чёрный, белый" directly in the plan creation dialog
 - Files modified: `src/components/tabs/sewing-plans-tab.tsx`, deleted `src/proxy.ts`
+
+---
+Task ID: 8
+Agent: Main
+Task: Fix kit combo display in plan creation and restore proper kit workflow
+
+Work Log:
+- Analyzed the problem: "базовый топ" product had isKit=true but kitComboColors="{}" (empty), so combo codes didn't appear in plan creation
+- Updated "базовый топ" in DB: set kitComboColors='{"ч/б":["чёрный","белый"]}'
+- Verified the full workflow: plan creation with ч/б → plan approval → cutting plan expansion
+- When plan is approved: ч/б 100 on size S correctly expands to чёрный S: 100 + белый S: 100
+- Separate white items (белый M: 50) remain as-is — they would be summed with expanded combos of same color/size
+- The subagent's previous changes already added combo code input UI in both quick mode and table mode
+- Removed stale proxy.ts file that was causing build conflicts
+
+Stage Summary:
+- Kit combos now work correctly in plan creation: combo codes from product card automatically appear as color options
+- When plan is approved, buildCuttingItems expands combos into individual colors with quantity summation
+- Both products now have proper kitComboColors: базовый топ has ч/б, Майка скимс has ч/б/б
+- Files modified: DB data updated, src/proxy.ts deleted
