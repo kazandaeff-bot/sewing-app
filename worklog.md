@@ -83,3 +83,24 @@ Stage Summary:
 - Product creation now works with or without image
 - Validation errors now show specific messages (e.g., "imageUrl: expected string, received null")
 - Files modified: `src/lib/schemas.ts`, `src/components/tabs/products-tab.tsx`
+
+---
+Task ID: 7
+Agent: Main
+Task: Add kit combo support in plan creation dialog
+
+Work Log:
+- Analyzed the plan creation UI (sewing-plans-tab.tsx): two modes - quick mode (size×color grid) and table mode (row-by-row)
+- Found that kit products with empty kitComboColors had no way to add combo codes in plan creation
+- Added kit combo management UI in both quick mode and table mode:
+  - Quick mode: amber-themed section above the size×color grid with combo code input (code + colors), existing combos shown as badges, inline add form
+  - Table mode: combo codes in color dropdown with amber dots, combo badge shown when selected, combo management section below each row
+- Added state: quickGroups now includes kitCombos field, newComboKey/newComboValue for quick mode inputs, tableKitCombos and tableComboInputs for table mode
+- Combo rows in quick mode grid have amber background and "комбо" badge
+- Removed stale proxy.ts file that was causing build conflict with middleware.ts
+- Build succeeded, server restarted
+
+Stage Summary:
+- Plan creation now supports adding combo codes for kit products in both quick and table modes
+- Users can define combos like "ч/б → чёрный, белый" directly in the plan creation dialog
+- Files modified: `src/components/tabs/sewing-plans-tab.tsx`, deleted `src/proxy.ts`

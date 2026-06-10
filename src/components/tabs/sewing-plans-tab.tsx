@@ -51,7 +51,15 @@ export function SewingPlansTab() {
 
   // Quick mode state for create dialog
   const [quickMode, setQuickMode] = useState(true)
-  const [quickGroups, setQuickGroups] = useState<Array<{ productId: string; quantities: Record<string, number>; colorHexMap: Record<string, string> }>>([])
+  const [quickGroups, setQuickGroups] = useState<Array<{ productId: string; quantities: Record<string, number>; colorHexMap: Record<string, string>; kitCombos: Record<string, string[]> }>>([])
+
+  // Combo input state for quick mode
+  const [newComboKey, setNewComboKey] = useState('')
+  const [newComboValue, setNewComboValue] = useState('')
+
+  // Combo input state for table mode (per product)
+  const [tableKitCombos, setTableKitCombos] = useState<Record<string, Record<string, string[]>>>({})
+  const [tableComboInputs, setTableComboInputs] = useState<Record<string, { key: string; value: string }>>({})
 
   // Use shared hooks for item row management
   const createRows = useItemRows()
@@ -375,127 +383,237 @@ export function SewingPlansTab() {
     const availableSizes = selectedProduct?.sizes || []
     const availableColors = selectedProduct?.colors || []
 
+    // Merge product kitComboColors + user-defined tableKitCombos
+    const productKitCombo = selectedProduct?.isKit ? parseKitComboColors(selectedProduct.kitComboColors) : {}
+    const userKitCombo = tableKitCombos[item.productId] || {}
+    const allKitCombos: Record<string, string[]> = { ...productKitCombo, ...userKitCombo }
+    const comboInput = tableComboInputs[item.productId] || { key: '', value: '' }
+
+    // Check if current color is a combo code
+    const isCurrentColorCombo = !!allKitCombos[item.color]
+
     return (
-      <div key={index} className="flex flex-col sm:flex-row sm:items-end gap-2">
-        <div className="flex-1 sm:min-w-[140px]">
-          <Label className="text-xs text-muted-foreground">Изделие</Label>
-          <Select
-            value={item.productId}
-            onValueChange={(v) => colorSelectHook.handleProductChange(index, v)}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Выберите" />
-            </SelectTrigger>
-            <SelectContent>
-              {products.map((p: Product) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name} ({p.article}){getKitLabel(p)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="sm:w-24">
-          <Label className="text-xs text-muted-foreground">Размер</Label>
-          {availableSizes.length > 0 ? (
+      <div key={index} className="flex flex-col gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+          <div className="flex-1 sm:min-w-[140px]">
+            <Label className="text-xs text-muted-foreground">Изделие</Label>
             <Select
-              value={item.size}
-              onValueChange={(v) => rowsHook.updateRow(index, 'size', v)}
+              value={item.productId}
+              onValueChange={(v) => colorSelectHook.handleProductChange(index, v)}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Размер" />
+                <SelectValue placeholder="Выберите" />
               </SelectTrigger>
               <SelectContent>
-                {availableSizes.map((s) => (
-                  <SelectItem key={s.id} value={s.size}>
-                    {s.size}
+                {products.map((p: Product) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.article}){getKitLabel(p)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          ) : (
-            <Input
-              placeholder="Размер"
-              value={item.size}
-              onChange={(e) => rowsHook.updateRow(index, 'size', e.target.value)}
-            />
-          )}
-        </div>
-        <div className="sm:w-28">
-          <Label className="text-xs text-muted-foreground">Цвет</Label>
-          {availableColors.length > 0 || (selectedProduct?.isKit) ? (
-            <Select
-              value={item.color}
-              onValueChange={(v) => colorSelectHook.handleColorSelect(index, v, selectedProduct)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Цвет" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableColors.map((c) => (
-                  <SelectItem key={c.id} value={c.color}>
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className="inline-block w-3 h-3 rounded-full border border-gray-200"
-                        style={{ backgroundColor: c.colorHex }}
-                      />
-                      {c.color}
-                    </span>
-                  </SelectItem>
-                ))}
-                {selectedProduct?.isKit && (() => {
-                  const kitCombo = parseKitComboColors(selectedProduct.kitComboColors)
-                  return Object.keys(kitCombo).map(key => (
-                    <SelectItem key={key} value={key}>
+          </div>
+          <div className="sm:w-24">
+            <Label className="text-xs text-muted-foreground">Размер</Label>
+            {availableSizes.length > 0 ? (
+              <Select
+                value={item.size}
+                onValueChange={(v) => rowsHook.updateRow(index, 'size', v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Размер" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableSizes.map((s) => (
+                    <SelectItem key={s.id} value={s.size}>
+                      {s.size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                placeholder="Размер"
+                value={item.size}
+                onChange={(e) => rowsHook.updateRow(index, 'size', e.target.value)}
+              />
+            )}
+          </div>
+          <div className="sm:w-28">
+            <Label className="text-xs text-muted-foreground">Цвет</Label>
+            {availableColors.length > 0 || (selectedProduct?.isKit) ? (
+              <Select
+                value={item.color}
+                onValueChange={(v) => {
+                  // Check if it's a combo code (from product or user-defined)
+                  if (allKitCombos[v]) {
+                    rowsHook.updateRow(index, 'color', v)
+                    rowsHook.updateRow(index, 'colorHex', '#808080')
+                  } else {
+                    colorSelectHook.handleColorSelect(index, v, selectedProduct)
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Цвет" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableColors.map((c) => (
+                    <SelectItem key={c.id} value={c.color}>
                       <span className="flex items-center gap-1.5">
                         <span
                           className="inline-block w-3 h-3 rounded-full border border-gray-200"
-                          style={{ backgroundColor: '#808080' }}
+                          style={{ backgroundColor: c.colorHex }}
                         />
-                        {key}
+                        {c.color}
                       </span>
                     </SelectItem>
-                  ))
-                })()}
-              </SelectContent>
-            </Select>
-          ) : (
+                  ))}
+                  {selectedProduct?.isKit && Object.keys(allKitCombos).map(key => (
+                    <SelectItem key={key} value={key}>
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-3 h-3 rounded-full border border-amber-300 bg-amber-200"
+                        />
+                        <span className="font-medium">{key}</span>
+                        <span className="text-amber-600 text-[10px]">({allKitCombos[key].join(', ')})</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input
+                placeholder="Цвет"
+                value={item.color}
+                onChange={(e) => rowsHook.updateRow(index, 'color', e.target.value)}
+              />
+            )}
+            {isCurrentColorCombo && (
+              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px] px-1.5 py-0 mt-1">
+                <Scissors className="h-2.5 w-2.5 mr-0.5" />
+                комбо: {item.color} → {allKitCombos[item.color].join(', ')}
+              </Badge>
+            )}
+          </div>
+          <div className="sm:w-16">
+            <Label className="text-xs text-muted-foreground">Hex</Label>
+            <div className="flex items-center gap-1">
+              <input
+                type="color"
+                value={item.colorHex}
+                onChange={(e) => rowsHook.updateRow(index, 'colorHex', e.target.value)}
+                className="w-6 h-8 rounded cursor-pointer border-0 p-0"
+              />
+            </div>
+          </div>
+          <div className="sm:w-20">
+            <Label className="text-xs text-muted-foreground">Кол-во</Label>
             <Input
-              placeholder="Цвет"
-              value={item.color}
-              onChange={(e) => rowsHook.updateRow(index, 'color', e.target.value)}
-            />
-          )}
-        </div>
-        <div className="sm:w-16">
-          <Label className="text-xs text-muted-foreground">Hex</Label>
-          <div className="flex items-center gap-1">
-            <input
-              type="color"
-              value={item.colorHex}
-              onChange={(e) => rowsHook.updateRow(index, 'colorHex', e.target.value)}
-              className="w-6 h-8 rounded cursor-pointer border-0 p-0"
+              type="number"
+              min="0"
+              value={item.quantity || ''}
+              onChange={(e) => rowsHook.updateRow(index, 'quantity', parseInt(e.target.value) || 0)}
             />
           </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-red-500 hover:text-red-700 hover:bg-red-50 mb-0.5"
+            onClick={() => rowsHook.removeRow(index)}
+            disabled={rowsHook.rows.length <= 1}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
-        <div className="sm:w-20">
-          <Label className="text-xs text-muted-foreground">Кол-во</Label>
-          <Input
-            type="number"
-            min="0"
-            value={item.quantity || ''}
-            onChange={(e) => rowsHook.updateRow(index, 'quantity', parseInt(e.target.value) || 0)}
-          />
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-red-500 hover:text-red-700 hover:bg-red-50 mb-0.5"
-          onClick={() => rowsHook.removeRow(index)}
-          disabled={rowsHook.rows.length <= 1}
-        >
-          <X className="h-4 w-4" />
-        </Button>
+
+        {/* Kit combo code management in table mode */}
+        {selectedProduct?.isKit && (
+          <div className="ml-0 sm:ml-[0px] rounded-md border border-amber-200 bg-amber-50/50 p-2 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-700">
+              <Scissors className="h-3 w-3" />
+              Комбо-коды комплекта
+            </div>
+            {Object.keys(allKitCombos).length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {Object.entries(allKitCombos).map(([key, val]) => {
+                  const isUserDefined = !!userKitCombo[key]
+                  return (
+                    <Badge
+                      key={key}
+                      variant="outline"
+                      className="bg-amber-100 border-amber-300 text-amber-800 gap-0.5 pr-1 text-[10px]"
+                    >
+                      <span className="font-semibold">{key}</span>
+                      <span className="text-amber-600/70">→</span>
+                      <span>{val.join(', ')}</span>
+                      {isUserDefined && (
+                        <button
+                          type="button"
+                          className="ml-0.5 rounded-full p-0.5 hover:bg-amber-300/50 text-amber-500 hover:text-red-600 transition-colors"
+                          onClick={() => {
+                            setTableKitCombos(prev => {
+                              const productCombos = { ...prev[item.productId] }
+                              const { [key]: _, ...rest } = productCombos
+                              return { ...prev, [item.productId]: rest }
+                            })
+                          }}
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                    </Badge>
+                  )
+                })}
+              </div>
+            )}
+            <div className="flex items-center gap-1">
+              <Input
+                className="h-6 text-[10px] w-16 border-amber-200 focus:border-amber-400"
+                placeholder="Код"
+                value={comboInput.key}
+                onChange={(e) => setTableComboInputs(prev => ({
+                  ...prev,
+                  [item.productId]: { ...prev[item.productId], key: e.target.value }
+                }))}
+              />
+              <Input
+                className="h-6 text-[10px] flex-1 border-amber-200 focus:border-amber-400"
+                placeholder="Цвета через запятую"
+                value={comboInput.value}
+                onChange={(e) => setTableComboInputs(prev => ({
+                  ...prev,
+                  [item.productId]: { ...prev[item.productId], value: e.target.value }
+                }))}
+              />
+              <Button
+                size="sm"
+                className="h-6 bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2"
+                disabled={!comboInput.key.trim() || !comboInput.value.trim()}
+                onClick={() => {
+                  const k = comboInput.key.trim()
+                  const vals = comboInput.value.split(',').map(v => v.trim()).filter(Boolean)
+                  if (!k || vals.length === 0) return
+                  if (allKitCombos[k]) {
+                    toast({ title: 'Ошибка', description: 'Такой код уже существует', variant: 'destructive' })
+                    return
+                  }
+                  setTableKitCombos(prev => ({
+                    ...prev,
+                    [item.productId]: { ...(prev[item.productId] || {}), [k]: vals }
+                  }))
+                  setTableComboInputs(prev => ({
+                    ...prev,
+                    [item.productId]: { key: '', value: '' }
+                  }))
+                }}
+              >
+                <Plus className="h-3 w-3 mr-0.5" />
+                Добавить
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -521,7 +639,7 @@ export function SewingPlansTab() {
             onClick={() => {
               setCreateDialogOpen(true)
               if (quickGroups.length === 0) {
-                setQuickGroups([{ productId: '', quantities: {}, colorHexMap: {} }])
+                setQuickGroups([{ productId: '', quantities: {}, colorHexMap: {}, kitCombos: {} }])
               }
             }}
           >
@@ -774,15 +892,43 @@ export function SewingPlansTab() {
                   {quickGroups.map((group, gi) => {
                     const product = products.find((p: Product) => p.id === group.productId)
                     const sizes = product?.sizes?.map(s => s.size) || []
-                    const colors = product?.colors?.map(c => ({ color: c.color, colorHex: c.colorHex })) || []
+                    const colors = product?.colors?.map(c => ({ color: c.color, colorHex: c.colorHex, isCombo: false })) || []
+
+                    // Merge product kitComboColors + user-defined kitCombos
+                    const allKitCombos: Record<string, string[]> = {}
                     if (product?.isKit) {
-                      const kitCombo = parseKitComboColors(product.kitComboColors)
-                      Object.keys(kitCombo).forEach(key => {
-                        if (!colors.find(c => c.color === key)) {
-                          colors.push({ color: key, colorHex: '#808080' })
-                        }
-                      })
+                      const productCombo = parseKitComboColors(product.kitComboColors)
+                      Object.entries(productCombo).forEach(([key, val]) => { allKitCombos[key] = val })
                     }
+                    if (group.kitCombos) {
+                      Object.entries(group.kitCombos).forEach(([key, val]) => { allKitCombos[key] = val })
+                    }
+
+                    // Add combo codes to colors list
+                    Object.keys(allKitCombos).forEach(key => {
+                      if (!colors.find(c => c.color === key)) {
+                        colors.push({ color: key, colorHex: '#808080', isCombo: true })
+                      }
+                    })
+
+                    // Helper: rebuild quantities and colorHexMap for a group given a list of colors
+                    const rebuildGridForGroup = (g: typeof group, newColors: typeof colors) => {
+                      const finalSizes = sizes.length > 0 ? sizes : ['—']
+                      const finalColors = newColors.length > 0 ? newColors : [{ color: '—', colorHex: '#9ca3af', isCombo: false }]
+                      const quantities: Record<string, number> = {}
+                      const colorHexMap: Record<string, string> = {}
+                      for (const size of finalSizes) {
+                        for (const c of finalColors) {
+                          const key = `${size}|${c.color}`
+                          quantities[key] = g.quantities[key] || 0
+                          colorHexMap[key] = c.colorHex
+                        }
+                      }
+                      return { ...g, quantities, colorHexMap }
+                    }
+
+                    // Determine which combos are user-defined (not from product)
+                    const userCombos = group.kitCombos || {}
 
                     return (
                       <Card key={gi} className="border border-emerald-200 bg-emerald-50/30">
@@ -809,19 +955,19 @@ export function SewingPlansTab() {
                               const p = products.find((pp: Product) => pp.id === v)
                               if (!p) return
                               const sList = p.sizes.map(s => s.size)
-                              const cList = p.colors.map(c => ({ color: c.color, colorHex: c.colorHex }))
+                              const cList = p.colors.map(c => ({ color: c.color, colorHex: c.colorHex, isCombo: false }))
                               if (p.isKit) {
                                 const kitCombo = parseKitComboColors(p.kitComboColors)
                                 Object.keys(kitCombo).forEach(key => {
                                   if (!cList.find(c => c.color === key)) {
-                                    cList.push({ color: key, colorHex: '#808080' })
+                                    cList.push({ color: key, colorHex: '#808080', isCombo: true })
                                   }
                                 })
                               }
                               const quantities: Record<string, number> = {}
                               const colorHexMap: Record<string, string> = {}
                               const finalSizes = sList.length > 0 ? sList : ['—']
-                              const finalColors = cList.length > 0 ? cList : [{ color: '—', colorHex: '#9ca3af' }]
+                              const finalColors = cList.length > 0 ? cList : [{ color: '—', colorHex: '#9ca3af', isCombo: false }]
                               for (const size of finalSizes) {
                                 for (const c of finalColors) {
                                   const key = `${size}|${c.color}`
@@ -829,7 +975,7 @@ export function SewingPlansTab() {
                                   colorHexMap[key] = c.colorHex
                                 }
                               }
-                              setQuickGroups(prev => prev.map((g, i) => i === gi ? { productId: v, quantities, colorHexMap } : g))
+                              setQuickGroups(prev => prev.map((g, i) => i === gi ? { productId: v, quantities, colorHexMap, kitCombos: g.kitCombos || {} } : g))
                             }}
                           >
                             <SelectTrigger><SelectValue placeholder="Выберите изделие" /></SelectTrigger>
@@ -841,6 +987,93 @@ export function SewingPlansTab() {
                               ))}
                             </SelectContent>
                           </Select>
+
+                          {/* Kit combo code management */}
+                          {product?.isKit && (
+                            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-2.5">
+                              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
+                                <Scissors className="h-3.5 w-3.5" />
+                                Комбо-коды комплекта
+                              </div>
+                              <p className="text-[10px] text-amber-600/80">
+                                Комбо-код — это условное обозначение группы цветов (напр. «ч/б» → чёрный, белый). При создании раскроя каждая позиция с комбо-кодом будет развернута в отдельные цвета.
+                              </p>
+                              {Object.keys(allKitCombos).length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {Object.entries(allKitCombos).map(([key, val]) => {
+                                    const isUserDefined = !!userCombos[key]
+                                    return (
+                                      <Badge
+                                        key={key}
+                                        variant="outline"
+                                        className="bg-amber-100 border-amber-300 text-amber-800 gap-1 pr-1 text-xs"
+                                      >
+                                        <span className="font-semibold">{key}</span>
+                                        <span className="text-amber-600/70">→</span>
+                                        <span>{val.join(', ')}</span>
+                                        {isUserDefined && (
+                                          <button
+                                            type="button"
+                                            className="ml-0.5 rounded-full p-0.5 hover:bg-amber-300/50 text-amber-500 hover:text-red-600 transition-colors"
+                                            onClick={() => {
+                                              setQuickGroups(prev => prev.map((g, i) => {
+                                                if (i !== gi) return g
+                                                const { [key]: _, ...rest } = g.kitCombos || {}
+                                                // Remove combo from colors and rebuild grid
+                                                const updatedColors = colors.filter(c => c.color !== key)
+                                                return rebuildGridForGroup({ ...g, kitCombos: rest }, updatedColors)
+                                              }))
+                                            }}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        )}
+                                      </Badge>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  className="h-7 text-xs w-20 border-amber-200 focus:border-amber-400"
+                                  placeholder="Код"
+                                  value={newComboKey}
+                                  onChange={(e) => setNewComboKey(e.target.value)}
+                                />
+                                <Input
+                                  className="h-7 text-xs flex-1 border-amber-200 focus:border-amber-400"
+                                  placeholder="Цвета через запятую (напр. чёрный, белый)"
+                                  value={newComboValue}
+                                  onChange={(e) => setNewComboValue(e.target.value)}
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-7 bg-amber-500 hover:bg-amber-600 text-white text-xs px-2"
+                                  disabled={!newComboKey.trim() || !newComboValue.trim()}
+                                  onClick={() => {
+                                    const key = newComboKey.trim()
+                                    const vals = newComboValue.split(',').map(v => v.trim()).filter(Boolean)
+                                    if (!key || vals.length === 0) return
+                                    if (colors.find(c => c.color === key)) {
+                                      toast({ title: 'Ошибка', description: 'Такой код уже существует', variant: 'destructive' })
+                                      return
+                                    }
+                                    setQuickGroups(prev => prev.map((g, i) => {
+                                      if (i !== gi) return g
+                                      const newKitCombos = { ...g.kitCombos, [key]: vals }
+                                      const newColors = [...colors, { color: key, colorHex: '#808080', isCombo: true }]
+                                      return rebuildGridForGroup({ ...g, kitCombos: newKitCombos }, newColors)
+                                    }))
+                                    setNewComboKey('')
+                                    setNewComboValue('')
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3 mr-0.5" />
+                                  Добавить
+                                </Button>
+                              </div>
+                            </div>
+                          )}
 
                           {product && sizes.length > 0 && colors.length > 0 && (
                             <div className="overflow-x-auto -mx-1">
@@ -855,7 +1088,7 @@ export function SewingPlansTab() {
                                 </thead>
                                 <tbody>
                                   {colors.map(c => (
-                                    <tr key={c.color} className="border-b last:border-0">
+                                    <tr key={c.color} className={`border-b last:border-0 ${c.isCombo ? 'bg-amber-50/60' : ''}`}>
                                       <td className="p-1.5">
                                         <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                                           <span
@@ -863,6 +1096,9 @@ export function SewingPlansTab() {
                                             style={{ backgroundColor: c.colorHex }}
                                           />
                                           {c.color}
+                                          {c.isCombo && (
+                                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[9px] px-1 py-0 ml-0.5">комбо</Badge>
+                                          )}
                                         </span>
                                       </td>
                                       {sizes.map(size => {
@@ -900,7 +1136,7 @@ export function SewingPlansTab() {
                     size="sm"
                     variant="outline"
                     className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 w-full"
-                    onClick={() => setQuickGroups(prev => [...prev, { productId: '', quantities: {}, colorHexMap: {} }])}
+                    onClick={() => setQuickGroups(prev => [...prev, { productId: '', quantities: {}, colorHexMap: {}, kitCombos: {} }])}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Добавить изделие
