@@ -104,37 +104,105 @@ export const GET = withAuth(async (_req, ctx, _user) => {
     }
 
     // Compute progress per plan item
+    // For combo-coded items (e.g. color="ч/б"), match against expanded colors in cutting/sewing items
+    // Combo progress is calculated as min-across-colors (complete sets) capped at combo quantity
     const planItemProgress = plan.items.map(planItem => {
-      // Find all cutting plan items matching this plan item
-      const matchingCuttingItems = plan.cuttingPlans.flatMap(cp =>
-        cp.items.filter(cpi =>
-          cpi.productId === planItem.productId &&
-          cpi.size === planItem.size &&
-          cpi.color === planItem.color
-        )
-      )
+      let isComboItem = false
+      let expandedColorNames: string[] = []
+
+      if (planItem.product.isKit && planItem.product.kitComboColors) {
+        try {
+          const kitCombo = typeof planItem.product.kitComboColors === 'string'
+            ? JSON.parse(planItem.product.kitComboColors)
+            : planItem.product.kitComboColors
+          if (kitCombo[planItem.color]) {
+            isComboItem = true
+            expandedColorNames = kitCombo[planItem.color]
+          }
+        } catch { /* ignore parse errors */ }
+      }
 
       const totalPlanned = planItem.quantity
-      const totalCut = matchingCuttingItems.reduce((sum, cpi) => sum + (cpi.actualQty ?? cpi.plannedQty), 0)
 
-      // Find all sewing task items matching this plan item
-      const matchingSewingItems = plan.cuttingPlans.flatMap(cp =>
-        cp.sewingTasks.flatMap(st =>
-          st.items.filter(sti =>
-            sti.productId === planItem.productId &&
-            sti.size === planItem.size &&
-            sti.color === planItem.color
+      let totalCut = 0
+      let assignedToSewers = 0
+      let sewnQty = 0
+      let checkedQty = 0
+
+      if (isComboItem && expandedColorNames.length > 0) {
+        // Combo item: progress = min across all expanded colors (complete sets)
+        // For each expanded color, find the matching cutting/sewing items
+        const cutPerColor: number[] = []
+        const assignedPerColor: number[] = []
+        const sewnPerColor: number[] = []
+        const checkedPerColor: number[] = []
+
+        for (const colorName of expandedColorNames) {
+          const matchingCut = plan.cuttingPlans.flatMap(cp =>
+            cp.items.filter(cpi =>
+              cpi.productId === planItem.productId &&
+              cpi.size === planItem.size &&
+              cpi.color.toLowerCase() === colorName.toLowerCase()
+            )
+          )
+          cutPerColor.push(matchingCut.reduce((sum, cpi) => sum + (cpi.actualQty ?? cpi.plannedQty), 0))
+
+          const matchingSewn = plan.cuttingPlans.flatMap(cp =>
+            cp.sewingTasks.flatMap(st =>
+              st.items.filter(sti =>
+                sti.productId === planItem.productId &&
+                sti.size === planItem.size &&
+                sti.color.toLowerCase() === colorName.toLowerCase()
+              )
+            )
+          )
+          assignedPerColor.push(matchingSewn.reduce((sum, sti) => sum + sti.quantity, 0))
+          sewnPerColor.push(
+            matchingSewn
+              .filter(sti => ['pending_ironing', 'ironed', 'pending_qc', 'completed'].includes(sti.status))
+              .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
+          )
+          checkedPerColor.push(
+            matchingSewn
+              .filter(sti => sti.status === 'completed')
+              .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
+          )
+        }
+
+        // The combo represents "sets" — progress is limited by the least-advanced color
+        // Cap at the combo quantity (can't have more complete sets than ordered)
+        totalCut = Math.min(...cutPerColor, totalPlanned)
+        assignedToSewers = Math.min(...assignedPerColor, totalPlanned)
+        sewnQty = Math.min(...sewnPerColor, totalPlanned)
+        checkedQty = Math.min(...checkedPerColor, totalPlanned)
+      } else {
+        // Regular item: match by exact color as before
+        const matchingCuttingItems = plan.cuttingPlans.flatMap(cp =>
+          cp.items.filter(cpi =>
+            cpi.productId === planItem.productId &&
+            cpi.size === planItem.size &&
+            cpi.color === planItem.color
           )
         )
-      )
+        totalCut = matchingCuttingItems.reduce((sum, cpi) => sum + (cpi.actualQty ?? cpi.plannedQty), 0)
 
-      const assignedToSewers = matchingSewingItems.reduce((sum, sti) => sum + sti.quantity, 0)
-      const sewnQty = matchingSewingItems
-        .filter(sti => ['pending_ironing', 'ironed', 'pending_qc', 'completed'].includes(sti.status))
-        .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
-      const checkedQty = matchingSewingItems
-        .filter(sti => sti.status === 'completed')
-        .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
+        const matchingSewingItems = plan.cuttingPlans.flatMap(cp =>
+          cp.sewingTasks.flatMap(st =>
+            st.items.filter(sti =>
+              sti.productId === planItem.productId &&
+              sti.size === planItem.size &&
+              sti.color === planItem.color
+            )
+          )
+        )
+        assignedToSewers = matchingSewingItems.reduce((sum, sti) => sum + sti.quantity, 0)
+        sewnQty = matchingSewingItems
+          .filter(sti => ['pending_ironing', 'ironed', 'pending_qc', 'completed'].includes(sti.status))
+          .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
+        checkedQty = matchingSewingItems
+          .filter(sti => sti.status === 'completed')
+          .reduce((sum, sti) => sum + (sti.actualQuantity ?? sti.quantity), 0)
+      }
 
       return {
         planItemId: planItem.id,
@@ -143,6 +211,8 @@ export const GET = withAuth(async (_req, ctx, _user) => {
         size: planItem.size,
         color: planItem.color,
         colorHex: planItem.colorHex,
+        isComboItem,
+        expandedColors: expandedColorNames,
         totalPlanned,
         totalCut,
         assignedToSewers,
@@ -151,12 +221,18 @@ export const GET = withAuth(async (_req, ctx, _user) => {
       }
     })
 
-    // Compute overall progress
-    const totalAllPlanned = planItemProgress.reduce((s, p) => s + p.totalPlanned, 0)
-    const totalAllCut = planItemProgress.reduce((s, p) => s + p.totalCut, 0)
-    const totalAllAssigned = planItemProgress.reduce((s, p) => s + p.assignedToSewers, 0)
-    const totalAllSewn = planItemProgress.reduce((s, p) => s + p.sewnQty, 0)
-    const totalAllChecked = planItemProgress.reduce((s, p) => s + p.checkedQty, 0)
+    // Compute overall progress based on actual cutting plan items (physical items)
+    const allCuttingItems = plan.cuttingPlans.flatMap(cp => cp.items)
+    const allSewingItems = plan.cuttingPlans.flatMap(cp => cp.sewingTasks.flatMap(st => st.items))
+    const totalAllPlanned = allCuttingItems.reduce((s, cpi) => s + cpi.plannedQty, 0)
+    const totalAllCut = allCuttingItems.reduce((s, cpi) => s + (cpi.actualQty ?? cpi.plannedQty), 0)
+    const totalAllAssigned = allSewingItems.reduce((s, sti) => s + sti.quantity, 0)
+    const totalAllSewn = allSewingItems
+      .filter(sti => ['pending_ironing', 'ironed', 'pending_qc', 'completed'].includes(sti.status))
+      .reduce((s, sti) => s + (sti.actualQuantity ?? sti.quantity), 0)
+    const totalAllChecked = allSewingItems
+      .filter(sti => sti.status === 'completed')
+      .reduce((s, sti) => s + (sti.actualQuantity ?? sti.quantity), 0)
 
     return NextResponse.json({
       ...plan,

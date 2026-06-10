@@ -112,6 +112,8 @@ export function SewingPlansTab() {
         size: string
         color: string
         colorHex: string
+        isComboItem?: boolean
+        expandedColors?: string[]
         totalPlanned: number
         totalCut: number
         assignedToSewers: number
@@ -1354,13 +1356,18 @@ export function SewingPlansTab() {
                           const percent = item.totalPlanned > 0 ? Math.round((item.checkedQty / item.totalPlanned) * 100) : 0
                           const sewnPercent = item.totalPlanned > 0 ? Math.round((item.sewnQty / item.totalPlanned) * 100) : 0
                           return (
-                            <TableRow key={item.planItemId}>
+                            <TableRow key={item.planItemId} className={item.isComboItem ? 'bg-amber-50/50' : ''}>
                               <TableCell className="font-medium">{item.productName}</TableCell>
                               <TableCell>{item.size}</TableCell>
                               <TableCell>
-                                <span className="flex items-center">
-                                  {getColorDot(item.colorHex)}
-                                  {item.color}
+                                <span className="flex items-center gap-1.5">
+                                  {getColorDot(item.isComboItem ? '#f59e0b' : item.colorHex)}
+                                  <span>{item.color}</span>
+                                  {item.isComboItem && item.expandedColors && item.expandedColors.length > 0 && (
+                                    <span className="text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+                                      {item.expandedColors.join(' + ')}
+                                    </span>
+                                  )}
                                 </span>
                               </TableCell>
                               <TableCell className="text-center">{item.totalPlanned}</TableCell>
