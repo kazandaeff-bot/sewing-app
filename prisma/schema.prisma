@@ -33,6 +33,7 @@ model Product {
   ironingRate    Float           @default(10)  // Ставка за утюжку
   cuttingRate    Float           @default(30)  // Ставка за раскрой
   reworkRate     Float           @default(80)
+  reworkPaid     Boolean         @default(true) // Оплачивается ли переделка
   isKit          Boolean         @default(false) // Комплект (напр. ч/б)
   kitComboColors  String?         // JSON: {"ч/б":["чёрный","белый"]} — расшифровка комплекта
   reworkReasons    ReworkReason[]

@@ -26,7 +26,7 @@ export const POST = withAuth(async (req, ctx, user) => {
   try {
     const result = await validateBody(req, CreateProductSchema)
     if ('error' in result) return result.error
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, reworkPaid, isKit, kitComboColors, sizes, colors } = result.data
 
     const product = await db.product.create({
       data: {
@@ -39,6 +39,7 @@ export const POST = withAuth(async (req, ctx, user) => {
         ironingRate,
         cuttingRate,
         reworkRate,
+        reworkPaid,
         isKit,
         kitComboColors: kitComboColors ? JSON.stringify(kitComboColors) : null,
         sizes: sizes && sizes.length > 0 ? {

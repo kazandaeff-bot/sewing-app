@@ -47,6 +47,7 @@ export function ProductsTab() {
   const [newHomeRate, setNewHomeRate] = useState('0')
   const [newQcRate, setNewQcRate] = useState('50')
   const [newReworkRate, setNewReworkRate] = useState('80')
+  const [newReworkPaid, setNewReworkPaid] = useState(true)
   const [newIsKit, setNewIsKit] = useState(false)
   const [newKitComboColors, setNewKitComboColors] = useState<Record<string, string[]>>({})
   const [newKitKey, setNewKitKey] = useState('')
@@ -68,6 +69,7 @@ export function ProductsTab() {
   const [editHomeRate, setEditHomeRate] = useState('0')
   const [editQcRate, setEditQcRate] = useState('50')
   const [editReworkRate, setEditReworkRate] = useState('80')
+  const [editReworkPaid, setEditReworkPaid] = useState(true)
   const [editIsKit, setEditIsKit] = useState(false)
   const [editKitComboColors, setEditKitComboColors] = useState<Record<string, string[]>>({})
   const [editKitKey, setEditKitKey] = useState('')
@@ -130,17 +132,17 @@ export function ProductsTab() {
   })
 
   const resetCreateForm = useCallback(() => {
-    setNewName(''); setNewArticle(''); setNewSewerRate('150'); setNewHomeRate('0'); setNewQcRate('50'); setNewReworkRate('80'); setNewIroningRate('10'); setNewCuttingRate('30'); setNewIsKit(false); setNewKitComboColors({}); setNewKitKey(''); setNewKitValue(''); setNewSizes([]); setNewSizeInput(''); setNewColors([]); setNewColorName(''); setNewColorHex('#9ca3af'); setNewReworkReasons([]); setNewReasonInput(''); setNewImageUrl(null); setNewImageFile(null)
+    setNewName(''); setNewArticle(''); setNewSewerRate('150'); setNewHomeRate('0'); setNewQcRate('50'); setNewReworkRate('80'); setNewReworkPaid(true); setNewIroningRate('10'); setNewCuttingRate('30'); setNewIsKit(false); setNewKitComboColors({}); setNewKitKey(''); setNewKitValue(''); setNewSizes([]); setNewSizeInput(''); setNewColors([]); setNewColorName(''); setNewColorHex('#9ca3af'); setNewReworkReasons([]); setNewReasonInput(''); setNewImageUrl(null); setNewImageFile(null)
   }, [])
 
   const handleCreate = useCallback(() => {
     if (!newName.trim() || !newArticle.trim()) { toast({ title: 'Ошибка', description: 'Заполните название и артикул', variant: 'destructive' }); return }
-    createMutation.mutate({ name: newName, article: newArticle, sewerRate: parseInt(newSewerRate) || 150, homeRate: parseInt(newHomeRate) || 0, qcRate: parseInt(newQcRate) || 50, reworkRate: parseInt(newReworkRate) || 80, ironingRate: parseInt(newIroningRate) || 0, cuttingRate: parseInt(newCuttingRate) || 0, isKit: newIsKit, kitComboColors: newIsKit ? newKitComboColors : null, sizes: newSizes, colors: newColors, imageUrl: newImageUrl })
+    createMutation.mutate({ name: newName, article: newArticle, sewerRate: parseInt(newSewerRate) || 150, homeRate: parseInt(newHomeRate) || 0, qcRate: parseInt(newQcRate) || 50, reworkRate: parseInt(newReworkRate) || 80, reworkPaid: newReworkPaid, ironingRate: parseInt(newIroningRate) || 0, cuttingRate: parseInt(newCuttingRate) || 0, isKit: newIsKit, kitComboColors: newIsKit ? newKitComboColors : null, sizes: newSizes, colors: newColors, imageUrl: newImageUrl })
   }, [newName, newArticle, newSewerRate, newHomeRate, newQcRate, newReworkRate, newIroningRate, newCuttingRate, newIsKit, newKitComboColors, newSizes, newColors, newImageUrl, createMutation, toast])
 
   const handleOpenEdit = useCallback((product: Product) => {
     const parsedKitComboColors = parseKitComboColors(product.isKit ? product.kitComboColors : null)
-    setSelectedProduct(product); setEditName(product.name); setEditArticle(product.article); setEditSewerRate(String(product.sewerRate)); setEditHomeRate(String(product.homeRate)); setEditQcRate(String(product.qcRate)); setEditReworkRate(String(product.reworkRate)); setEditIroningRate(String(product.ironingRate ?? 0)); setEditCuttingRate(String(product.cuttingRate ?? 0)); setEditIsKit(product.isKit); setEditKitComboColors(parsedKitComboColors); setEditKitKey(''); setEditKitValue(''); setEditSizes(product.sizes.map((s) => s.size)); setEditSizeInput(''); setEditColors(product.colors.map((c) => ({ color: c.color, colorHex: c.colorHex }))); setEditColorName(''); setEditColorHex('#9ca3af'); setEditReworkReasons(product.reworkReasons.map((r) => r.text)); setEditReasonInput(''); setEditImageUrl(product.imageUrl || null); setEditImageFile(null); setSizeRates({}); setEditOpen(true)
+    setSelectedProduct(product); setEditName(product.name); setEditArticle(product.article); setEditSewerRate(String(product.sewerRate)); setEditHomeRate(String(product.homeRate)); setEditQcRate(String(product.qcRate)); setEditReworkRate(String(product.reworkRate)); setEditReworkPaid(product.reworkPaid !== false); setEditIroningRate(String(product.ironingRate ?? 0)); setEditCuttingRate(String(product.cuttingRate ?? 0)); setEditIsKit(product.isKit); setEditKitComboColors(parsedKitComboColors); setEditKitKey(''); setEditKitValue(''); setEditSizes(product.sizes.map((s) => s.size)); setEditSizeInput(''); setEditColors(product.colors.map((c) => ({ color: c.color, colorHex: c.colorHex }))); setEditColorName(''); setEditColorHex('#9ca3af'); setEditReworkReasons(product.reworkReasons.map((r) => r.text)); setEditReasonInput(''); setEditImageUrl(product.imageUrl || null); setEditImageFile(null); setSizeRates({}); setEditOpen(true)
     // Load size rates
     authFetchJson<Array<{ size: string; sewerRate: number | null; homeRate: number | null; qcRate: number | null; ironingRate: number | null; cuttingRate: number | null }>>(`/api/product-size-rates?productId=${product.id}`).then((rates) => {
       const r: Record<string, { sewerRate: string; homeRate: string; qcRate: string; ironingRate: string; cuttingRate: string }> = {}
@@ -151,7 +153,7 @@ export function ProductsTab() {
 
   const handleUpdate = useCallback(() => {
     if (!selectedProduct || !editName.trim() || !editArticle.trim()) { toast({ title: 'Ошибка', description: 'Заполните название и артикул', variant: 'destructive' }); return }
-    updateMutation.mutate({ id: selectedProduct.id, data: { name: editName, article: editArticle, sewerRate: parseInt(editSewerRate) || 150, homeRate: parseInt(editHomeRate) || 0, qcRate: parseInt(editQcRate) || 50, reworkRate: parseInt(editReworkRate) || 80, ironingRate: parseInt(editIroningRate) || 0, cuttingRate: parseInt(editCuttingRate) || 0, isKit: editIsKit, kitComboColors: editIsKit ? editKitComboColors : null, sizes: editSizes, colors: editColors, imageUrl: editImageUrl } })
+    updateMutation.mutate({ id: selectedProduct.id, data: { name: editName, article: editArticle, sewerRate: parseInt(editSewerRate) || 150, homeRate: parseInt(editHomeRate) || 0, qcRate: parseInt(editQcRate) || 50, reworkRate: parseInt(editReworkRate) || 80, reworkPaid: editReworkPaid, ironingRate: parseInt(editIroningRate) || 0, cuttingRate: parseInt(editCuttingRate) || 0, isKit: editIsKit, kitComboColors: editIsKit ? editKitComboColors : null, sizes: editSizes, colors: editColors, imageUrl: editImageUrl } })
     // Save size rates
     const ratesToSave = Object.entries(sizeRates).filter(([, v]) => v.sewerRate !== '' || v.homeRate !== '' || v.qcRate !== '' || v.ironingRate !== '' || v.cuttingRate !== '').map(([size, v]) => ({
       productId: selectedProduct.id,
@@ -199,7 +201,7 @@ export function ProductsTab() {
                   <div><span className="text-muted-foreground">Швея:</span> {product.sewerRate} ₽</div>
                   <div><span className="text-muted-foreground">Дома:</span> {product.homeRate} ₽</div>
                   <div><span className="text-muted-foreground">ОТК:</span> {product.qcRate} ₽</div>
-                  <div><span className="text-muted-foreground">Перед.:</span> {product.reworkRate} ₽</div>
+                  <div><span className="text-muted-foreground">Перед.:</span> {product.reworkRate} ₽{product.reworkPaid === false && <span className="text-red-500 text-xs ml-1">(не опл.)</span>}</div>
                   <div><span className="text-muted-foreground">ВТО:</span> {product.ironingRate ?? 0} ₽</div>
                   <div><span className="text-muted-foreground">Крой:</span> {product.cuttingRate ?? 0} ₽</div>
                 </div>
@@ -230,7 +232,7 @@ export function ProductsTab() {
                 <div className="space-y-2"><Label>Швея, ₽</Label><Input type="number" min="0" value={newSewerRate} onChange={(e) => setNewSewerRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Дома, ₽</Label><Input type="number" min="0" value={newHomeRate} onChange={(e) => setNewHomeRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>ОТК, ₽</Label><Input type="number" min="0" value={newQcRate} onChange={(e) => setNewQcRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Переделка, ₽</Label><Input type="number" min="0" value={newReworkRate} onChange={(e) => setNewReworkRate(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Переделка, ₽</Label><div className="flex items-center gap-2"><Input type="number" min="0" value={newReworkRate} onChange={(e) => setNewReworkRate(e.target.value)} /><div className="flex items-center gap-1.5 whitespace-nowrap"><Checkbox id="newReworkPaid" checked={newReworkPaid} onCheckedChange={(c) => setNewReworkPaid(c === true)} /><Label htmlFor="newReworkPaid" className="text-xs cursor-pointer">Опл.</Label></div></div></div>
                 <div className="space-y-2"><Label>ВТО, ₽</Label><Input type="number" min="0" value={newIroningRate} onChange={(e) => setNewIroningRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Крой, ₽</Label><Input type="number" min="0" value={newCuttingRate} onChange={(e) => setNewCuttingRate(e.target.value)} /></div>
               </div>
@@ -396,7 +398,7 @@ export function ProductsTab() {
                 <div className="space-y-2"><Label>Швея, ₽</Label><Input type="number" min="0" value={editSewerRate} onChange={(e) => setEditSewerRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Дома, ₽</Label><Input type="number" min="0" value={editHomeRate} onChange={(e) => setEditHomeRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>ОТК, ₽</Label><Input type="number" min="0" value={editQcRate} onChange={(e) => setEditQcRate(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Переделка, ₽</Label><Input type="number" min="0" value={editReworkRate} onChange={(e) => setEditReworkRate(e.target.value)} /></div>
+                <div className="space-y-2"><Label>Переделка, ₽</Label><div className="flex items-center gap-2"><Input type="number" min="0" value={editReworkRate} onChange={(e) => setEditReworkRate(e.target.value)} /><div className="flex items-center gap-1.5 whitespace-nowrap"><Checkbox id="editReworkPaid" checked={editReworkPaid} onCheckedChange={(c) => setEditReworkPaid(c === true)} /><Label htmlFor="editReworkPaid" className="text-xs cursor-pointer">Опл.</Label></div></div></div>
                 <div className="space-y-2"><Label>ВТО, ₽</Label><Input type="number" min="0" value={editIroningRate} onChange={(e) => setEditIroningRate(e.target.value)} /></div>
                 <div className="space-y-2"><Label>Крой, ₽</Label><Input type="number" min="0" value={editCuttingRate} onChange={(e) => setEditCuttingRate(e.target.value)} /></div>
               </div>

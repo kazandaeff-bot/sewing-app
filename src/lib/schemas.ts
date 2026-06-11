@@ -81,6 +81,7 @@ export const CreateProductSchema = z.object({
   ironingRate: rateField,
   cuttingRate: rateField,
   reworkRate: rateField,
+  reworkPaid: z.boolean().default(true),
   isKit: z.boolean().default(false),
   kitComboColors: z.union([z.string(), z.record(z.string(), z.array(z.string()))]).nullable().optional(),
   sizes: z.array(z.string()).default([]),

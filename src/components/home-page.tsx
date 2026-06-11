@@ -34,6 +34,7 @@ const InvoicesTab = lazy(() => import('@/components/tabs/invoices-tab').then(m =
 const UPDTab = lazy(() => import('@/components/tabs/upd-tab').then(m => ({ default: m.UPDTab })))
 const CRMTab = lazy(() => import('@/components/tabs/crm-tab').then(m => ({ default: m.CRMTab })))
 const ContractsTab = lazy(() => import('@/components/tabs/contracts-tab').then(m => ({ default: m.ContractsTab })))
+const FabricCalculatorTab = lazy(() => import('@/components/tabs/fabric-calculator-tab').then(m => ({ default: m.FabricCalculatorTab })))
 
 // Loading fallback for lazy tabs
 function TabLoader() {
@@ -70,6 +71,7 @@ import {
   ScrollText,
   KeyRound,
   Menu,
+  Ruler,
 } from 'lucide-react'
 
 import type { LucideIcon } from 'lucide-react'
@@ -311,6 +313,7 @@ const SUPERVISOR_MENU: MenuItem[] = [
   { id: 'invoices', label: 'Счета', icon: Receipt, group: 'Финансы' },
   { id: 'upd', label: 'УПД', icon: FileSpreadsheet, group: 'Финансы' },
   { id: 'crm', label: 'Сделки', icon: Handshake, group: 'Финансы' },
+  { id: 'fabric-calc', label: 'Калькулятор ткани', icon: Ruler, group: 'Справочники' },
   { id: 'products', label: 'Изделия', icon: Package, group: 'Справочники' },
   { id: 'employees', label: 'Сотрудники', icon: Users, group: 'Справочники' },
   { id: 'references', label: 'Прочее', icon: BookOpen, group: 'Справочники' },
@@ -452,6 +455,7 @@ export default function HomePage() {
             case 'invoices': return <InvoicesTab />
             case 'upd': return <UPDTab />
             case 'crm': return <CRMTab />
+            case 'fabric-calc': return <FabricCalculatorTab />
             case 'materials': return <CustomerMaterialsTab customerId={user.customerId!} />
             default: return <SewingPlansTab />
           }

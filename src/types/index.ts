@@ -36,6 +36,7 @@ export interface Product {
   homeRate: number
   qcRate: number
   reworkRate: number
+  reworkPaid: boolean
   ironingRate: number
   cuttingRate: number
   isKit: boolean
@@ -182,7 +183,7 @@ export interface SewingTaskItemResponse {
   ironedAt: string | null
   qcAt: string | null
   completedAt: string | null
-  product: { id: string; name: string; article: string; sewerRate: number; qcRate: number; reworkRate: number }
+  product: { id: string; name: string; article: string; sewerRate: number; qcRate: number; reworkRate: number; reworkPaid: boolean }
   reworks: SewingReworkResponse[]
 }
 

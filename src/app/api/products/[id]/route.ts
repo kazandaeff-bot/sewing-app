@@ -11,7 +11,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
 
     const result = await validateBody(req, UpdateProductSchema)
     if ('error' in result) return result.error
-    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, isKit, kitComboColors, sizes, colors } = result.data
+    const { name, article, imageUrl, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, reworkRate, reworkPaid, isKit, kitComboColors, sizes, colors } = result.data
 
     const updateData: Record<string, unknown> = {}
     if (name !== undefined) updateData.name = name
@@ -23,6 +23,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
     if (ironingRate !== undefined) updateData.ironingRate = ironingRate
     if (cuttingRate !== undefined) updateData.cuttingRate = cuttingRate
     if (reworkRate !== undefined) updateData.reworkRate = reworkRate
+    if (reworkPaid !== undefined) updateData.reworkPaid = reworkPaid
     if (isKit !== undefined) updateData.isKit = isKit
     if (kitComboColors !== undefined) updateData.kitComboColors = kitComboColors ? JSON.stringify(kitComboColors) : null
 
