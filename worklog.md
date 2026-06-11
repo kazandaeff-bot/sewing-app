@@ -150,3 +150,34 @@ Stage Summary:
 - Combo progress tracking works correctly — no more 0% for combo items
 - Bundle count (пачки) field added throughout the stack: DB → API → UI → Print
 - Files modified: prisma/schema.prisma, src/types/index.ts, src/lib/schemas.ts, src/app/api/plans/[id]/route.ts, src/app/api/cutting-plans/[id]/route.ts, src/app/api/print/route.ts, src/components/tabs/sewing-plans-tab.tsx, src/components/tabs/cutting-plans-tab.tsx
+---
+Task ID: 1
+Agent: main
+Task: Implement fabric calculator feature improvements and fix fabricCoeff bug
+
+Work Log:
+- Analyzed existing fabric-calculator-tab.tsx (916 lines) and fabric-calculator API route - both already implemented
+- Discovered critical bug: product-size-rates API POST/PATCH routes ignored fabricCoeff field - it was destructured but never added to Prisma upsert data
+- Fixed POST route: added fabricCoeff to updateData and createData objects with proper undefined/null checks
+- Fixed PATCH route: added fabricCoeff to data object
+- Enhanced fabric-calculator-tab.tsx with major improvements:
+  - Auto-select material when product has only one norm
+  - Show warehouse stock for selected material with "Подставить" button
+  - Show current fabricCoeff values on size cards
+  - Added comparison bar chart (norm vs fact) in calibration results
+  - Show previous vs new coefficient values in save dialog
+  - Highlight changed coefficients with amber color
+  - Added tooltips explaining distribution and calibration
+  - Added reset button
+  - Improved save: uses Promise.all for batch coefficient saves
+  - Invalidate products query after saving coefficients
+- Created test data: fabric material type, material, and norms for both products
+- Tested both calculator modes successfully:
+  - Calculate mode: correctly applies size coefficients (XS=0.85, S=0.92, M=1.0, L=1.08, etc.)
+  - Calibrate mode: correctly computes real consumption per size and suggests effective coefficients
+
+Stage Summary:
+- fabricCoeff API bug fixed in POST and PATCH routes
+- Fabric calculator UI significantly enhanced with stock integration and better UX
+- Both calculator modes tested and working
+- Production build has a Turbopack caching issue where some API calls use stale chunks - workaround: direct Prisma updates or dev mode

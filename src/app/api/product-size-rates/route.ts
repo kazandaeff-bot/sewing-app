@@ -31,28 +31,38 @@ export const POST = withAuth(async (req, ctx, user) => {
   try {
     const result = await validateBody(req, CreateProductSizeRateSchema)
     if ('error' in result) return result.error
-    const { productId, size, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
+    const { productId, size, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, fabricCoeff } = result.data
+
+    const updateData: Record<string, unknown> = {
+      sewerRate: sewerRate !== undefined ? sewerRate : null,
+      homeRate: homeRate !== undefined ? homeRate : null,
+      qcRate: qcRate !== undefined ? qcRate : null,
+      ironingRate: ironingRate !== undefined ? ironingRate : null,
+      cuttingRate: cuttingRate !== undefined ? cuttingRate : null,
+    }
+    if (fabricCoeff !== undefined) {
+      updateData.fabricCoeff = fabricCoeff
+    }
+
+    const createData: Record<string, unknown> = {
+      productId,
+      size,
+      sewerRate: sewerRate ?? null,
+      homeRate: homeRate ?? null,
+      qcRate: qcRate ?? null,
+      ironingRate: ironingRate ?? null,
+      cuttingRate: cuttingRate ?? null,
+    }
+    if (fabricCoeff !== undefined && fabricCoeff !== null) {
+      createData.fabricCoeff = fabricCoeff
+    }
 
     const sizeRate = await db.productSizeRate.upsert({
       where: {
         productId_size: { productId, size },
       },
-      update: {
-        sewerRate: sewerRate !== undefined ? sewerRate : null,
-        homeRate: homeRate !== undefined ? homeRate : null,
-        qcRate: qcRate !== undefined ? qcRate : null,
-        ironingRate: ironingRate !== undefined ? ironingRate : null,
-        cuttingRate: cuttingRate !== undefined ? cuttingRate : null,
-      },
-      create: {
-        productId,
-        size,
-        sewerRate: sewerRate ?? null,
-        homeRate: homeRate ?? null,
-        qcRate: qcRate ?? null,
-        ironingRate: ironingRate ?? null,
-        cuttingRate: cuttingRate ?? null,
-      },
+      update: updateData,
+      create: createData,
       include: { product: true },
     })
 
@@ -70,7 +80,7 @@ export const PATCH = withAuth(async (req, ctx, user) => {
   try {
     const result = await validateBody(req, UpdateProductSizeRateSchema)
     if ('error' in result) return result.error
-    const { id, sewerRate, homeRate, qcRate, ironingRate, cuttingRate } = result.data
+    const { id, sewerRate, homeRate, qcRate, ironingRate, cuttingRate, fabricCoeff } = result.data
 
     const data: Record<string, unknown> = {}
     if (sewerRate !== undefined) data.sewerRate = sewerRate
@@ -78,6 +88,7 @@ export const PATCH = withAuth(async (req, ctx, user) => {
     if (qcRate !== undefined) data.qcRate = qcRate
     if (ironingRate !== undefined) data.ironingRate = ironingRate
     if (cuttingRate !== undefined) data.cuttingRate = cuttingRate
+    if (fabricCoeff !== undefined) data.fabricCoeff = fabricCoeff
 
     const sizeRate = await db.productSizeRate.update({
       where: { id },
