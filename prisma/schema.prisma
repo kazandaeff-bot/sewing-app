@@ -68,15 +68,16 @@ model ProductSize {
 
 // Нормы ставок по размерам (P2)
 model ProductSizeRate {
-  id         String  @id @default(cuid())
-  productId  String
-  size       String
-  sewerRate  Float?  // NULL = использовать базовую ставку изделия
-  homeRate   Float?
-  qcRate     Float?
+  id          String  @id @default(cuid())
+  productId   String
+  size        String
+  sewerRate   Float?  // NULL = использовать базовую ставку изделия
+  homeRate    Float?
+  qcRate      Float?
   ironingRate Float?
   cuttingRate Float?
-  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  fabricCoeff Float?  // Коэффициент расхода ткани относительно базовой нормы (напр. S=0.9, M=1.0, L=1.1)
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([productId, size])
 }

@@ -451,6 +451,7 @@ export const CreateProductSizeRateSchema = z.object({
   qcRate: z.coerce.number().nonnegative().nullable().optional(),
   ironingRate: z.coerce.number().nonnegative().nullable().optional(),
   cuttingRate: z.coerce.number().nonnegative().nullable().optional(),
+  fabricCoeff: z.coerce.number().positive().nullable().optional(),
 })
 
 export const UpdateProductSizeRateSchema = z.object({
@@ -460,6 +461,7 @@ export const UpdateProductSizeRateSchema = z.object({
   qcRate: z.coerce.number().nonnegative().optional(),
   ironingRate: z.coerce.number().nonnegative().optional(),
   cuttingRate: z.coerce.number().nonnegative().optional(),
+  fabricCoeff: z.coerce.number().positive().optional(),
 })
 
 export const DeleteProductSizeRateSchema = z.object({
