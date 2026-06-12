@@ -13,7 +13,7 @@ export const GET = withAuth(async (_req, ctx, _user) => {
       where: { id },
       include: {
         plan: true,
-        items: { include: { product: true } },
+        items: { include: { product: true, passes: { orderBy: { passNumber: 'asc' } } } },
         sewingTasks: {
           include: {
             employee: EMPLOYEE_PUBLIC_INCLUDE,
@@ -211,7 +211,7 @@ export const PATCH = withAuth(async (req, ctx, _user) => {
       data: updateData,
       include: {
         plan: true,
-        items: { include: { product: true } },
+        items: { include: { product: true, passes: { orderBy: { passNumber: 'asc' } } } },
         sewingTasks: {
           include: { employee: EMPLOYEE_PUBLIC_INCLUDE },
         },

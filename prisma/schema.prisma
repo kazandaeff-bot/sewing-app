@@ -255,17 +255,33 @@ model CuttingPlan {
 }
 
 model CuttingPlanItem {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   cuttingPlanId  String
   productId      String
   size           String
   color          String
-  colorHex       String       @default("#9ca3af")
+  colorHex       String        @default("#9ca3af")
   plannedQty     Int
   actualQty      Int?
-  bundleCount    Int?         // Кол-во пачек (настилов)
-  cuttingPlan    CuttingPlan  @relation(fields: [cuttingPlanId], references: [id], onDelete: Cascade)
-  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bundleCount    Int?          // Кол-во пачек (настилов) — вычисляемое: кол-во заходов
+  cuttingPlan    CuttingPlan   @relation(fields: [cuttingPlanId], references: [id], onDelete: Cascade)
+  product        Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  passes         CuttingPass[]
+}
+
+// Заход раскроя (настил) — один проход раскладки и резки
+model CuttingPass {
+  id                 String           @id @default(cuid())
+  cuttingPlanItemId  String
+  passNumber         Int              // Номер захода (1, 2, 3...)
+  layers             Int              // Кол-во слоёв настила в этом заходе
+  actualQty          Int?             // Сколько изделий получено из этого захода (обычно = layers, но может отличаться при браке)
+  note               String?          // Примечание (напр. "ткань кончилась", "брак ткани")
+  cuttingPlanItem    CuttingPlanItem  @relation(fields: [cuttingPlanItemId], references: [id], onDelete: Cascade)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([cuttingPlanItemId, passNumber])
 }
 
 // ============ Остатки кроя ============

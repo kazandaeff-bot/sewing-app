@@ -9,7 +9,7 @@ export const GET = withAuth(async (req, ctx, user) => {
       include: {
         plan: true,
         items: {
-          include: { product: true },
+          include: { product: true, passes: { orderBy: { passNumber: 'asc' } } },
           orderBy: { id: 'asc' },
         },
         sewingTasks: {

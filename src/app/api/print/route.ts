@@ -187,7 +187,7 @@ async function generateCuttingPlan(id: string): Promise<string> {
     include: {
       plan: { select: { name: true, deadline: true } },
       items: {
-        include: { product: { select: { name: true, article: true } } },
+        include: { product: { select: { name: true, article: true } }, passes: { orderBy: { passNumber: 'asc' } } },
         orderBy: [{ productId: 'asc' }, { size: 'asc' }, { color: 'asc' }],
       },
     },
@@ -210,12 +210,17 @@ async function generateCuttingPlan(id: string): Promise<string> {
       totalPlanned += item.plannedQty
       const actual = item.actualQty ?? 0
       totalActual += actual
+      // Формируем инфо о заходах
+      const passes = (item as any).passes || []
+      const passesInfo = passes.length > 0
+        ? passes.map((p: any) => `${p.layers} сл.`).join(' + ')
+        : (item.bundleCount ? `${item.bundleCount} пач.` : '—')
       return `<tr>
         <td>${item.product.name}</td>
         <td class="num">${item.size}</td>
         <td>${item.color}</td>
         <td class="num">${item.plannedQty}</td>
-        <td class="num">${item.bundleCount ?? '—'}</td>
+        <td class="num">${passesInfo}</td>
         <td class="num">${item.actualQty ?? '—'}</td>
       </tr>`
     })
@@ -238,7 +243,7 @@ async function generateCuttingPlan(id: string): Promise<string> {
           <th>Размер</th>
           <th>Цвет</th>
           <th>План, шт</th>
-          <th>Пачки</th>
+          <th>Настилы</th>
           <th>Факт, шт</th>
         </tr>
       </thead>
