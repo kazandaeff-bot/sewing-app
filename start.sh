@@ -7,7 +7,9 @@ export DATABASE_URL=file:/home/z/my-project/db/custom.db
 # Kill any existing server
 pkill -f "next-server" 2>/dev/null
 pkill -f "standalone/server" 2>/dev/null
-sleep 1
+pkill -f "next start" 2>/dev/null
+pkill -f "npm exec next" 2>/dev/null
+sleep 2
 
 # Use double-fork + setsid to keep process alive in K8s
 # This ensures the process is adopted by PID 1 (tini) and won't be killed
