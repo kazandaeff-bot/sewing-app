@@ -1,0 +1,796 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useCallback, useMemo, Fragment } from 'react'
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     6→     6→import { Badge } from '@/components/ui/badge'
+     7→     7→import { Button } from '@/components/ui/button'
+     8→     8→import { Input } from '@/components/ui/input'
+     9→     9→import { Label } from '@/components/ui/label'
+    10→    10→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    11→    11→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    12→    12→import { Checkbox } from '@/components/ui/checkbox'
+    13→    13→import { Loader2, Plus, X, CheckCircle2, ClipboardList, Users, Printer, Zap, Settings2 } from 'lucide-react'
+    14→    14→import { useToast } from '@/hooks/use-toast'
+    15→    15→import { authFetch } from '@/components/auth-provider'
+    16→    16→import type { Employee, CuttingPlan, CuttingPlanItem, SewingTask } from '@/types'
+    17→    17→import { printDocument } from '@/lib/formatters'
+    18→    18→import { getColorDot, getSewingTaskStatusBadge } from '@/lib/status-badges'
+    19→    19→
+    20→    20→export function SewingTasksTab() {
+    21→    21→  const { toast } = useToast()
+    22→    22→  const queryClient = useQueryClient()
+    23→    23→
+    24→    24→  // Distribution state
+    25→    25→  const [selectedCuttingPlanId, setSelectedCuttingPlanId] = useState('')
+    26→    26→  const [assignments, setAssignments] = useState<Array<{
+    27→    27→    id: string
+    28→    28→    cuttingPlanItemId: string
+    29→    29→    employeeId: string
+    30→    30→    quantity: number
+    31→    31→  }>>([])
+    32→    32→  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+    33→    33→  const [isCreating, setIsCreating] = useState(false)
+    34→    34→  const [showAutoSettings, setShowAutoSettings] = useState(false)
+    35→    35→  const [selectedSewerIds, setSelectedSewerIds] = useState<Set<string>>(new Set())
+    36→    36→  const [bundleAware, setBundleAware] = useState(true)
+    37→    37→
+    38→    38→  const { data: sewingTasks = [], isLoading } = useQuery({
+    39→    39→    queryKey: ['sewing-tasks'],
+    40→    40→    queryFn: async () => {
+    41→    41→      const r = await authFetch('/api/sewing-tasks')
+    42→    42→      const data = await r.json()
+    43→    43→      return Array.isArray(data) ? data : []
+    44→    44→    },
+    45→    45→  })
+    46→    46→
+    47→    47→  const { data: cuttingPlans = [] } = useQuery({
+    48→    48→    queryKey: ['cutting-plans'],
+    49→    49→    queryFn: async () => {
+    50→    50→      const r = await authFetch('/api/cutting-plans')
+    51→    51→      const data = await r.json()
+    52→    52→      return Array.isArray(data) ? data : []
+    53→    53→    },
+    54→    54→  })
+    55→    55→
+    56→    56→  const { data: employees = [] } = useQuery({
+    57→    57→    queryKey: ['employees'],
+    58→    58→    queryFn: async () => {
+    59→    59→      const r = await authFetch('/api/employees')
+    60→    60→      const data = await r.json()
+    61→    61→      return Array.isArray(data) ? data : []
+    62→    62→    },
+    63→    63→  })
+    64→    64→
+    65→    65→  const cutPlans = cuttingPlans.filter((cp: CuttingPlan) => cp.status === 'cut')
+    66→    66→  const sewers = employees.filter((e: Employee) => e.role === 'sewer')
+    67→    67→  const selectedPlan = cutPlans.find((cp: CuttingPlan) => cp.id === selectedCuttingPlanId)
+    68→    68→
+    69→    69→  // Compute seamstress workload (active tasks count + total quantity)
+    70→    70→  const sewerWorkload = useMemo(() => {
+    71→    71→    const workload: Record<string, { taskCount: number; totalQty: number }> = {}
+    72→    72→    for (const s of sewers) {
+    73→    73→      workload[s.id] = { taskCount: 0, totalQty: 0 }
+    74→    74→    }
+    75→    75→    for (const task of sewingTasks as SewingTask[]) {
+    76→    76→      if (task.status === 'completed' || task.status === 'done') continue
+    77→    77→      if (!workload[task.employeeId]) workload[task.employeeId] = { taskCount: 0, totalQty: 0 }
+    78→    78→      workload[task.employeeId].taskCount += 1
+    79→    79→      workload[task.employeeId].totalQty += task.items.reduce((sum: number, item) => sum + item.quantity, 0)
+    80→    80→    }
+    81→    81→    return workload
+    82→    82→  }, [sewingTasks, sewers])
+    83→    83→
+    84→    84→  // Compute stats per cutting plan item
+    85→    85→  const getItemStats = useCallback((cpItem: CuttingPlanItem) => {
+    86→    86→    const existingAssigned = (sewingTasks as SewingTask[])
+    87→    87→      .filter((st) => st.cuttingPlanId === selectedCuttingPlanId)
+    88→    88→      .flatMap((st) => st.items)
+    89→    89→      .filter((item) =>
+    90→    90→        item.productId === cpItem.productId &&
+    91→    91→        item.size === cpItem.size &&
+    92→    92→        item.color === cpItem.color
+    93→    93→      )
+    94→    94→      .reduce((sum, item) => sum + item.quantity, 0)
+    95→    95→
+    96→    96→    const newAssigned = assignments
+    97→    97→      .filter(a => a.cuttingPlanItemId === cpItem.id)
+    98→    98→      .reduce((sum, a) => sum + a.quantity, 0)
+    99→    99→
+   100→   100→    return {
+   101→   101→      total: cpItem.actualQty ?? cpItem.plannedQty,
+   102→   102→      plannedQty: cpItem.plannedQty,
+   103→   103→      actualQty: cpItem.actualQty,
+   104→   104→      assigned: existingAssigned + newAssigned,
+   105→   105→      remaining: (cpItem.actualQty ?? cpItem.plannedQty) - existingAssigned - newAssigned,
+   106→   106→      existingAssigned,
+   107→   107→      newAssigned,
+   108→   108→    }
+   109→   109→  }, [sewingTasks, selectedCuttingPlanId, assignments])
+   110→   110→
+   111→   111→  // Get existing assignments for display
+   112→   112→  const getExistingAssignments = useCallback((cpItem: CuttingPlanItem) => {
+   113→   113→    return (sewingTasks as SewingTask[])
+   114→   114→      .filter((st) => st.cuttingPlanId === selectedCuttingPlanId)
+   115→   115→      .flatMap((st) =>
+   116→   116→        st.items
+   117→   117→          .filter((item) =>
+   118→   118→            item.productId === cpItem.productId &&
+   119→   119→            item.size === cpItem.size &&
+   120→   120→            item.color === cpItem.color
+   121→   121→          )
+   122→   122→          .map((item) => ({
+   123→   123→            taskId: st.id,
+   124→   124→            taskStatus: st.status,
+   125→   125→            employeeName: st.employee.name,
+   126→   126→            quantity: item.quantity,
+   127→   127→          }))
+   128→   128→      )
+   129→   129→  }, [sewingTasks, selectedCuttingPlanId])
+   130→   130→
+   131→   131→  // Assignment management
+   132→   132→  const addAssignment = useCallback((cuttingPlanItemId: string) => {
+   133→   133→    setAssignments(prev => [...prev, {
+   134→   134→      id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+   135→   135→      cuttingPlanItemId,
+   136→   136→      employeeId: '',
+   137→   137→      quantity: 0,
+   138→   138→    }])
+   139→   139→  }, [])
+   140→   140→
+   141→   141→  const removeAssignment = useCallback((id: string) => {
+   142→   142→    setAssignments(prev => prev.filter(a => a.id !== id))
+   143→   143→  }, [])
+   144→   144→
+   145→   145→  const updateAssignment = useCallback((id: string, field: string, value: string | number) => {
+   146→   146→    setAssignments(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a))
+   147→   147→  }, [])
+   148→   148→
+   149→   149→  // ===== AUTO-DISTRIBUTION ALGORITHM =====
+   150→   150→  const handleAutoDistribute = useCallback(() => {
+   151→   151→    if (!selectedPlan) {
+   152→   152→      toast({ title: 'Ошибка', description: 'Выберите план раскроя', variant: 'destructive' })
+   153→   153→      return
+   154→   154→    }
+   155→   155→
+   156→   156→    const activeSewers = sewers.filter((s: Employee) => selectedSewerIds.has(s.id))
+   157→   157→    if (activeSewers.length === 0) {
+   158→   158→      toast({ title: 'Ошибка', description: 'Выберите хотя бы одну швею для распределения', variant: 'destructive' })
+   159→   159→      return
+   160→   160→    }
+   161→   161→
+   162→   162→    const newAssignments: Array<{
+   163→   163→      id: string
+   164→   164→      cuttingPlanItemId: string
+   165→   165→      employeeId: string
+   166→   166→      quantity: number
+   167→   167→    }> = []
+   168→   168→
+   169→   169→    // Sort sewers by workload (ascending) — less loaded first
+   170→   170→    const sortedSewers = [...activeSewers].sort((a, b) => {
+   171→   171→      const wa = sewerWorkload[a.id] || { taskCount: 0, totalQty: 0 }
+   172→   172→      const wb = sewerWorkload[b.id] || { taskCount: 0, totalQty: 0 }
+   173→   173→      // Primary: fewer tasks, secondary: fewer total qty
+   174→   174→      if (wa.taskCount !== wb.taskCount) return wa.taskCount - wb.taskCount
+   175→   175→      return wa.totalQty - wb.totalQty
+   176→   176→    })
+   177→   177→
+   178→   178→    for (const cpItem of selectedPlan.items) {
+   179→   179→      const stats = getItemStats(cpItem)
+   180→   180→      let remaining = stats.remaining
+   181→   181→
+   182→   182→      if (remaining <= 0) continue
+   183→   183→
+   184→   184→      // Determine bundle size for this item
+   185→   185→      const bundleSize = (bundleAware && cpItem.bundleCount && cpItem.bundleCount > 0)
+   186→   186→        ? Math.max(1, Math.round((cpItem.actualQty ?? cpItem.plannedQty) / cpItem.bundleCount))
+   187→   187→        : 1
+   188→   188→
+   189→   189→      // Calculate how many bundles each sewer should get
+   190→   190→      const totalBundles = bundleSize > 1 ? Math.floor(remaining / bundleSize) : remaining
+   191→   191→      const leftover = bundleSize > 1 ? remaining - totalBundles * bundleSize : 0
+   192→   192→
+   193→   193→      if (totalBundles <= 0 && leftover <= 0) continue
+   194→   194→
+   195→   195→      // Distribute bundles evenly among sewers
+   196→   196→      const basePerSewer = Math.floor(totalBundles / sortedSewers.length)
+   197→   197→      const extraBundles = totalBundles % sortedSewers.length
+   198→   198→
+   199→   199→      let sewerIdx = 0
+   200→   200→      for (const sewer of sortedSewers) {
+   201→   201→        // Give base + 1 extra to first N sewers (to distribute remainder)
+   202→   202→        let bundlesForSewer = basePerSewer + (sewerIdx < extraBundles ? 1 : 0)
+   203→   203→        let qtyForSewer = bundlesForSewer * bundleSize
+   204→   204→
+   205→   205→        // First sewer gets the leftover items that don't fit in bundles
+   206→   206→        if (sewerIdx === 0 && leftover > 0) {
+   207→   207→          qtyForSewer += leftover
+   208→   208→        }
+   209→   209→
+   210→   210→        if (qtyForSewer > 0) {
+   211→   211→          newAssignments.push({
+   212→   212→            id: `auto-${cpItem.id}-${sewer.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+   213→   213→            cuttingPlanItemId: cpItem.id,
+   214→   214→            employeeId: sewer.id,
+   215→   215→            quantity: qtyForSewer,
+   216→   216→          })
+   217→   217→        }
+   218→   218→
+   219→   219→        sewerIdx++
+   220→   220→      }
+   221→   221→    }
+   222→   222→
+   223→   223→    if (newAssignments.length === 0) {
+   224→   224→      toast({ title: 'Информация', description: 'Нет позиций для распределения — всё уже распределено' })
+   225→   225→      return
+   226→   226→    }
+   227→   227→
+   228→   228→    setAssignments(newAssignments)
+   229→   229→    // Expand all rows that got assignments
+   230→   230→    const assignedItems = new Set(newAssignments.map(a => a.cuttingPlanItemId))
+   231→   231→    // Set expanded to first item with assignments
+   232→   232→    const firstAssigned = newAssignments[0]?.cuttingPlanItemId
+   233→   233→    if (firstAssigned) setExpandedRow(firstAssigned)
+   234→   234→
+   235→   235→    toast({
+   236→   236→      title: 'Автоматическое распределение',
+   237→   237→      description: `Распределено ${newAssignments.length} назначений между ${activeSewers.length} швеями`,
+   238→   238→    })
+   239→   239→  }, [selectedPlan, sewers, selectedSewerIds, sewerWorkload, getItemStats, bundleAware, toast])
+   240→   240→
+   241→   241→  // Toggle sewer selection for auto-distribution
+   242→   242→  const toggleSewerSelection = useCallback((sewerId: string) => {
+   243→   243→    setSelectedSewerIds(prev => {
+   244→   244→      const next = new Set(prev)
+   245→   245→      if (next.has(sewerId)) {
+   246→   246→        next.delete(sewerId)
+   247→   247→      } else {
+   248→   248→        next.add(sewerId)
+   249→   249→      }
+   250→   250→      return next
+   251→   251→    })
+   252→   252→  }, [])
+   253→   253→
+   254→   254→  const selectAllSewers = useCallback(() => {
+   255→   255→    setSelectedSewerIds(new Set(sewers.map((s: Employee) => s.id)))
+   256→   256→  }, [sewers])
+   257→   257→
+   258→   258→  const deselectAllSewers = useCallback(() => {
+   259→   259→    setSelectedSewerIds(new Set())
+   260→   260→  }, [])
+   261→   261→
+   262→   262→  // Create sewing tasks from assignments
+   263→   263→  const handleCreateTasks = useCallback(async () => {
+   264→   264→    if (!selectedCuttingPlanId) {
+   265→   265→      toast({ title: 'Ошибка', description: 'Выберите план раскроя', variant: 'destructive' })
+   266→   266→      return
+   267→   267→    }
+   268→   268→
+   269→   269→    const validAssignments = assignments.filter(a => a.employeeId && a.quantity > 0)
+   270→   270→    if (validAssignments.length === 0) {
+   271→   271→      toast({ title: 'Ошибка', description: 'Добавьте хотя бы одно назначение', variant: 'destructive' })
+   272→   272→      return
+   273→   273→    }
+   274→   274→
+   275→   275→    // Validate remaining for each position
+   276→   276→    const plan = cutPlans.find((cp: CuttingPlan) => cp.id === selectedCuttingPlanId)
+   277→   277→    if (!plan) return
+   278→   278→
+   279→   279→    for (const cpItem of plan.items) {
+   280→   280→      const stats = getItemStats(cpItem)
+   281→   281→      if (stats.remaining < 0) {
+   282→   282→        toast({
+   283→   283→          title: 'Ошибка',
+   284→   284→          description: `Превышено количество: ${cpItem.product.name} ${cpItem.size} ${cpItem.color}`,
+   285→   285→          variant: 'destructive',
+   286→   286→        })
+   287→   287→        return
+   288→   288→      }
+   289→   289→    }
+   290→   290→
+   291→   291→    setIsCreating(true)
+   292→   292→    try {
+   293→   293→      // Group assignments by employeeId — create one SewingTask per employee with all their items
+   294→   294→      const byEmployee: Record<string, Array<typeof validAssignments[0]>> = {}
+   295→   295→      for (const a of validAssignments) {
+   296→   296→        if (!byEmployee[a.employeeId]) byEmployee[a.employeeId] = []
+   297→   297→        byEmployee[a.employeeId].push(a)
+   298→   298→      }
+   299→   299→
+   300→   300→      const promises = Object.entries(byEmployee).map(([employeeId, empAssignments]) => {
+   301→   301→        const items = empAssignments.map((assignment) => {
+   302→   302→          const cpItem = plan.items.find(i => i.id === assignment.cuttingPlanItemId)
+   303→   303→          if (!cpItem) return null
+   304→   304→          return {
+   305→   305→            productId: cpItem.productId,
+   306→   306→            size: cpItem.size,
+   307→   307→            color: cpItem.color,
+   308→   308→            colorHex: cpItem.colorHex,
+   309→   309→            quantity: assignment.quantity,
+   310→   310→          }
+   311→   311→        }).filter(Boolean)
+   312→   312→
+   313→   313→        if (items.length === 0) return Promise.resolve(null)
+   314→   314→
+   315→   315→        return authFetch('/api/sewing-tasks', {
+   316→   316→          method: 'POST',
+   317→   317→          headers: { 'Content-Type': 'application/json' },
+   318→   318→          body: JSON.stringify({
+   319→   319→            cuttingPlanId: selectedCuttingPlanId,
+   320→   320→            employeeId,
+   321→   321→            items,
+   322→   322→          }),
+   323→   323→        }).then(r => {
+   324→   324→          if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Ошибка') })
+   325→   325→          return r.json()
+   326→   326→        })
+   327→   327→      })
+   328→   328→
+   329→   329→      const results = await Promise.all(promises)
+   330→   330→      const created = results.filter(Boolean).length
+   331→   331→
+   332→   332→      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
+   333→   333→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+   334→   334→      setAssignments([])
+   335→   335→      toast({ title: 'Задания сформированы', description: `Создано ${created} заданий для швей` })
+   336→   336→    } catch (err: unknown) {
+   337→   337→      const msg = err instanceof Error ? err.message : 'Не удалось создать задания'
+   338→   338→      toast({ title: 'Ошибка', description: msg, variant: 'destructive' })
+   339→   339→    } finally {
+   340→   340→      setIsCreating(false)
+   341→   341→    }
+   342→   342→  }, [selectedCuttingPlanId, assignments, cutPlans, getItemStats, queryClient, toast])
+   343→   343→
+   344→   344→  // Status update for existing tasks
+   345→   345→  const updateStatusMutation = useMutation({
+   346→   346→    mutationFn: ({ id, status }: { id: string; status: string }) =>
+   347→   347→      authFetch(`/api/sewing-tasks/${id}`, {
+   348→   348→        method: 'PATCH',
+   349→   349→        headers: { 'Content-Type': 'application/json' },
+   350→   350→        body: JSON.stringify({ status }),
+   351→   351→      }).then(async (r) => {
+   352→   352→        const result = await r.json()
+   353→   353→        if (!r.ok) throw new Error(result.error || 'Не удалось обновить статус')
+   354→   354→        return result
+   355→   355→      }),
+   356→   356→    onSuccess: () => {
+   357→   357→      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
+   358→   358→      toast({ title: 'Статус обновлён', description: 'Статус задания изменён' })
+   359→   359→    },
+   360→   360→    onError: (err: Error) => {
+   361→   361→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   362→   362→    },
+   363→   363→  })
+   364→   364→
+   365→   365→  if (isLoading) {
+   366→   366→    return (
+   367→   367→      <div className="flex items-center justify-center p-8">
+   368→   368→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   369→   369→        <span className="ml-2 text-muted-foreground">Загрузка...</span>
+   370→   370→      </div>
+   371→   371→    )
+   372→   372→  }
+   373→   373→
+   374→   374→  const hasNewAssignments = assignments.some(a => a.employeeId && a.quantity > 0)
+   375→   375→  const totalAssignedQty = assignments.filter(a => a.employeeId && a.quantity > 0).reduce((s, a) => s + a.quantity, 0)
+   376→   376→  const uniqueSewersInAssignments = new Set(assignments.filter(a => a.employeeId && a.quantity > 0).map(a => a.employeeId)).size
+   377→   377→
+   378→   378→  return (
+   379→   379→    <div className="space-y-6">
+   380→   380→      <h2 className="text-xl font-semibold">Задания для швей</h2>
+   381→   381→
+   382→   382→      {/* ===== Distribution Section ===== */}
+   383→   383→      <Card>
+   384→   384→        <CardHeader className="pb-3">
+   385→   385→          <div className="flex items-center justify-between">
+   386→   386→            <CardTitle className="text-base flex items-center gap-2">
+   387→   387→              <ClipboardList className="h-5 w-5 text-emerald-600" />
+   388→   388→              Распределение заданий
+   389→   389→            </CardTitle>
+   390→   390→            {selectedPlan && (
+   391→   391→              <Button
+   392→   392→                size="sm"
+   393→   393→                variant="outline"
+   394→   394→                className="gap-1.5"
+   395→   395→                onClick={() => setShowAutoSettings(!showAutoSettings)}
+   396→   396→              >
+   397→   397→                <Zap className="h-4 w-4 text-amber-500" />
+   398→   398→                Авто-распределение
+   399→   399→              </Button>
+   400→   400→            )}
+   401→   401→          </div>
+   402→   402→        </CardHeader>
+   403→   403→        <CardContent className="space-y-4">
+   404→   404→          <div className="max-w-xs">
+   405→   405→            <Label className="text-sm">План раскроя</Label>
+   406→   406→            <Select
+   407→   407→              value={selectedCuttingPlanId}
+   408→   408→              onValueChange={(v) => {
+   409→   409→                setSelectedCuttingPlanId(v)
+   410→   410→                setAssignments([])
+   411→   411→                setExpandedRow(null)
+   412→   412→              }}
+   413→   413→            >
+   414→   414→              <SelectTrigger><SelectValue placeholder="Выберите раскрой" /></SelectTrigger>
+   415→   415→              <SelectContent>
+   416→   416→                {cutPlans.length === 0 ? (
+   417→   417→                  <SelectItem value="_none" disabled>Нет раскроенных планов</SelectItem>
+   418→   418→                ) : (
+   419→   419→                  cutPlans.map((cp: CuttingPlan) => (
+   420→   420→                    <SelectItem key={cp.id} value={cp.id}>{cp.plan.name}</SelectItem>
+   421→   421→                  ))
+   422→   422→                )}
+   423→   423→              </SelectContent>
+   424→   424→            </Select>
+   425→   425→          </div>
+   426→   426→
+   427→   427→          {/* ===== Auto-Distribution Settings Panel ===== */}
+   428→   428→          {showAutoSettings && selectedPlan && (
+   429→   429→            <Card className="border-amber-200 bg-amber-50/30">
+   430→   430→              <CardHeader className="pb-2 pt-3 px-4">
+   431→   431→                <CardTitle className="text-sm flex items-center gap-2">
+   432→   432→                  <Settings2 className="h-4 w-4 text-amber-600" />
+   433→   433→                  Настройки автоматического распределения
+   434→   434→                </CardTitle>
+   435→   435→              </CardHeader>
+   436→   436→              <CardContent className="px-4 pb-3 space-y-3">
+   437→   437→                {/* Sewer selection */}
+   438→   438→                <div className="space-y-2">
+   439→   439→                  <div className="flex items-center justify-between">
+   440→   440→                    <Label className="text-xs font-medium">Швеи для распределения:</Label>
+   441→   441→                    <div className="flex gap-2">
+   442→   442→                      <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={selectAllSewers}>
+   443→   443→                        Все
+   444→   444→                      </Button>
+   445→   445→                      <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={deselectAllSewers}>
+   446→   446→                        Сброс
+   447→   447→                      </Button>
+   448→   448→                    </div>
+   449→   449→                  </div>
+   450→   450→                  <div className="flex flex-wrap gap-2">
+   451→   451→                    {sewers.map((s: Employee) => {
+   452→   452→                      const isSelected = selectedSewerIds.has(s.id)
+   453→   453→                      const workload = sewerWorkload[s.id] || { taskCount: 0, totalQty: 0 }
+   454→   454→                      return (
+   455→   455→                        <label
+   456→   456→                          key={s.id}
+   457→   457→                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors text-sm ${
+   458→   458→                            isSelected
+   459→   459→                              ? 'border-amber-400 bg-amber-100 text-amber-800'
+   460→   460→                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+   461→   461→                          }`}
+   462→   462→                        >
+   463→   463→                          <Checkbox
+   464→   464→                            checked={isSelected}
+   465→   465→                            onCheckedChange={() => toggleSewerSelection(s.id)}
+   466→   466→                            className="h-3.5 w-3.5"
+   467→   467→                          />
+   468→   468→                          <span className="font-medium">{s.name}</span>
+   469→   469→                          <span className="text-xs opacity-70">({s.code})</span>
+   470→   470→                          {workload.taskCount > 0 && (
+   471→   471→                            <Badge variant="outline" className="text-[10px] ml-0.5 py-0 px-1">
+   472→   472→                              {workload.taskCount} зад.
+   473→   473→                            </Badge>
+   474→   474→                          )}
+   475→   475→                        </label>
+   476→   476→                      )
+   477→   477→                    })}
+   478→   478→                  </div>
+   479→   479→                  {sewers.length === 0 && (
+   480→   480→                    <p className="text-xs text-muted-foreground">Нет швей в системе. Добавьте сотрудников с ролью &quot;швея&quot;.</p>
+   481→   481→                  )}
+   482→   482→                </div>
+   483→   483→
+   484→   484→                {/* Bundle-aware toggle */}
+   485→   485→                <div className="flex items-center gap-3">
+   486→   486→                  <Checkbox
+   487→   487→                    id="bundle-aware"
+   488→   488→                    checked={bundleAware}
+   489→   489→                    onCheckedChange={(checked) => setBundleAware(!!checked)}
+   490→   490→                  />
+   491→   491→                  <Label htmlFor="bundle-aware" className="text-sm cursor-pointer">
+   492→   492→                    Учитывать пачки при распределении (кратно количеству в пачке)
+   493→   493→                  </Label>
+   494→   494→                </div>
+   495→   495→
+   496→   496→                {/* Auto-distribute button */}
+   497→   497→                <Button
+   498→   498→                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+   499→   499→                  onClick={handleAutoDistribute}
+   500→   500→                  disabled={selectedSewerIds.size === 0}
+   501→   501→                >
+   502→   502→                  <Zap className="h-4 w-4 mr-2" />
+   503→   503→                  Распределить автоматически
+   504→   504→                  {selectedSewerIds.size > 0 && ` (${selectedSewerIds.size} швей)`}
+   505→   505→                </Button>
+   506→   506→              </CardContent>
+   507→   507→            </Card>
+   508→   508→          )}
+   509→   509→
+   510→   510→          {selectedPlan && (
+   511→   511→            <>
+   512→   512→              <div className="border rounded-lg overflow-x-auto">
+   513→   513→                <div className="overflow-x-auto">
+   514→   514→                  <Table>
+   515→   515→                    <TableHeader>
+   516→   516→                      <TableRow>
+   517→   517→                        <TableHead>Изделие</TableHead>
+   518→   518→                        <TableHead>Размер</TableHead>
+   519→   519→                        <TableHead>Цвет</TableHead>
+   520→   520→                        <TableHead className="text-center">Всего</TableHead>
+   521→   521→                        <TableHead className="text-center">Распределено</TableHead>
+   522→   522→                        <TableHead className="text-center">Осталось</TableHead>
+   523→   523→                        <TableHead>Статус</TableHead>
+   524→   524→                      </TableRow>
+   525→   525→                    </TableHeader>
+   526→   526→                    <TableBody>
+   527→   527→                      {selectedPlan.items.map((cpItem) => {
+   528→   528→                        const stats = getItemStats(cpItem)
+   529→   529→                        const isExpanded = expandedRow === cpItem.id
+   530→   530→                        const itemAssignments = assignments.filter(a => a.cuttingPlanItemId === cpItem.id)
+   531→   531→                        const existingAssignments = getExistingAssignments(cpItem)
+   532→   532→                        const maxForNewAssignment = stats.remaining + itemAssignments.reduce((s, a) => s + a.quantity, 0)
+   533→   533→
+   534→   534→                        return (
+   535→   535→                          <Fragment key={cpItem.id}>
+   536→   536→                            <TableRow
+   537→   537→                              className={`cursor-pointer hover:bg-emerald-50/50 ${stats.remaining === 0 ? 'bg-emerald-50/30' : ''}`}
+   538→   538→                              onClick={() => setExpandedRow(isExpanded ? null : cpItem.id)}
+   539→   539→                            >
+   540→   540→                              <TableCell className="font-medium">{cpItem.product.name}</TableCell>
+   541→   541→                              <TableCell>{cpItem.size}</TableCell>
+   542→   542→                              <TableCell>
+   543→   543→                                <span className="flex items-center">
+   544→   544→                                  {getColorDot(cpItem.colorHex)}
+   545→   545→                                  {cpItem.color}
+   546→   546→                                </span>
+   547→   547→                              </TableCell>
+   548→   548→                              <TableCell className="text-center">
+   549→   549→                                {stats.total}
+   550→   550→                                {cpItem.bundleCount && cpItem.bundleCount > 0 && (
+   551→   551→                                  <span className="text-xs text-muted-foreground ml-1">
+   552→   552→                                    ({cpItem.bundleCount} пач.)
+   553→   553→                                  </span>
+   554→   554→                                )}
+   555→   555→                              </TableCell>
+   556→   556→                              <TableCell className="text-center">{stats.assigned}</TableCell>
+   557→   557→                              <TableCell className={`text-center font-medium ${stats.remaining > 0 ? 'text-amber-600' : stats.remaining === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+   558→   558→                                {stats.remaining}
+   559→   559→                              </TableCell>
+   560→   560→                              <TableCell>
+   561→   561→                                {stats.remaining === 0 ? (
+   562→   562→                                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Распределено</Badge>
+   563→   563→                                ) : stats.assigned > 0 ? (
+   564→   564→                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">Частично</Badge>
+   565→   565→                                ) : (
+   566→   566→                                  <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-xs">Не начато</Badge>
+   567→   567→                                )}
+   568→   568→                              </TableCell>
+   569→   569→                            </TableRow>
+   570→   570→                            {isExpanded && (
+   571→   571→                              <TableRow>
+   572→   572→                                <TableCell colSpan={7} className="bg-gray-50/50 p-4">
+   573→   573→                                  <div className="space-y-3">
+   574→   574→                                    {/* Existing assignments */}
+   575→   575→                                    {existingAssignments.length > 0 && (
+   576→   576→                                      <div className="space-y-1">
+   577→   577→                                        <Label className="text-xs text-muted-foreground font-medium">Уже назначено:</Label>
+   578→   578→                                        {existingAssignments.map((ea, idx) => (
+   579→   579→                                          <div key={idx} className="flex items-center gap-2 text-sm bg-white rounded px-3 py-1.5 border">
+   580→   580→                                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+   581→   581→                                            <span className="font-medium">{ea.employeeName}</span>
+   582→   582→                                            <span className="text-muted-foreground">—</span>
+   583→   583→                                            <span>{ea.quantity} шт</span>
+   584→   584→                                            {ea.taskStatus !== 'done' && (
+   585→   585→                                              <Badge variant="outline" className="text-[10px] ml-auto">
+   586→   586→                                                {ea.taskStatus === 'issued' ? 'Выдано' : ea.taskStatus === 'in_work' ? 'В работе' : ''}
+   587→   587→                                              </Badge>
+   588→   588→                                            )}
+   589→   589→                                          </div>
+   590→   590→                                        ))}
+   591→   591→                                      </div>
+   592→   592→                                    )}
+   593→   593→
+   594→   594→                                    {/* New assignment rows */}
+   595→   595→                                    {itemAssignments.map((assignment) => {
+   596→   596→                                      const sewer = sewers.find((s: Employee) => s.id === assignment.employeeId)
+   597→   597→                                      return (
+   598→   598→                                        <div key={assignment.id} className="flex items-center gap-2 flex-wrap bg-white rounded-md px-3 py-2 border border-amber-200">
+   599→   599→                                          <Select
+   600→   600→                                            value={assignment.employeeId}
+   601→   601→                                            onValueChange={(v) => updateAssignment(assignment.id, 'employeeId', v)}
+   602→   602→                                          >
+   603→   603→                                            <SelectTrigger className="w-52">
+   604→   604→                                              <SelectValue placeholder="Выберите швею" />
+   605→   605→                                            </SelectTrigger>
+   606→   606→                                            <SelectContent>
+   607→   607→                                              {sewers.map((s: Employee) => (
+   608→   608→                                                <SelectItem key={s.id} value={s.id}>
+   609→   609→                                                  {s.name} ({s.code})
+   610→   610→                                                </SelectItem>
+   611→   611→                                              ))}
+   612→   612→                                            </SelectContent>
+   613→   613→                                          </Select>
+   614→   614→                                          <Input
+   615→   615→                                            type="number"
+   616→   616→                                            min={1}
+   617→   617→                                            max={maxForNewAssignment}
+   618→   618→                                            className="w-24"
+   619→   619→                                            placeholder="Кол-во"
+   620→   620→                                            value={assignment.quantity || ''}
+   621→   621→                                            onChange={(e) => {
+   622→   622→                                              const val = parseInt(e.target.value) || 0
+   623→   623→                                              updateAssignment(assignment.id, 'quantity', val)
+   624→   624→                                            }}
+   625→   625→                                          />
+   626→   626→                                          <span className="text-xs text-muted-foreground">шт</span>
+   627→   627→                                          {cpItem.bundleCount && cpItem.bundleCount > 0 && assignment.quantity > 0 && (
+   628→   628→                                            <Badge variant="outline" className="text-[10px]">
+   629→   629→                                              {Math.ceil(assignment.quantity / Math.max(1, Math.round((cpItem.actualQty ?? cpItem.plannedQty) / cpItem.bundleCount)))} пач.
+   630→   630→                                            </Badge>
+   631→   631→                                          )}
+   632→   632→                                          {sewer && (
+   633→   633→                                            <span className="text-xs text-muted-foreground ml-auto">
+   634→   634→                                              Загрузка: {sewerWorkload[sewer.id]?.taskCount || 0} зад.
+   635→   635→                                            </span>
+   636→   636→                                          )}
+   637→   637→                                          <Button
+   638→   638→                                            size="sm"
+   639→   639→                                            variant="ghost"
+   640→   640→                                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+   641→   641→                                            onClick={() => removeAssignment(assignment.id)}
+   642→   642→                                          >
+   643→   643→                                            <X className="h-4 w-4" />
+   644→   644→                                          </Button>
+   645→   645→                                        </div>
+   646→   646→                                      )
+   647→   647→                                    })}
+   648→   648→
+   649→   649→                                    {/* Add sewer button */}
+   650→   650→                                    {stats.remaining > 0 && (
+   651→   651→                                      <Button
+   652→   652→                                        size="sm"
+   653→   653→                                        variant="outline"
+   654→   654→                                        onClick={() => addAssignment(cpItem.id)}
+   655→   655→                                      >
+   656→   656→                                        <Plus className="h-4 w-4 mr-1" />
+   657→   657→                                        {itemAssignments.length > 0 ? 'Добавить ещё швею' : 'Назначить швею'}
+   658→   658→                                      </Button>
+   659→   659→                                    )}
+   660→   660→
+   661→   661→                                    {stats.remaining <= 0 && itemAssignments.length === 0 && (
+   662→   662→                                      <p className="text-xs text-muted-foreground">Все изделия распределены</p>
+   663→   663→                                    )}
+   664→   664→                                  </div>
+   665→   665→                                </TableCell>
+   666→   666→                              </TableRow>
+   667→   667→                            )}
+   668→   668→                          </Fragment>
+   669→   669→                        )
+   670→   670→                      })}
+   671→   671→                    </TableBody>
+   672→   672→                  </Table>
+   673→   673→                </div>
+   674→   674→              </div>
+   675→   675→
+   676→   676→              {/* Summary + Create tasks button */}
+   677→   677→              {hasNewAssignments && (
+   678→   678→                <div className="space-y-2">
+   679→   679→                  {/* Distribution summary */}
+   680→   680→                  <div className="flex flex-wrap gap-2 text-sm">
+   681→   681→                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+   682→   682→                      {assignments.filter(a => a.employeeId && a.quantity > 0).length} назначений
+   683→   683→                    </Badge>
+   684→   684→                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+   685→   685→                      {totalAssignedQty} шт всего
+   686→   686→                    </Badge>
+   687→   687→                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+   688→   688→                      {uniqueSewersInAssignments} швей
+   689→   689→                    </Badge>
+   690→   690→                  </div>
+   691→   691→                  <div className="flex justify-end gap-3">
+   692→   692→                    <Button
+   693→   693→                      variant="outline"
+   694→   694→                      onClick={() => setAssignments([])}
+   695→   695→                    >
+   696→   696→                      Сбросить
+   697→   697→                    </Button>
+   698→   698→                    <Button
+   699→   699→                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   700→   700→                      onClick={handleCreateTasks}
+   701→   701→                      disabled={isCreating}
+   702→   702→                    >
+   703→   703→                      {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   704→   704→                      <CheckCircle2 className="h-4 w-4 mr-1" />
+   705→   705→                      Сформировать задания ({uniqueSewersInAssignments} заданий для швей)
+   706→   706→                    </Button>
+   707→   707→                  </div>
+   708→   708→                </div>
+   709→   709→              )}
+   710→   710→            </>
+   711→   711→          )}
+   712→   712→
+   713→   713→          {!selectedPlan && cutPlans.length === 0 && (
+   714→   714→            <p className="text-sm text-muted-foreground text-center py-6">
+   715→   715→              Нет раскроенных планов для распределения. Утвердите план пошива и выполните раскрой.
+   716→   716→            </p>
+   717→   717→          )}
+   718→   718→          {!selectedPlan && cutPlans.length > 0 && (
+   719→   719→            <p className="text-sm text-muted-foreground text-center py-4">
+   720→   720→              Выберите план раскроя для распределения заданий
+   721→   721→            </p>
+   722→   722→          )}
+   723→   723→        </CardContent>
+   724→   724→      </Card>
+   725→   725→
+   726→   726→      {/* ===== Existing Sewing Tasks ===== */}
+   727→   727→      {sewingTasks.length > 0 && (
+   728→   728→        <div>
+   729→   729→          <h3 className="text-lg font-semibold mb-3">Существующие задания</h3>
+   730→   730→          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   731→   731→            {sewingTasks.map((task: SewingTask) => (
+   732→   732→              <Card key={task.id} className="hover:shadow-md transition-shadow">
+   733→   733→                <CardHeader className="pb-3">
+   734→   734→                  <div className="flex items-start justify-between">
+   735→   735→                    <div>
+   736→   736→                      <CardTitle className="text-base">{task.employee.name}</CardTitle>
+   737→   737→                      <p className="text-xs text-muted-foreground mt-0.5">
+   738→   738→                        План: {task.cuttingPlan.plan.name}
+   739→   739→                      </p>
+   740→   740→                    </div>
+   741→   741→                    {getSewingTaskStatusBadge(task.status)}
+   742→   742→                  </div>
+   743→   743→                </CardHeader>
+   744→   744→                <CardContent className="space-y-3">
+   745→   745→                  <div className="space-y-1">
+   746→   746→                    {task.items.map((item) => (
+   747→   747→                      <div key={item.id} className="flex items-center justify-between text-sm">
+   748→   748→                        <span className="flex items-center">
+   749→   749→                          {getColorDot(item.colorHex)}
+   750→   750→                          {item.product.name} ({item.size})
+   751→   751→                        </span>
+   752→   752→                        <span className="font-medium">{item.quantity} шт</span>
+   753→   753→                      </div>
+   754→   754→                    ))}
+   755→   755→                  </div>
+   756→   756→                  <div className="flex gap-2 pt-1">
+   757→   757→                    {task.status === 'issued' && (
+   758→   758→                      <Button
+   759→   759→                        size="sm"
+   760→   760→                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white min-h-[44px]"
+   761→   761→                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'in_work' })}
+   762→   762→                        disabled={updateStatusMutation.isPending}
+   763→   763→                      >
+   764→   764→                        В работу
+   765→   765→                      </Button>
+   766→   766→                    )}
+   767→   767→                    {task.status === 'in_work' && (
+   768→   768→                      <Button
+   769→   769→                        size="sm"
+   770→   770→                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+   771→   771→                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'completed' })}
+   772→   772→                        disabled={updateStatusMutation.isPending}
+   773→   773→                      >
+   774→   774→                        <CheckCircle2 className="h-4 w-4 mr-1" />
+   775→   775→                        Готово
+   776→   776→                      </Button>
+   777→   777→                    )}
+   778→   778→                    <Button
+   779→   779→                      size="sm"
+   780→   780→                      variant="ghost"
+   781→   781→                      onClick={() => printDocument('sewing-task', task.id)}
+   782→   782→                    >
+   783→   783→                      <Printer className="h-4 w-4 mr-1" />
+   784→   784→                      Печать
+   785→   785→                    </Button>
+   786→   786→                  </div>
+   787→   787→                </CardContent>
+   788→   788→              </Card>
+   789→   789→            ))}
+   790→   790→          </div>
+   791→   791→        </div>
+   792→   792→      )}
+   793→   793→    </div>
+   794→   794→  )
+   795→   795→}
+   796→   796→

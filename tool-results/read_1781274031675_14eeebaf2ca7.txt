@@ -1,0 +1,605 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useCallback, useMemo } from 'react'
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     6→     6→import { Badge } from '@/components/ui/badge'
+     7→     7→import { Button } from '@/components/ui/button'
+     8→     8→import { Input } from '@/components/ui/input'
+     9→     9→import { Label } from '@/components/ui/label'
+    10→    10→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    11→    11→import {
+    12→    12→  Dialog,
+    13→    13→  DialogContent,
+    14→    14→  DialogHeader,
+    15→    15→  DialogTitle,
+    16→    16→  DialogFooter,
+    17→    17→} from '@/components/ui/dialog'
+    18→    18→import {
+    19→    19→  Loader2, Scissors, Printer, AlertTriangle, Plus, Trash2, Layers, ChevronDown, ChevronUp,
+    20→    20→} from 'lucide-react'
+    21→    21→import { useToast } from '@/hooks/use-toast'
+    22→    22→import { authFetch, authFetchJson } from '@/components/auth-provider'
+    23→    23→import type { CuttingPlan, CuttingLeftover } from '@/types'
+    24→    24→import { formatDate, printDocument } from '@/lib/formatters'
+    25→    25→import { getColorDot, getCuttingStatusBadge } from '@/lib/status-badges'
+    26→    26→
+    27→    27→// Тип для захода раскроя
+    28→    28→interface CuttingPassItem {
+    29→    29→  id: string
+    30→    30→  passNumber: number
+    31→    31→  layers: number
+    32→    32→  drawings: number
+    33→    33→  actualQty: number | null
+    34→    34→  note: string | null
+    35→    35→}
+    36→    36→
+    37→    37→// Локальное состояние редактируемого захода
+    38→    38→interface PassEdit {
+    39→    39→  passNumber: number
+    40→    40→  layers: number
+    41→    41→  drawings: number
+    42→    42→  actualQty: number
+    43→    43→  note: string
+    44→    44→}
+    45→    45→
+    46→    46→export function CuttingPlansTab() {
+    47→    47→  const { toast } = useToast()
+    48→    48→  const queryClient = useQueryClient()
+    49→    49→  const [actualQtys, setActualQtys] = useState<Record<string, string>>({})
+    50→    50→
+    51→    51→  // Состояние раскрытых строк (какие позиции показывают заходы)
+    52→    52→  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({})
+    53→    53→
+    54→    54→  // Диалог редактирования заходов
+    55→    55→  const [passesDialogOpen, setPassesDialogOpen] = useState(false)
+    56→    56→  const [passesDialogItemId, setPassesDialogItemId] = useState<string>('')
+    57→    57→  const [passesEditData, setPassesEditData] = useState<PassEdit[]>([])
+    58→    58→
+    59→    59→  const { data: cuttingPlans = [], isLoading } = useQuery({
+    60→    60→    queryKey: ['cutting-plans'],
+    61→    61→    queryFn: async () => {
+    62→    62→      const r = await authFetch('/api/cutting-plans')
+    63→    63→      const data = await r.json()
+    64→    64→      return Array.isArray(data) ? data : []
+    65→    65→    },
+    66→    66→  })
+    67→    67→
+    68→    68→  const updateMutation = useMutation({
+    69→    69→    mutationFn: ({ id, data }: { id: string; data: { status?: string; items?: Array<{ id: string; actualQty: number | null; bundleCount?: number | null }> } }) =>
+    70→    70→      authFetch(`/api/cutting-plans/${id}`, {
+    71→    71→        method: 'PATCH',
+    72→    72→        headers: { 'Content-Type': 'application/json' },
+    73→    73→        body: JSON.stringify(data),
+    74→    74→      }).then(async (r) => {
+    75→    75→        const result = await r.json()
+    76→    76→        if (!r.ok) throw new Error(result.error || 'Не удалось обновить план раскроя')
+    77→    77→        return result
+    78→    78→      }),
+    79→    79→    onSuccess: () => {
+    80→    80→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+    81→    81→      toast({ title: 'Обновлено', description: 'План раскроя обновлён' })
+    82→    82→    },
+    83→    83→    onError: (err: Error) => {
+    84→    84→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+    85→    85→    },
+    86→    86→  })
+    87→    87→
+    88→    88→  // Мутация: сохранить заходы
+    89→    89→  const savePassesMutation = useMutation({
+    90→    90→    mutationFn: async ({ cuttingPlanItemId, passes }: { cuttingPlanItemId: string; passes: PassEdit[] }) => {
+    91→    91→      const result = await authFetchJson('/api/cutting-passes', {
+    92→    92→        method: 'POST',
+    93→    93→        headers: { 'Content-Type': 'application/json' },
+    94→    94→        body: JSON.stringify({ cuttingPlanItemId, passes }),
+    95→    95→      })
+    96→    96→      return result
+    97→    97→    },
+    98→    98→    onSuccess: () => {
+    99→    99→      setPassesDialogOpen(false)
+   100→   100→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+   101→   101→      toast({ title: 'Заходы сохранены', description: 'Данные по настилам обновлены' })
+   102→   102→    },
+   103→   103→    onError: (err: Error) => {
+   104→   104→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   105→   105→    },
+   106→   106→  })
+   107→   107→
+   108→   108→  const handleSaveActual = useCallback(
+   109→   109→    (plan: CuttingPlan) => {
+   110→   110→      const items = plan.items.map((item) => ({
+   111→   111→        id: item.id,
+   112→   112→        actualQty: actualQtys[item.id] !== undefined ? parseInt(actualQtys[item.id]) || null : item.actualQty,
+   113→   113→      }))
+   114→   114→      updateMutation.mutate({ id: plan.id, data: { items } })
+   115→   115→    },
+   116→   116→    [actualQtys, updateMutation]
+   117→   117→  )
+   118→   118→
+   119→   119→  const handleMarkCut = useCallback(
+   120→   120→    (plan: CuttingPlan) => {
+   121→   121→      const items = plan.items.map((item) => ({
+   122→   122→        id: item.id,
+   123→   123→        actualQty: actualQtys[item.id] !== undefined ? parseInt(actualQtys[item.id]) || null : item.actualQty,
+   124→   124→      }))
+   125→   125→      updateMutation.mutate({ id: plan.id, data: { status: 'cut', items } })
+   126→   126→    },
+   127→   127→    [actualQtys, updateMutation]
+   128→   128→  )
+   129→   129→
+   130→   130→  // Открыть диалог редактирования заходов для позиции
+   131→   131→  const openPassesDialog = useCallback((item: any) => {
+   132→   132→    const passes: CuttingPassItem[] = item.passes || []
+   133→   133→    if (passes.length > 0) {
+   134→   134→      setPassesEditData(passes.map((p) => ({
+   135→   135→        passNumber: p.passNumber,
+   136→   136→        layers: p.layers,
+   137→   137→        drawings: p.drawings || 1,
+   138→   138→        actualQty: p.actualQty ?? p.layers * (p.drawings || 1),
+   139→   139→        note: p.note || '',
+   140→   140→      })))
+   141→   141→    } else {
+   142→   142→      // Если заходов нет — создаём один с дефолтами
+   143→   143→      setPassesEditData([{ passNumber: 1, layers: item.plannedQty, drawings: 1, actualQty: item.plannedQty, note: '' }])
+   144→   144→    }
+   145→   145→    setPassesDialogItemId(item.id)
+   146→   146→    setPassesDialogOpen(true)
+   147→   147→  }, [])
+   148→   148→
+   149→   149→  // Добавить заход
+   150→   150→  const addPass = useCallback(() => {
+   151→   151→    setPassesEditData((prev) => [
+   152→   152→      ...prev,
+   153→   153→      { passNumber: prev.length + 1, layers: 0, drawings: 1, actualQty: 0, note: '' },
+   154→   154→    ])
+   155→   155→  }, [])
+   156→   156→
+   157→   157→  // Удалить заход
+   158→   158→  const removePass = useCallback((index: number) => {
+   159→   159→    setPassesEditData((prev) =>
+   160→   160→      prev.filter((_, i) => i !== index).map((p, i) => ({ ...p, passNumber: i + 1 }))
+   161→   161→    )
+   162→   162→  }, [])
+   163→   163→
+   164→   164→  // Обновить данные захода
+   165→   165→  const updatePass = useCallback((index: number, field: keyof PassEdit, value: number | string) => {
+   166→   166→    setPassesEditData((prev) =>
+   167→   167→      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+   168→   168→    )
+   169→   169→  }, [])
+   170→   170→
+   171→   171→  // Сохранить заходы
+   172→   172→  const handleSavePasses = useCallback(() => {
+   173→   173→    savePassesMutation.mutate({ cuttingPlanItemId: passesDialogItemId, passes: passesEditData })
+   174→   174→  }, [passesDialogItemId, passesEditData, savePassesMutation])
+   175→   175→
+   176→   176→  // Итого по заходам для позиции
+   177→   177→  const getPassesSummary = useCallback((item: any) => {
+   178→   178→    const passes: CuttingPassItem[] = item.passes || []
+   179→   179→    if (passes.length === 0) return null
+   180→   180→    const totalBundles = passes.reduce((sum, p) => sum + (p.drawings || 1), 0)
+   181→   181→    const totalLayers = passes.reduce((sum, p) => sum + p.layers, 0)
+   182→   182→    const totalActual = passes.reduce((sum, p) => sum + (p.actualQty ?? p.layers * (p.drawings || 1)), 0)
+   183→   183→    return { passCount: passes.length, totalBundles, totalLayers, totalActual }
+   184→   184→  }, [])
+   185→   185→
+   186→   186→  // Переключить раскрытие строки
+   187→   187→  const toggleExpand = useCallback((itemId: string) => {
+   188→   188→    setExpandedItems((prev) => ({ ...prev, [itemId]: !prev[itemId] }))
+   189→   189→  }, [])
+   190→   190→
+   191→   191→  if (isLoading) {
+   192→   192→    return (
+   193→   193→      <div className="flex items-center justify-center p-8">
+   194→   194→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   195→   195→        <span className="ml-2 text-muted-foreground">Загрузка...</span>
+   196→   196→      </div>
+   197→   197→    )
+   198→   198→  }
+   199→   199→
+   200→   200→  return (
+   201→   201→    <div className="space-y-6">
+   202→   202→      <h2 className="text-xl font-semibold">Планы раскроя</h2>
+   203→   203→
+   204→   204→      {cuttingPlans.length === 0 ? (
+   205→   205→        <Card className="border-dashed">
+   206→   206→          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   207→   207→            <Scissors className="h-12 w-12 mb-3 opacity-30" />
+   208→   208→            <p>Нет планов раскроя. Утвердите план пошива для автоматического создания.</p>
+   209→   209→          </CardContent>
+   210→   210→        </Card>
+   211→   211→      ) : (
+   212→   212→        <div className="space-y-4">
+   213→   213→          {cuttingPlans.map((cp: CuttingPlan) => (
+   214→   214→            <Card key={cp.id} className="overflow-hidden">
+   215→   215→              <CardHeader className="pb-3">
+   216→   216→                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+   217→   217→                  <div>
+   218→   218→                    <CardTitle className="text-base">{cp.plan.name}</CardTitle>
+   219→   219→                    <p className="text-xs text-muted-foreground mt-1">{formatDate(cp.createdAt)}</p>
+   220→   220→                  </div>
+   221→   221→                  <div className="flex items-center gap-2">
+   222→   222→                    {getCuttingStatusBadge(cp.status)}
+   223→   223→                    {cp.status === 'in_work' && (
+   224→   224→                      <Button
+   225→   225→                        size="sm"
+   226→   226→                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   227→   227→                        onClick={() => handleMarkCut(cp)}
+   228→   228→                        disabled={updateMutation.isPending}
+   229→   229→                      >
+   230→   230→                        <Scissors className="h-4 w-4 mr-1" />
+   231→   231→                        Раскроено
+   232→   232→                      </Button>
+   233→   233→                    )}
+   234→   234→                    <Button
+   235→   235→                      size="sm"
+   236→   236→                      variant="outline"
+   237→   237→                      onClick={() => handleSaveActual(cp)}
+   238→   238→                      disabled={updateMutation.isPending}
+   239→   239→                    >
+   240→   240→                      Сохранить факт
+   241→   241→                    </Button>
+   242→   242→                    <Button
+   243→   243→                      size="sm"
+   244→   244→                      variant="ghost"
+   245→   245→                      onClick={() => printDocument('cutting-plan', cp.id)}
+   246→   246→                    >
+   247→   247→                      <Printer className="h-4 w-4 mr-1" />
+   248→   248→                      Печать
+   249→   249→                    </Button>
+   250→   250→                  </div>
+   251→   251→                </div>
+   252→   252→              </CardHeader>
+   253→   253→              <CardContent className="p-0">
+   254→   254→                <div className="overflow-x-auto -mx-3 sm:mx-0">
+   255→   255→                  <Table>
+   256→   256→                    <TableHeader>
+   257→   257→                      <TableRow>
+   258→   258→                        <TableHead className="w-8"></TableHead>
+   259→   259→                        <TableHead>Изделие</TableHead>
+   260→   260→                        <TableHead>Артикул</TableHead>
+   261→   261→                        <TableHead>Размер</TableHead>
+   262→   262→                        <TableHead>Цвет</TableHead>
+   263→   263→                        <TableHead className="text-center">План</TableHead>
+   264→   264→                        <TableHead className="text-center">Настилы</TableHead>
+   265→   265→                        <TableHead className="text-center">Факт</TableHead>
+   266→   266→                        <TableHead className="text-center">Остаток</TableHead>
+   267→   267→                      </TableRow>
+   268→   268→                    </TableHeader>
+   269→   269→                    <TableBody>
+   270→   270→                      {cp.items.map((item: any) => {
+   271→   271→                        const currentActual = actualQtys[item.id] !== undefined ? actualQtys[item.id] : (item.actualQty ?? '')
+   272→   272→                        const hasMismatch = item.actualQty !== null && item.actualQty !== item.plannedQty
+   273→   273→                        const passes: CuttingPassItem[] = item.passes || []
+   274→   274→                        const summary = getPassesSummary(item)
+   275→   275→                        const isExpanded = expandedItems[item.id]
+   276→   276→                        const hasPasses = passes.length > 0
+   277→   277→
+   278→   278→                        return (
+   279→   279→                          <TableRow key={item.id} className={hasMismatch ? 'bg-red-50' : ''}>
+   280→   280→                            {/* Кнопка раскрытия */}
+   281→   281→                            <TableCell className="px-1">
+   282→   282→                              {hasPasses ? (
+   283→   283→                                <Button
+   284→   284→                                  variant="ghost"
+   285→   285→                                  size="sm"
+   286→   286→                                  className="h-6 w-6 p-0"
+   287→   287→                                  onClick={() => toggleExpand(item.id)}
+   288→   288→                                >
+   289→   289→                                  {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+   290→   290→                                </Button>
+   291→   291→                              ) : (
+   292→   292→                                <Button
+   293→   293→                                  variant="ghost"
+   294→   294→                                  size="sm"
+   295→   295→                                  className="h-6 w-6 p-0 text-muted-foreground"
+   296→   296→                                  onClick={() => openPassesDialog(item)}
+   297→   297→                                  title="Добавить заходы"
+   298→   298→                                >
+   299→   299→                                  <Layers className="h-3 w-3" />
+   300→   300→                                </Button>
+   301→   301→                              )}
+   302→   302→                            </TableCell>
+   303→   303→                            <TableCell className="font-medium">{item.product.name}</TableCell>
+   304→   304→                            <TableCell className="text-muted-foreground">{item.product.article}</TableCell>
+   305→   305→                            <TableCell>{item.size}</TableCell>
+   306→   306→                            <TableCell>
+   307→   307→                              <span className="flex items-center">
+   308→   308→                                {getColorDot(item.colorHex)}
+   309→   309→                                {item.color}
+   310→   310→                              </span>
+   311→   311→                            </TableCell>
+   312→   312→                            <TableCell className="text-center">{item.plannedQty}</TableCell>
+   313→   313→                            {/* Настилы — сводка + кнопка редактировать */}
+   314→   314→                            <TableCell className="text-center">
+   315→   315→                              {summary ? (
+   316→   316→                                <div className="flex items-center justify-center gap-1">
+   317→   317→                                  <Button
+   318→   318→                                    variant="outline"
+   319→   319→                                    size="sm"
+   320→   320→                                    className="h-7 text-xs px-2"
+   321→   321→                                    onClick={() => openPassesDialog(item)}
+   322→   322→                                  >
+   323→   323→                                    <Layers className="h-3 w-3 mr-1" />
+   324→   324→                                    {summary.totalBundles} пач.
+   325→   325→                                  </Button>
+   326→   326→                                  <span className="text-xs text-muted-foreground">
+   327→   327→                                    {summary.passCount} зах., {summary.totalLayers} сл.
+   328→   328→                                  </span>
+   329→   329→                                </div>
+   330→   330→                              ) : (
+   331→   331→                                <Button
+   332→   332→                                  variant="outline"
+   333→   333→                                  size="sm"
+   334→   334→                                  className="h-7 text-xs px-2"
+   335→   335→                                  onClick={() => openPassesDialog(item)}
+   336→   336→                                >
+   337→   337→                                  <Plus className="h-3 w-3 mr-1" />
+   338→   338→                                  Добавить
+   339→   339→                                </Button>
+   340→   340→                              )}
+   341→   341→                            </TableCell>
+   342→   342→                            <TableCell className="text-center">
+   343→   343→                              <Input
+   344→   344→                                type="number"
+   345→   345→                                min="0"
+   346→   346→                                className="w-20 mx-auto text-center"
+   347→   347→                                value={currentActual}
+   348→   348→                                onChange={(e) =>
+   349→   349→                                  setActualQtys((prev) => ({
+   350→   350→                                    ...prev,
+   351→   351→                                    [item.id]: e.target.value,
+   352→   352→                                  }))
+   353→   353→                                }
+   354→   354→                              />
+   355→   355→                            </TableCell>
+   356→   356→                            <TableCell className="text-center">
+   357→   357→                              {item.actualQty !== null && item.actualQty > item.plannedQty ? (
+   358→   358→                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
+   359→   359→                                  +{item.actualQty - item.plannedQty}
+   360→   360→                                </Badge>
+   361→   361→                              ) : '—'}
+   362→   362→                            </TableCell>
+   363→   363→                          </TableRow>
+   364→   364→                        )
+   365→   365→                      })}
+   366→   366→                    </TableBody>
+   367→   367→                  </Table>
+   368→   368→                </div>
+   369→   369→
+   370→   370→                {/* Раскрытые заходы под таблицей */}
+   371→   371→                {cp.items.some((item: any) => expandedItems[item.id] && (item.passes || []).length > 0) && (
+   372→   372→                  <div className="border-t bg-gray-50/50">
+   373→   373→                    {cp.items.filter((item: any) => expandedItems[item.id] && (item.passes || []).length > 0).map((item: any) => {
+   374→   374→                      const passes: CuttingPassItem[] = item.passes || []
+   375→   375→                      return (
+   376→   376→                        <div key={item.id} className="px-4 py-3 border-b last:border-0">
+   377→   377→                          <div className="flex items-center justify-between mb-2">
+   378→   378→                            <span className="text-sm font-medium">
+   379→   379→                              {item.product.name} — {item.size} — {item.color}
+   380→   380→                            </span>
+   381→   381→                            <Button
+   382→   382→                              variant="outline"
+   383→   383→                              size="sm"
+   384→   384→                              className="h-6 text-xs px-2"
+   385→   385→                              onClick={() => openPassesDialog(item)}
+   386→   386→                            >
+   387→   387→                              Редактировать
+   388→   388→                            </Button>
+   389→   389→                          </div>
+   390→   390→                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+   391→   391→                            {passes.map((p) => (
+   392→   392→                              <div key={p.id} className="bg-white rounded-lg border p-2 text-sm">
+   393→   393→                                <div className="flex items-center justify-between mb-1">
+   394→   394→                                  <span className="font-semibold text-xs">Заход {p.passNumber}</span>
+   395→   395→                                  <div className="flex gap-1">
+   396→   396→                                    <Badge variant="secondary" className="text-[10px] px-1">
+   397→   397→                                      {p.layers} сл.
+   398→   398→                                    </Badge>
+   399→   399→                                    {(p.drawings || 1) > 1 && (
+   400→   400→                                      <Badge variant="outline" className="text-[10px] px-1">
+   401→   401→                                        {p.drawings} зар.
+   402→   402→                                      </Badge>
+   403→   403→                                    )}
+   404→   404→                                  </div>
+   405→   405→                                </div>
+   406→   406→                                <div className="text-xs text-muted-foreground">
+   407→   407→                                  {(p.drawings || 1) > 1
+   408→   408→                                    ? <>{p.drawings} пач. × {p.layers} сл. = {p.layers * (p.drawings || 1)} шт</>
+   409→   409→                                    : <>1 пач. × {p.layers} сл. = {p.layers} шт</>
+   410→   410→                                  }
+   411→   411→                                  {p.actualQty !== null && p.actualQty !== p.layers * (p.drawings || 1) && (
+   412→   412→                                    <span className="ml-1 text-amber-600">факт: {p.actualQty}</span>
+   413→   413→                                  )}
+   414→   414→                                </div>
+   415→   415→                                {p.note && (
+   416→   416→                                  <div className="text-[10px] text-muted-foreground mt-1 truncate" title={p.note}>
+   417→   417→                                    {p.note}
+   418→   418→                                  </div>
+   419→   419→                                )}
+   420→   420→                              </div>
+   421→   421→                            ))}
+   422→   422→                          </div>
+   423→   423→                        </div>
+   424→   424→                      )
+   425→   425→                    })}
+   426→   426→                  </div>
+   427→   427→                )}
+   428→   428→              </CardContent>
+   429→   429→              {cp.leftovers && cp.leftovers.length > 0 && (
+   430→   430→                <div className="px-4 pb-4">
+   431→   431→                  <div className="text-xs font-medium text-amber-700 mb-2 flex items-center gap-1">
+   432→   432→                    <AlertTriangle className="h-3 w-3" /> Остатки кроя ({cp.leftovers.length})
+   433→   433→                  </div>
+   434→   434→                  <div className="space-y-1">
+   435→   435→                    {cp.leftovers.map((lo: CuttingLeftover) => (
+   436→   436→                      <div key={lo.id} className="flex items-center gap-2 text-xs bg-amber-50 rounded px-2 py-1">
+   437→   437→                        <span className="font-medium">{lo.product.name}</span>
+   438→   438→                        <span className="text-muted-foreground">{lo.size}</span>
+   439→   439→                        <span className="flex items-center"><span style={{ backgroundColor: lo.colorHex }} className="inline-block w-2 h-2 rounded-full mr-1" />{lo.color}</span>
+   440→   440→                        <span className="font-semibold">+{lo.quantity} шт</span>
+   441→   441→                        {lo.sewnQty > 0 && <span className="text-emerald-600">пошито: {lo.sewnQty}</span>}
+   442→   442→                        <Badge variant="outline" className="text-[10px]">{lo.status === 'free' ? 'свободно' : lo.status === 'partially_sewn' ? 'частично пошито' : 'полностью пошито'}</Badge>
+   443→   443→                      </div>
+   444→   444→                    ))}
+   445→   445→                  </div>
+   446→   446→                </div>
+   447→   447→              )}
+   448→   448→            </Card>
+   449→   449→          ))}
+   450→   450→        </div>
+   451→   451→      )}
+   452→   452→
+   453→   453→      {/* ===== Диалог редактирования заходов ===== */}
+   454→   454→      <Dialog open={passesDialogOpen} onOpenChange={setPassesDialogOpen}>
+   455→   455→        <DialogContent className="max-w-lg">
+   456→   456→          <DialogHeader>
+   457→   457→            <DialogTitle className="flex items-center gap-2">
+   458→   458→              <Layers className="h-5 w-5 text-emerald-600" />
+   459→   459→              Заходы раскроя (настилы)
+   460→   460→            </DialogTitle>
+   461→   461→          </DialogHeader>
+   462→   462→          <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+   463→   463→            <p className="text-xs text-muted-foreground">
+   464→   464→              Каждый заход — один настил (укладка слоёв ткани) и его раскрой.
+   465→   465→              Если в раскладке несколько зарисовок одного размера — укажите их количество.
+   466→   466→              Формула: <strong>зарисовок × слои = пачки × слои = изделий</strong>
+   467→   467→            </p>
+   468→   468→            {passesEditData.map((pass, index) => {
+   469→   469→              const expectedQty = pass.layers * (pass.drawings || 1)
+   470→   470→              return (
+   471→   471→              <div key={index} className="bg-gray-50 rounded-lg border p-3 space-y-2">
+   472→   472→                <div className="flex items-center justify-between">
+   473→   473→                  <Label className="text-sm font-semibold">Заход {pass.passNumber}</Label>
+   474→   474→                  {passesEditData.length > 1 && (
+   475→   475→                    <Button
+   476→   476→                      variant="ghost"
+   477→   477→                      size="sm"
+   478→   478→                      className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+   479→   479→                      onClick={() => removePass(index)}
+   480→   480→                    >
+   481→   481→                      <Trash2 className="h-3.5 w-3.5" />
+   482→   482→                    </Button>
+   483→   483→                  )}
+   484→   484→                </div>
+   485→   485→                <div className="grid grid-cols-3 gap-2">
+   486→   486→                  <div className="space-y-1">
+   487→   487→                    <Label className="text-xs text-muted-foreground">Слоёв настила</Label>
+   488→   488→                    <Input
+   489→   489→                      type="number"
+   490→   490→                      min="1"
+   491→   491→                      className="h-8 text-sm"
+   492→   492→                      value={pass.layers}
+   493→   493→                      onChange={(e) => {
+   494→   494→                        const val = parseInt(e.target.value) || 0
+   495→   495→                        updatePass(index, 'layers', val)
+   496→   496→                        // Авто-пересчёт факта если он совпадал с ожидаемым
+   497→   497→                        if (pass.actualQty === expectedQty || pass.actualQty === 0) {
+   498→   498→                          updatePass(index, 'actualQty', val * (pass.drawings || 1))
+   499→   499→                        }
+   500→   500→                      }}
+   501→   501→                    />
+   502→   502→                  </div>
+   503→   503→                  <div className="space-y-1">
+   504→   504→                    <Label className="text-xs text-muted-foreground">Зарисовок</Label>
+   505→   505→                    <Input
+   506→   506→                      type="number"
+   507→   507→                      min="1"
+   508→   508→                      className="h-8 text-sm"
+   509→   509→                      value={pass.drawings}
+   510→   510→                      onChange={(e) => {
+   511→   511→                        const val = parseInt(e.target.value) || 1
+   512→   512→                        updatePass(index, 'drawings', val)
+   513→   513→                        // Авто-пересчёт факта
+   514→   514→                        if (pass.actualQty === expectedQty || pass.actualQty === 0) {
+   515→   515→                          updatePass(index, 'actualQty', pass.layers * val)
+   516→   516→                        }
+   517→   517→                      }}
+   518→   518→                    />
+   519→   519→                  </div>
+   520→   520→                  <div className="space-y-1">
+   521→   521→                    <Label className="text-xs text-muted-foreground">Факт (шт)</Label>
+   522→   522→                    <Input
+   523→   523→                      type="number"
+   524→   524→                      min="0"
+   525→   525→                      className="h-8 text-sm"
+   526→   526→                      value={pass.actualQty}
+   527→   527→                      onChange={(e) => updatePass(index, 'actualQty', parseInt(e.target.value) || 0)}
+   528→   528→                    />
+   529→   529→                  </div>
+   530→   530→                </div>
+   531→   531→                {/* Подсказка расчёта */}
+   532→   532→                <div className="text-[11px] text-muted-foreground">
+   533→   533→                  {(pass.drawings || 1) > 1
+   534→   534→                    ? <>{pass.drawings} пач. × {pass.layers} сл. = <strong>{expectedQty} шт</strong></>
+   535→   535→                    : <>1 пач. × {pass.layers} сл. = <strong>{expectedQty} шт</strong></>
+   536→   536→                  }
+   537→   537→                  {pass.actualQty > 0 && pass.actualQty !== expectedQty && (
+   538→   538→                    <span className="ml-2 text-amber-600">факт: {pass.actualQty} (отклонение)</span>
+   539→   539→                  )}
+   540→   540→                </div>
+   541→   541→                <div className="space-y-1">
+   542→   542→                  <Label className="text-xs text-muted-foreground">Примечание</Label>
+   543→   543→                  <Input
+   544→   544→                    className="h-7 text-xs"
+   545→   545→                    placeholder="необязательно"
+   546→   546→                    value={pass.note}
+   547→   547→                    onChange={(e) => updatePass(index, 'note', e.target.value)}
+   548→   548→                  />
+   549→   549→                </div>
+   550→   550→              </div>
+   551→   551→              )
+   552→   552→            })}
+   553→   553→            <Button
+   554→   554→              variant="outline"
+   555→   555→              size="sm"
+   556→   556→              className="w-full"
+   557→   557→              onClick={addPass}
+   558→   558→            >
+   559→   559→              <Plus className="h-4 w-4 mr-1" />
+   560→   560→              Добавить заход
+   561→   561→            </Button>
+   562→   562→            {/* Сводка */}
+   563→   563→            {passesEditData.length > 0 && (
+   564→   564→              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm">
+   565→   565→                <div className="flex items-center justify-between">
+   566→   566→                  <span className="font-medium">Итого:</span>
+   567→   567→                  <div className="flex items-center gap-3">
+   568→   568→                    <span className="text-xs text-muted-foreground">
+   569→   569→                      {passesEditData.reduce((s, p) => s + (p.drawings || 1), 0)} пач.
+   570→   570→                    </span>
+   571→   571→                    <span className="text-xs text-muted-foreground">
+   572→   572→                      {passesEditData.length} зах.
+   573→   573→                    </span>
+   574→   574→                    <span className="text-xs text-muted-foreground">
+   575→   575→                      {passesEditData.reduce((s, p) => s + p.layers, 0)} сл.
+   576→   576→                    </span>
+   577→   577→                    <span className="font-semibold">
+   578→   578→                      {passesEditData.reduce((s, p) => s + p.actualQty, 0)} шт
+   579→   579→                    </span>
+   580→   580→                  </div>
+   581→   581→                </div>
+   582→   582→              </div>
+   583→   583→            )}
+   584→   584→          </div>
+   585→   585→          <DialogFooter>
+   586→   586→            <Button variant="outline" onClick={() => setPassesDialogOpen(false)}>
+   587→   587→              Отмена
+   588→   588→            </Button>
+   589→   589→            <Button
+   590→   590→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   591→   591→              onClick={handleSavePasses}
+   592→   592→              disabled={savePassesMutation.isPending}
+   593→   593→            >
+   594→   594→              {savePassesMutation.isPending ? (
+   595→   595→                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   596→   596→              ) : null}
+   597→   597→              Сохранить
+   598→   598→            </Button>
+   599→   599→          </DialogFooter>
+   600→   600→        </DialogContent>
+   601→   601→      </Dialog>
+   602→   602→    </div>
+   603→   603→  )
+   604→   604→}
+   605→   605→

@@ -1,0 +1,652 @@
+     1→'use client'
+     2→
+     3→import { useState, useCallback, useMemo, Fragment } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    11→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    12→import { ScrollArea } from '@/components/ui/scroll-area'
+    13→import { Separator } from '@/components/ui/separator'
+    14→import { Loader2, Plus, X, CheckCircle2, MapPin, Truck, AlertTriangle } from 'lucide-react'
+    15→import { useToast } from '@/hooks/use-toast'
+    16→import { authFetch, authFetchJson } from '@/components/auth-provider'
+    17→import type { Plan, SellerPlan } from '@/types'
+    18→import { formatDate } from '@/lib/formatters'
+    19→import { getColorDot, getSellerPlanStatusBadge } from '@/lib/status-badges'
+    20→
+    21→export function CityDistributionTab() {
+    22→  const { toast } = useToast()
+    23→  const queryClient = useQueryClient()
+    24→
+    25→  // --- New distribution state ---
+    26→  const [selectedPlanId, setSelectedPlanId] = useState('')
+    27→  const [distributionItems, setDistributionItems] = useState<Array<{
+    28→    planItemId: string
+    29→    productId: string
+    30→    size: string
+    31→    color: string
+    32→    colorHex: string
+    33→    totalQty: number
+    34→    cities: Array<{ city: string; quantity: number }>
+    35→  }>>([])
+    36→  const [sellerPlanName, setSellerPlanName] = useState('')
+    37→
+    38→  // --- Data queries ---
+    39→  const { data: plans = [] } = useQuery({
+    40→    queryKey: ['plans'],
+    41→    queryFn: async () => {
+    42→      const data = await authFetchJson('/api/plans')
+    43→      return Array.isArray(data) ? data : []
+    44→    },
+    45→  })
+    46→
+    47→  const { data: sellerPlans = [], isLoading } = useQuery({
+    48→    queryKey: ['seller-plans'],
+    49→    queryFn: async () => {
+    50→      const data = await authFetchJson('/api/seller-plans')
+    51→      return Array.isArray(data) ? data : []
+    52→    },
+    53→  })
+    54→
+    55→  const { data: cities = [] } = useQuery({
+    56→    queryKey: ['cities'],
+    57→    queryFn: async () => {
+    58→      const data = await authFetchJson('/api/cities')
+    59→      return Array.isArray(data) ? data : []
+    60→    },
+    61→  })
+    62→
+    63→  // --- Filter plans to only approved or in_work ---
+    64→  const eligiblePlans = useMemo(
+    65→    () => (plans as Plan[]).filter((p) => p.status === 'approved' || p.status === 'in_work'),
+    66→    [plans]
+    67→  )
+    68→
+    69→  // --- Group eligible plans by customer ---
+    70→  const plansByCustomer = useMemo(() => {
+    71→    const groups: Record<string, { customerName: string; plans: Plan[] }> = {}
+    72→    for (const plan of eligiblePlans) {
+    73→      const key = plan.customer?.id || '__no_customer__'
+    74→      if (!groups[key]) {
+    75→        groups[key] = { customerName: plan.customer?.name || 'Без заказчика', plans: [] }
+    76→      }
+    77→      groups[key].plans.push(plan)
+    78→    }
+    79→    return Object.values(groups)
+    80→  }, [eligiblePlans])
+    81→
+    82→  // --- Selected plan reference ---
+    83→  const selectedPlan = useMemo(
+    84→    () => (plans as Plan[]).find((p) => p.id === selectedPlanId),
+    85→    [plans, selectedPlanId]
+    86→  )
+    87→
+    88→  // --- Handle plan selection ---
+    89→  const handlePlanSelect = useCallback((planId: string) => {
+    90→    setSelectedPlanId(planId)
+    91→    const plan = (plans as Plan[]).find((p) => p.id === planId)
+    92→    if (plan) {
+    93→      const items = plan.items.map((item) => ({
+    94→        planItemId: item.id,
+    95→        productId: item.productId,
+    96→        size: item.size,
+    97→        color: item.color,
+    98→        colorHex: item.colorHex,
+    99→        totalQty: item.quantity,
+   100→        cities: [] as Array<{ city: string; quantity: number }>,
+   101→      }))
+   102→      setDistributionItems(items)
+   103→      setSellerPlanName(plan.name)
+   104→    } else {
+   105→      setDistributionItems([])
+   106→      setSellerPlanName('')
+   107→    }
+   108→  }, [plans])
+   109→
+   110→  // --- City management per item ---
+   111→  const addCityToItem = useCallback((itemIndex: number) => {
+   112→    setDistributionItems((prev) =>
+   113→      prev.map((item, i) =>
+   114→        i === itemIndex ? { ...item, cities: [...item.cities, { city: '', quantity: 0 }] } : item
+   115→      )
+   116→    )
+   117→  }, [])
+   118→
+   119→  const removeCityFromItem = useCallback((itemIndex: number, cityIndex: number) => {
+   120→    setDistributionItems((prev) =>
+   121→      prev.map((item, i) =>
+   122→        i === itemIndex ? { ...item, cities: item.cities.filter((_, ci) => ci !== cityIndex) } : item
+   123→      )
+   124→    )
+   125→  }, [])
+   126→
+   127→  const updateCityInItem = useCallback((itemIndex: number, cityIndex: number, field: string, value: string | number) => {
+   128→    setDistributionItems((prev) =>
+   129→      prev.map((item, i) =>
+   130→        i === itemIndex
+   131→          ? { ...item, cities: item.cities.map((c, ci) => (ci === cityIndex ? { ...c, [field]: value } : c)) }
+   132→          : item
+   133→      )
+   134→    )
+   135→  }, [])
+   136→
+   137→  // --- Distribution calculations ---
+   138→  const getItemDistributed = useCallback((item: typeof distributionItems[number]) =>
+   139→    item.cities.reduce((sum, c) => sum + (c.quantity || 0), 0), [])
+   140→
+   141→  // --- Overall progress ---
+   142→  const overallProgress = useMemo(() => {
+   143→    let totalQty = 0
+   144→    let totalDistributed = 0
+   145→    for (const item of distributionItems) {
+   146→      totalQty += item.totalQty
+   147→      totalDistributed += item.cities.reduce((s, c) => s + (c.quantity || 0), 0)
+   148→    }
+   149→    return { totalQty, totalDistributed, percent: totalQty > 0 ? Math.round((totalDistributed / totalQty) * 100) : 0 }
+   150→  }, [distributionItems])
+   151→
+   152→  // --- Create mutation ---
+   153→  const createMutation = useMutation({
+   154→    mutationFn: (data: {
+   155→      sellerName: string
+   156→      customerId: string
+   157→      planId: string
+   158→      items: Array<{
+   159→        productId: string; size: string; color: string; colorHex: string; quantity: number
+   160→        cities: Array<{ city: string; quantity: number }>
+   161→      }>
+   162→    }) =>
+   163→      authFetchJson('/api/seller-plans', {
+   164→        method: 'POST',
+   165→        headers: { 'Content-Type': 'application/json' },
+   166→        body: JSON.stringify(data),
+   167→      }),
+   168→    onSuccess: () => {
+   169→      queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
+   170→      setSelectedPlanId('')
+   171→      setDistributionItems([])
+   172→      setSellerPlanName('')
+   173→      toast({ title: 'План создан', description: 'План распределения создан' })
+   174→    },
+   175→    onError: (err: Error) => {
+   176→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   177→    },
+   178→  })
+   179→
+   180→  // --- Existing plan mutations ---
+   181→  const approveMutation = useMutation({
+   182→    mutationFn: (id: string) =>
+   183→      authFetchJson(`/api/seller-plans/${id}`, {
+   184→        method: 'PATCH',
+   185→        headers: { 'Content-Type': 'application/json' },
+   186→        body: JSON.stringify({ status: 'approved' }),
+   187→      }),
+   188→    onSuccess: () => {
+   189→      queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
+   190→      toast({ title: 'План утверждён', description: 'План распределения утверждён' })
+   191→    },
+   192→    onError: (err: Error) => {
+   193→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   194→    },
+   195→  })
+   196→
+   197→  const markDistributedMutation = useMutation({
+   198→    mutationFn: (id: string) =>
+   199→      authFetchJson(`/api/seller-plans/${id}`, {
+   200→        method: 'PATCH',
+   201→        headers: { 'Content-Type': 'application/json' },
+   202→        body: JSON.stringify({ status: 'distributed' }),
+   203→      }),
+   204→    onSuccess: () => {
+   205→      queryClient.invalidateQueries({ queryKey: ['seller-plans'] })
+   206→      toast({ title: 'Распределено', description: 'План отмечен как распределённый' })
+   207→    },
+   208→    onError: (err: Error) => {
+   209→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   210→    },
+   211→  })
+   212→
+   213→  // --- Handle create ---
+   214→  const handleCreate = useCallback(() => {
+   215→    if (!selectedPlanId) {
+   216→      toast({ title: 'Ошибка', description: 'Выберите план заказчика', variant: 'destructive' })
+   217→      return
+   218→    }
+   219→    if (!sellerPlanName.trim()) {
+   220→      toast({ title: 'Ошибка', description: 'Укажите название плана', variant: 'destructive' })
+   221→      return
+   222→    }
+   223→    if (distributionItems.length === 0) {
+   224→      toast({ title: 'Ошибка', description: 'Нет позиций для распределения', variant: 'destructive' })
+   225→      return
+   226→    }
+   227→
+   228→    // Validate: each item must have all quantity distributed
+   229→    const undistributedItems = distributionItems.filter((item) => {
+   230→      const distributed = item.cities.reduce((s, c) => s + (c.quantity || 0), 0)
+   231→      return distributed !== item.totalQty
+   232→    })
+   233→    if (undistributedItems.length > 0) {
+   234→      toast({
+   235→        title: 'Ошибка',
+   236→        description: `Не все позиции распределены: ${undistributedItems.length} из ${distributionItems.length} позиций имеют нераспределённое количество`,
+   237→        variant: 'destructive',
+   238→      })
+   239→      return
+   240→    }
+   241→
+   242→    // Validate: all city entries must have city selected
+   243→    const emptyCities = distributionItems.some((item) =>
+   244→      item.cities.some((c) => !c.city)
+   245→    )
+   246→    if (emptyCities) {
+   247→      toast({ title: 'Ошибка', description: 'Укажите город для всех записей распределения', variant: 'destructive' })
+   248→      return
+   249→    }
+   250→
+   251→    const itemsPayload = distributionItems.map((item) => ({
+   252→      productId: item.productId,
+   253→      size: item.size,
+   254→      color: item.color,
+   255→      colorHex: item.colorHex,
+   256→      quantity: item.totalQty,
+   257→      cities: item.cities,
+   258→    }))
+   259→
+   260→    createMutation.mutate({
+   261→      sellerName: sellerPlanName,
+   262→      customerId: selectedPlan!.customerId!,
+   263→      planId: selectedPlanId,
+   264→      items: itemsPayload,
+   265→    })
+   266→  }, [selectedPlanId, sellerPlanName, distributionItems, selectedPlan, createMutation, toast])
+   267→
+   268→  // --- Compute distribution progress for existing plan ---
+   269→  const getDistributionProgress = useCallback((plan: SellerPlan) => {
+   270→    let totalQty = 0
+   271→    let totalDistributed = 0
+   272→    for (const item of plan.items) {
+   273→      totalQty += item.quantity
+   274→      totalDistributed += item.cities.reduce((sum, c) => sum + c.quantity, 0)
+   275→    }
+   276→    return { totalQty, totalDistributed, percent: totalQty > 0 ? Math.round((totalDistributed / totalQty) * 100) : 0 }
+   277→  }, [])
+   278→
+   279→  // getSellerPlanStatusBadge is imported from @/lib/status-badges
+   280→
+   281→  if (isLoading) {
+   282→    return (
+   283→      <div className="flex items-center justify-center p-8">
+   284→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   285→        <span className="ml-2 text-muted-foreground">Загрузка...</span>
+   286→      </div>
+   287→    )
+   288→  }
+   289→
+   290→  return (
+   291→    <div className="space-y-6">
+   292→      <h2 className="text-xl font-semibold">Распределение по городам</h2>
+   293→
+   294→      {/* ========= Section 1: New distribution ========= */}
+   295→      <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white">
+   296→        <CardHeader className="pb-3">
+   297→          <CardTitle className="text-base flex items-center gap-2">
+   298→            <MapPin className="h-5 w-5 text-emerald-600" />
+   299→            Новое распределение
+   300→          </CardTitle>
+   301→        </CardHeader>
+   302→        <CardContent className="space-y-4">
+   303→          {/* Plan selector */}
+   304→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   305→            <div className="space-y-2">
+   306→              <Label>План заказчика <span className="text-red-500">*</span></Label>
+   307→              <Select value={selectedPlanId} onValueChange={handlePlanSelect}>
+   308→                <SelectTrigger>
+   309→                  <SelectValue placeholder="Выберите план" />
+   310→                </SelectTrigger>
+   311→                <SelectContent>
+   312→                  {plansByCustomer.length === 0 ? (
+   313→                    <div className="px-2 py-3 text-sm text-muted-foreground text-center">
+   314→                      Нет утверждённых планов
+   315→                    </div>
+   316→                  ) : (
+   317→                    plansByCustomer.map((group) => (
+   318→                      <Fragment key={group.customerName}>
+   319→                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+   320→                          {group.customerName}
+   321→                        </div>
+   322→                        {group.plans.map((plan) => (
+   323→                          <SelectItem key={plan.id} value={plan.id}>
+   324→                            <span className="flex items-center gap-2">
+   325→                              {plan.name}
+   326→                              <span className="text-xs text-muted-foreground">({plan.items.length} поз.)</span>
+   327→                            </span>
+   328→                          </SelectItem>
+   329→                        ))}
+   330→                      </Fragment>
+   331→                    ))
+   332→                  )}
+   333→                </SelectContent>
+   334→              </Select>
+   335→            </div>
+   336→            <div className="space-y-2">
+   337→              <Label>Название плана распределения</Label>
+   338→              <Input
+   339→                placeholder="Выберите план заказчика"
+   340→                value={sellerPlanName}
+   341→                readOnly
+   342→                className="bg-gray-50"
+   343→              />
+   344→            </div>
+   345→          </div>
+   346→
+   347→          {/* No eligible plans hint */}
+   348→          {eligiblePlans.length === 0 && (
+   349→            <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-700 flex items-center gap-2">
+   350→              <AlertTriangle className="h-4 w-4 shrink-0" />
+   351→              Нет планов со статусом «Утверждён» или «В работе». Сначала создайте и утвердите план пошива.
+   352→            </div>
+   353→          )}
+   354→
+   355→          {/* Distribution table (shown when a plan is selected) */}
+   356→          {selectedPlanId && distributionItems.length > 0 && (
+   357→            <>
+   358→              <Separator />
+   359→
+   360→              {/* Overall progress */}
+   361→              <div className="flex items-center gap-4">
+   362→                <div className="flex-1">
+   363→                  <div className="flex items-center justify-between text-xs mb-1">
+   364→                    <span>Общее распределение: {overallProgress.totalDistributed} из {overallProgress.totalQty} шт</span>
+   365→                    <span className={overallProgress.percent === 100 ? 'text-emerald-600 font-medium' : overallProgress.percent > 0 ? 'text-amber-600' : 'text-gray-400'}>
+   366→                      {overallProgress.percent}%
+   367→                    </span>
+   368→                  </div>
+   369→                  <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+   370→                    <div
+   371→                      className={`h-full rounded-full transition-all duration-300 ${overallProgress.percent === 100 ? 'bg-emerald-500' : 'bg-amber-400'}`}
+   372→                      style={{ width: `${overallProgress.percent}%` }}
+   373→                    />
+   374→                  </div>
+   375→                </div>
+   376→                {overallProgress.percent === 100 && (
+   377→                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 whitespace-nowrap">
+   378→                    <CheckCircle2 className="h-3 w-3 mr-1" />Распределено
+   379→                  </Badge>
+   380→                )}
+   381→              </div>
+   382→
+   383→              {/* Distribution items table */}
+   384→              <div className="border rounded-lg overflow-x-auto">
+   385→                <ScrollArea className="max-h-[500px]">
+   386→                  <Table>
+   387→                    <TableHeader>
+   388→                      <TableRow>
+   389→                        <TableHead>Изделие</TableHead>
+   390→                        <TableHead>Размер</TableHead>
+   391→                        <TableHead>Цвет</TableHead>
+   392→                        <TableHead className="text-center">Всего</TableHead>
+   393→                        <TableHead className="text-center">Распределено</TableHead>
+   394→                        <TableHead className="text-center">Не распределено</TableHead>
+   395→                        <TableHead className="min-w-[280px]">Города</TableHead>
+   396→                      </TableRow>
+   397→                    </TableHeader>
+   398→                    <TableBody>
+   399→                      {distributionItems.map((item, itemIndex) => {
+   400→                        const product = selectedPlan?.items.find((pi) => pi.id === item.planItemId)?.product
+   401→                        const distributed = getItemDistributed(item)
+   402→                        const undistributed = item.totalQty - distributed
+   403→                        const isFullyDistributed = distributed === item.totalQty && item.totalQty > 0
+   404→
+   405→                        return (
+   406→                          <TableRow key={item.planItemId} className={isFullyDistributed ? 'bg-emerald-50/50' : ''}>
+   407→                            <TableCell className="font-medium text-sm">
+   408→                              {product?.name || '—'}
+   409→                            </TableCell>
+   410→                            <TableCell className="text-sm">{item.size}</TableCell>
+   411→                            <TableCell className="text-sm">
+   412→                              <span className="flex items-center">
+   413→                                {getColorDot(item.colorHex)}
+   414→                                {item.color}
+   415→                              </span>
+   416→                            </TableCell>
+   417→                            <TableCell className="text-center text-sm font-medium">{item.totalQty}</TableCell>
+   418→                            <TableCell className="text-center text-sm">
+   419→                              <span className={isFullyDistributed ? 'text-emerald-600 font-medium' : distributed > 0 ? 'text-amber-600' : 'text-gray-400'}>
+   420→                                {distributed}
+   421→                              </span>
+   422→                            </TableCell>
+   423→                            <TableCell className="text-center text-sm">
+   424→                              {isFullyDistributed ? (
+   425→                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">Распределено</Badge>
+   426→                              ) : (
+   427→                                <span className={undistributed > 0 ? 'text-red-500 font-medium' : 'text-gray-400'}>
+   428→                                  {undistributed}
+   429→                                </span>
+   430→                              )}
+   431→                            </TableCell>
+   432→                            <TableCell>
+   433→                              <div className="space-y-1.5">
+   434→                                {item.cities.map((city, cityIndex) => (
+   435→                                  <div key={cityIndex} className="flex items-center gap-1.5">
+   436→                                    <Select
+   437→                                      value={city.city}
+   438→                                      onValueChange={(v) => updateCityInItem(itemIndex, cityIndex, 'city', v)}
+   439→                                    >
+   440→                                      <SelectTrigger className="w-32 h-7 text-xs">
+   441→                                        <SelectValue placeholder="Город" />
+   442→                                      </SelectTrigger>
+   443→                                      <SelectContent>
+   444→                                        {(cities as Array<{ id: string; name: string }>).map((c) => (
+   445→                                          <SelectItem key={c.id} value={c.name} className="text-xs">
+   446→                                            {c.name}
+   447→                                          </SelectItem>
+   448→                                        ))}
+   449→                                      </SelectContent>
+   450→                                    </Select>
+   451→                                    <Input
+   452→                                      type="number"
+   453→                                      className="w-16 h-7 text-xs text-center"
+   454→                                      placeholder="Кол-во"
+   455→                                      min="0"
+   456→                                      value={city.quantity || ''}
+   457→                                      onChange={(e) => updateCityInItem(itemIndex, cityIndex, 'quantity', parseInt(e.target.value) || 0)}
+   458→                                    />
+   459→                                    <Button
+   460→                                      size="sm"
+   461→                                      variant="ghost"
+   462→                                      className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7 p-0 shrink-0"
+   463→                                      onClick={() => removeCityFromItem(itemIndex, cityIndex)}
+   464→                                    >
+   465→                                      <X className="h-3 w-3" />
+   466→                                    </Button>
+   467→                                  </div>
+   468→                                ))}
+   469→                                <Button
+   470→                                  size="sm"
+   471→                                  variant="ghost"
+   472→                                  className="h-6 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+   473→                                  onClick={() => addCityToItem(itemIndex)}
+   474→                                >
+   475→                                  <Plus className="h-3 w-3 mr-1" />
+   476→                                  Добавить город
+   477→                                </Button>
+   478→                              </div>
+   479→                            </TableCell>
+   480→                          </TableRow>
+   481→                        )
+   482→                      })}
+   483→                    </TableBody>
+   484→                  </Table>
+   485→                </ScrollArea>
+   486→              </div>
+   487→
+   488→              {/* Create button */}
+   489→              <div className="flex items-center justify-end gap-3 pt-2">
+   490→                <Button
+   491→                  variant="outline"
+   492→                  onClick={() => {
+   493→                    setSelectedPlanId('')
+   494→                    setDistributionItems([])
+   495→                    setSellerPlanName('')
+   496→                  }}
+   497→                >
+   498→                  Сбросить
+   499→                </Button>
+   500→                <Button
+   501→                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   502→                  onClick={handleCreate}
+   503→                  disabled={createMutation.isPending || distributionItems.length === 0}
+   504→                >
+   505→                  {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+   506→                  <MapPin className="h-4 w-4 mr-1" />
+   507→                  Создать план распределения
+   508→                </Button>
+   509→              </div>
+   510→            </>
+   511→          )}
+   512→
+   513→          {/* Hint when no plan selected yet but plans exist */}
+   514→          {eligiblePlans.length > 0 && !selectedPlanId && (
+   515→            <div className="text-sm text-muted-foreground text-center py-4">
+   516→              Выберите план заказчика для создания распределения по городам
+   517→            </div>
+   518→          )}
+   519→        </CardContent>
+   520→      </Card>
+   521→
+   522→      {/* ========= Section 2: Existing distributions ========= */}
+   523→      <div className="space-y-4">
+   524→        <h3 className="text-lg font-medium">Существующие распределения</h3>
+   525→
+   526→        {sellerPlans.length === 0 ? (
+   527→          <Card className="border-dashed">
+   528→            <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   529→              <Truck className="h-12 w-12 mb-3 opacity-30" />
+   530→              <p>Нет планов распределения</p>
+   531→            </CardContent>
+   532→          </Card>
+   533→        ) : (
+   534→          <div className="space-y-4">
+   535→            {sellerPlans.map((sp: SellerPlan) => {
+   536→              const progress = getDistributionProgress(sp)
+   537→              const isFullyDistributed = progress.percent === 100 && progress.totalQty > 0
+   538→              return (
+   539→                <Card key={sp.id} className="overflow-hidden">
+   540→                  <CardHeader className="pb-3">
+   541→                    <div className="flex items-center justify-between flex-wrap gap-2">
+   542→                      <div>
+   543→                        <CardTitle className="text-base">{sp.sellerName}</CardTitle>
+   544→                        {sp.customer && (
+   545→                          <p className="text-xs text-muted-foreground mt-0.5">Заказчик: {sp.customer.name}</p>
+   546→                        )}
+   547→                        <p className="text-xs text-muted-foreground">{formatDate(sp.createdAt)}</p>
+   548→                      </div>
+   549→                      <div className="flex items-center gap-2">
+   550→                        {getSellerPlanStatusBadge(sp.status)}
+   551→                        {sp.status === 'draft' && (
+   552→                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMutation.mutate(sp.id)} disabled={approveMutation.isPending}>
+   553→                            <CheckCircle2 className="h-4 w-4 mr-1" />Утвердить
+   554→                          </Button>
+   555→                        )}
+   556→                        {sp.status === 'approved' && isFullyDistributed && (
+   557→                          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => markDistributedMutation.mutate(sp.id)} disabled={markDistributedMutation.isPending}>
+   558→                            <MapPin className="h-4 w-4 mr-1" />Распределено
+   559→                          </Button>
+   560→                        )}
+   561→                      </div>
+   562→                    </div>
+   563→                  </CardHeader>
+   564→                  <CardContent className="p-0">
+   565→                    {/* Distribution progress bar */}
+   566→                    <div className="px-4 pb-2">
+   567→                      <div className="flex items-center justify-between text-xs mb-1">
+   568→                        <span>Распределение: {progress.totalDistributed} из {progress.totalQty} шт</span>
+   569→                        <span className={progress.percent === 100 ? 'text-emerald-600 font-medium' : progress.percent > 0 ? 'text-amber-600' : 'text-gray-400'}>
+   570→                          {progress.percent}%
+   571→                        </span>
+   572→                      </div>
+   573→                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+   574→                        <div
+   575→                          className={`h-full rounded-full transition-all ${progress.percent === 100 ? 'bg-emerald-500' : 'bg-amber-400'}`}
+   576→                          style={{ width: `${progress.percent}%` }}
+   577→                        />
+   578→                      </div>
+   579→                    </div>
+   580→                    {/* Items table */}
+   581→                    <div className="overflow-x-auto">
+   582→                      <Table>
+   583→                        <TableHeader>
+   584→                          <TableRow>
+   585→                            <TableHead>Изделие</TableHead>
+   586→                            <TableHead>Размер</TableHead>
+   587→                            <TableHead>Цвет</TableHead>
+   588→                            <TableHead className="text-center">Всего</TableHead>
+   589→                            <TableHead className="text-center">Распределено</TableHead>
+   590→                            <TableHead className="text-center">Не распределено</TableHead>
+   591→                            <TableHead>Города</TableHead>
+   592→                          </TableRow>
+   593→                        </TableHeader>
+   594→                        <TableBody>
+   595→                          {sp.items.map((item) => {
+   596→                            const distributed = item.cities.reduce((sum, c) => sum + c.quantity, 0)
+   597→                            const undistributed = item.quantity - distributed
+   598→                            return (
+   599→                              <TableRow key={item.id}>
+   600→                                <TableCell className="font-medium">{item.product.name}</TableCell>
+   601→                                <TableCell>{item.size}</TableCell>
+   602→                                <TableCell>
+   603→                                  <span className="flex items-center">
+   604→                                    {getColorDot(item.colorHex)}
+   605→                                    {item.color}
+   606→                                  </span>
+   607→                                </TableCell>
+   608→                                <TableCell className="text-center">{item.quantity}</TableCell>
+   609→                                <TableCell className="text-center">
+   610→                                  <span className={distributed === item.quantity ? 'text-emerald-600 font-medium' : distributed > 0 ? 'text-amber-600' : 'text-gray-400'}>
+   611→                                    {distributed}
+   612→                                  </span>
+   613→                                </TableCell>
+   614→                                <TableCell className="text-center">
+   615→                                  {undistributed === 0 && item.quantity > 0 ? (
+   616→                                    <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">Распределено</Badge>
+   617→                                  ) : (
+   618→                                    <span className={undistributed > 0 ? 'text-red-500 font-medium' : ''}>
+   619→                                      {undistributed}
+   620→                                    </span>
+   621→                                  )}
+   622→                                </TableCell>
+   623→                                <TableCell>
+   624→                                  {item.cities.length > 0 ? (
+   625→                                    <div className="flex flex-wrap gap-1">
+   626→                                      {item.cities.map((c, ci) => (
+   627→                                        <Badge key={ci} variant="outline" className="text-[10px]">
+   628→                                          {c.city}: {c.quantity}
+   629→                                        </Badge>
+   630→                                      ))}
+   631→                                    </div>
+   632→                                  ) : (
+   633→                                    <span className="text-xs text-muted-foreground">—</span>
+   634→                                  )}
+   635→                                </TableCell>
+   636→                              </TableRow>
+   637→                            )
+   638→                          })}
+   639→                        </TableBody>
+   640→                      </Table>
+   641→                    </div>
+   642→                  </CardContent>
+   643→                </Card>
+   644→              )
+   645→            })}
+   646→          </div>
+   647→        )}
+   648→      </div>
+   649→    </div>
+   650→  )
+   651→}
+   652→

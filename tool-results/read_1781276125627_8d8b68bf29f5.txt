@@ -1,0 +1,1135 @@
+     1→'use client'
+     2→
+     3→import { useState, useCallback, useMemo, Fragment } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    11→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    12→import { Checkbox } from '@/components/ui/checkbox'
+    13→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+    14→import { Loader2, Plus, X, CheckCircle2, ClipboardList, Users, Printer, Zap, Settings2, Scale, Info } from 'lucide-react'
+    15→import { useToast } from '@/hooks/use-toast'
+    16→import { authFetch } from '@/components/auth-provider'
+    17→import type { Employee, CuttingPlan, CuttingPlanItem, SewingTask, ProductSizeRate } from '@/types'
+    18→import { printDocument } from '@/lib/formatters'
+    19→import { getColorDot, getSewingTaskStatusBadge } from '@/lib/status-badges'
+    20→
+    21→// ===== SIZE DIFFICULTY HELPERS =====
+    22→
+    23→// Standard size order for sorting
+    24→const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', '3XL', '4XL', '5XL', '80', '86', '92', '98', '104', '110', '116', '122', '128', '134', '140', '146', '152', '158', '164']
+    25→
+    26→function getSizeOrderIndex(size: string): number {
+    27→  const idx = SIZE_ORDER.indexOf(size.toUpperCase())
+    28→  if (idx >= 0) return idx
+    29→  // Try parsing as number
+    30→  const num = parseInt(size)
+    31→  if (!isNaN(num)) return num
+    32→  return 999
+    33→}
+    34→
+    35→// Get the effective sewer rate for a given size, falling back to product base rate
+    36→function getSizeRate(cpItem: CuttingPlanItem): number {
+    37→  const baseRate = cpItem.product.sewerRate || 1
+    38→  const sizeRate = cpItem.product.sizeRates?.find((sr: ProductSizeRate) => sr.size === cpItem.size)
+    39→  if (sizeRate && sizeRate.sewerRate != null && sizeRate.sewerRate > 0) {
+    40→    return sizeRate.sewerRate
+    41→  }
+    42→  // Fallback: estimate difficulty from fabricCoeff if available
+    43→  if (sizeRate && sizeRate.fabricCoeff != null && sizeRate.fabricCoeff > 0) {
+    44→    return baseRate * sizeRate.fabricCoeff
+    45→  }
+    46→  // Last fallback: estimate from size order — larger sizes = more work
+    47→  // Use a multiplier based on size position (e.g., S=0.9, M=1.0, L=1.1)
+    48→  const sizeIdx = getSizeOrderIndex(cpItem.size)
+    49→  if (sizeIdx < 999) {
+    50→    // Normalize around M (index 2) as baseline 1.0
+    51→    const midIdx = SIZE_ORDER.indexOf('M')
+    52→    const diff = sizeIdx - (midIdx >= 0 ? midIdx : 2)
+    53→    return baseRate * (1 + diff * 0.05) // ±5% per size step
+    54→  }
+    55→  return baseRate
+    56→}
+    57→
+    58→// Get a human-readable difficulty label for a size
+    59→function getSizeDifficultyLabel(cpItem: CuttingPlanItem): { label: string; color: string } {
+    60→  const baseRate = cpItem.product.sewerRate || 1
+    61→  const rate = getSizeRate(cpItem)
+    62→  const ratio = rate / baseRate
+    63→
+    64→  if (ratio <= 0.85) return { label: 'Лёгкий', color: 'text-green-600' }
+    65→  if (ratio <= 0.95) return { label: 'Средне-лёгкий', color: 'text-lime-600' }
+    66→  if (ratio <= 1.05) return { label: 'Средний', color: 'text-gray-600' }
+    67→  if (ratio <= 1.15) return { label: 'Средне-тяжёлый', color: 'text-orange-600' }
+    68→  return { label: 'Тяжёлый', color: 'text-red-600' }
+    69→}
+    70→
+    71→export function SewingTasksTab() {
+    72→  const { toast } = useToast()
+    73→  const queryClient = useQueryClient()
+    74→
+    75→  // Distribution state
+    76→  const [selectedCuttingPlanId, setSelectedCuttingPlanId] = useState('')
+    77→  const [assignments, setAssignments] = useState<Array<{
+    78→    id: string
+    79→    cuttingPlanItemId: string
+    80→    employeeId: string
+    81→    quantity: number
+    82→  }>>([])
+    83→  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+    84→  const [isCreating, setIsCreating] = useState(false)
+    85→  const [showAutoSettings, setShowAutoSettings] = useState(false)
+    86→  const [selectedSewerIds, setSelectedSewerIds] = useState<Set<string>>(new Set())
+    87→  const [bundleAware, setBundleAware] = useState(true)
+    88→  const [balanceMode, setBalanceMode] = useState<'workload' | 'quantity'>('workload')
+    89→
+    90→  const { data: sewingTasks = [], isLoading } = useQuery({
+    91→    queryKey: ['sewing-tasks'],
+    92→    queryFn: async () => {
+    93→      const r = await authFetch('/api/sewing-tasks')
+    94→      const data = await r.json()
+    95→      return Array.isArray(data) ? data : []
+    96→    },
+    97→  })
+    98→
+    99→  const { data: cuttingPlans = [] } = useQuery({
+   100→    queryKey: ['cutting-plans'],
+   101→    queryFn: async () => {
+   102→      const r = await authFetch('/api/cutting-plans')
+   103→      const data = await r.json()
+   104→      return Array.isArray(data) ? data : []
+   105→    },
+   106→  })
+   107→
+   108→  const { data: employees = [] } = useQuery({
+   109→    queryKey: ['employees'],
+   110→    queryFn: async () => {
+   111→      const r = await authFetch('/api/employees')
+   112→      const data = await r.json()
+   113→      return Array.isArray(data) ? data : []
+   114→    },
+   115→  })
+   116→
+   117→  const cutPlans = cuttingPlans.filter((cp: CuttingPlan) => cp.status === 'cut')
+   118→  const sewers = employees.filter((e: Employee) => e.role === 'sewer')
+   119→  const selectedPlan = cutPlans.find((cp: CuttingPlan) => cp.id === selectedCuttingPlanId)
+   120→
+   121→  // Compute seamstress workload (active tasks count + total weighted work)
+   122→  const sewerWorkload = useMemo(() => {
+   123→    const workload: Record<string, { taskCount: number; totalQty: number; totalWork: number }> = {}
+   124→    for (const s of sewers) {
+   125→      workload[s.id] = { taskCount: 0, totalQty: 0, totalWork: 0 }
+   126→    }
+   127→    for (const task of sewingTasks as SewingTask[]) {
+   128→      if (task.status === 'completed' || task.status === 'done') continue
+   129→      if (!workload[task.employeeId]) workload[task.employeeId] = { taskCount: 0, totalQty: 0, totalWork: 0 }
+   130→      workload[task.employeeId].taskCount += 1
+   131→      for (const item of task.items) {
+   132→        workload[task.employeeId].totalQty += item.quantity
+   133→        // Use product sewerRate as weight for existing work
+   134→        workload[task.employeeId].totalWork += item.quantity * (item.product.sewerRate || 1)
+   135→      }
+   136→    }
+   137→    return workload
+   138→  }, [sewingTasks, sewers])
+   139→
+   140→  // Compute stats per cutting plan item
+   141→  const getItemStats = useCallback((cpItem: CuttingPlanItem) => {
+   142→    const existingAssigned = (sewingTasks as SewingTask[])
+   143→      .filter((st) => st.cuttingPlanId === selectedCuttingPlanId)
+   144→      .flatMap((st) => st.items)
+   145→      .filter((item) =>
+   146→        item.productId === cpItem.productId &&
+   147→        item.size === cpItem.size &&
+   148→        item.color === cpItem.color
+   149→      )
+   150→      .reduce((sum, item) => sum + item.quantity, 0)
+   151→
+   152→    const newAssigned = assignments
+   153→      .filter(a => a.cuttingPlanItemId === cpItem.id)
+   154→      .reduce((sum, a) => sum + a.quantity, 0)
+   155→
+   156→    return {
+   157→      total: cpItem.actualQty ?? cpItem.plannedQty,
+   158→      plannedQty: cpItem.plannedQty,
+   159→      actualQty: cpItem.actualQty,
+   160→      assigned: existingAssigned + newAssigned,
+   161→      remaining: (cpItem.actualQty ?? cpItem.plannedQty) - existingAssigned - newAssigned,
+   162→      existingAssigned,
+   163→      newAssigned,
+   164→    }
+   165→  }, [sewingTasks, selectedCuttingPlanId, assignments])
+   166→
+   167→  // Get existing assignments for display
+   168→  const getExistingAssignments = useCallback((cpItem: CuttingPlanItem) => {
+   169→    return (sewingTasks as SewingTask[])
+   170→      .filter((st) => st.cuttingPlanId === selectedCuttingPlanId)
+   171→      .flatMap((st) =>
+   172→        st.items
+   173→          .filter((item) =>
+   174→            item.productId === cpItem.productId &&
+   175→            item.size === cpItem.size &&
+   176→            item.color === cpItem.color
+   177→          )
+   178→          .map((item) => ({
+   179→            taskId: st.id,
+   180→            taskStatus: st.status,
+   181→            employeeName: st.employee.name,
+   182→            quantity: item.quantity,
+   183→          }))
+   184→      )
+   185→  }, [sewingTasks, selectedCuttingPlanId])
+   186→
+   187→  // Assignment management
+   188→  const addAssignment = useCallback((cuttingPlanItemId: string) => {
+   189→    setAssignments(prev => [...prev, {
+   190→      id: `new-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+   191→      cuttingPlanItemId,
+   192→      employeeId: '',
+   193→      quantity: 0,
+   194→    }])
+   195→  }, [])
+   196→
+   197→  const removeAssignment = useCallback((id: string) => {
+   198→    setAssignments(prev => prev.filter(a => a.id !== id))
+   199→  }, [])
+   200→
+   201→  const updateAssignment = useCallback((id: string, field: string, value: string | number) => {
+   202→    setAssignments(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a))
+   203→  }, [])
+   204→
+   205→  // ===== SMART AUTO-DISTRIBUTION ALGORITHM =====
+   206→  // Key principle: balance by SIZE DIFFICULTY, not just quantity.
+   207→  // Each size has a "weight" (sewerRate or estimated difficulty).
+   208→  // The algorithm distributes so each sewer gets roughly equal TOTAL WORKLOAD
+   209→  // (sum of qty × sizeRate), and a fair MIX of easy and hard sizes.
+   210→  const handleAutoDistribute = useCallback(() => {
+   211→    if (!selectedPlan) {
+   212→      toast({ title: 'Ошибка', description: 'Выберите план раскроя', variant: 'destructive' })
+   213→      return
+   214→    }
+   215→
+   216→    const activeSewers = sewers.filter((s: Employee) => selectedSewerIds.has(s.id))
+   217→    if (activeSewers.length === 0) {
+   218→      toast({ title: 'Ошибка', description: 'Выберите хотя бы одну швею для распределения', variant: 'destructive' })
+   219→      return
+   220→    }
+   221→
+   222→    // 1. Collect all items that need distribution, with their difficulty weights
+   223→    type DistribItem = {
+   224→      cpItem: CuttingPlanItem
+   225→      remaining: number
+   226→      sizeRate: number      // difficulty weight per unit
+   227→      bundleSize: number    // minimum unit (bundle size)
+   228→      totalWork: number     // remaining × sizeRate
+   229→    }
+   230→
+   231→    const distribItems: DistribItem[] = []
+   232→    for (const cpItem of selectedPlan.items) {
+   233→      const stats = getItemStats(cpItem)
+   234→      if (stats.remaining <= 0) continue
+   235→
+   236→      const sizeRate = getSizeRate(cpItem)
+   237→      const bundleSize = (bundleAware && cpItem.bundleCount && cpItem.bundleCount > 0)
+   238→        ? Math.max(1, Math.round((cpItem.actualQty ?? cpItem.plannedQty) / cpItem.bundleCount))
+   239→        : 1
+   240→
+   241→      distribItems.push({
+   242→        cpItem,
+   243→        remaining: stats.remaining,
+   244→        sizeRate,
+   245→        bundleSize,
+   246→        totalWork: stats.remaining * sizeRate,
+   247→      })
+   248→    }
+   249→
+   250→    if (distribItems.length === 0) {
+   251→      toast({ title: 'Информация', description: 'Нет позиций для распределения — всё уже распределено' })
+   252→      return
+   253→    }
+   254→
+   255→    // 2. Initialize sewer buckets
+   256→    type SewerBucket = {
+   257→      sewer: Employee
+   258→      assignments: Array<{ cpItemId: string; quantity: number }>
+   259→      totalWork: number    // sum of qty × sizeRate (includes existing workload)
+   260→      totalQty: number
+   261→      sizeMix: Map<string, number>  // size → qty for this sewer
+   262→    }
+   263→
+   264→    const buckets: SewerBucket[] = activeSewers.map(sewer => {
+   265→      const existing = sewerWorkload[sewer.id] || { taskCount: 0, totalQty: 0, totalWork: 0 }
+   266→      return {
+   267→        sewer,
+   268→        assignments: [],
+   269→        totalWork: existing.totalWork,
+   270→        totalQty: existing.totalQty,
+   271→        sizeMix: new Map<string, number>(),
+   272→      }
+   273→    })
+   274→
+   275→    // 3. Strategy: distribute each item to the sewer with least current work,
+   276→    //    but also try to balance SIZE MIX — each sewer should get variety.
+   277→    //    Sort items by size (alternating: small-big-small-big) to get variety.
+   278→
+   279→    // Sort distribItems by size order, then alternate from edges
+   280→    const sortedBySize = [...distribItems].sort((a, b) =>
+   281→      getSizeOrderIndex(a.cpItem.size) - getSizeOrderIndex(b.cpItem.size)
+   282→    )
+   283→
+   284→    // Create alternating order: smallest, largest, 2nd smallest, 2nd largest, etc.
+   285→    // This ensures when we distribute sequentially, each sewer gets a mix of sizes
+   286→    const alternatingItems: DistribItem[] = []
+   287→    let left = 0
+   288→    let right = sortedBySize.length - 1
+   289→    while (left <= right) {
+   290→      alternatingItems.push(sortedBySize[left])
+   291→      if (left !== right) alternatingItems.push(sortedBySize[right])
+   292→      left++
+   293→      right--
+   294→    }
+   295→
+   296→    for (const dItem of alternatingItems) {
+   297→      let remaining = dItem.remaining
+   298→
+   299→      if (dItem.bundleSize > 1) {
+   300→        // Distribute in whole bundles
+   301→        const totalBundles = Math.floor(remaining / dItem.bundleSize)
+   302→        const looseItems = remaining - totalBundles * dItem.bundleSize
+   303→
+   304→        // Sort buckets by totalWork (ascending) — least loaded first
+   305→        const sortedBuckets = [...buckets].sort((a, b) => a.totalWork - b.totalWork)
+   306→
+   307→        const basePerSewer = Math.floor(totalBundles / sortedBuckets.length)
+   308→        const extraBundles = totalBundles % sortedBuckets.length
+   309→
+   310→        for (let i = 0; i < sortedBuckets.length; i++) {
+   311→          const bucket = sortedBuckets[i]
+   312→          let bundlesForSewer = basePerSewer + (i < extraBundles ? 1 : 0)
+   313→          let qty = bundlesForSewer * dItem.bundleSize
+   314→
+   315→          // First sewer gets the loose items
+   316→          if (i === 0 && looseItems > 0) qty += looseItems
+   317→
+   318→          if (qty > 0) {
+   319→            bucket.assignments.push({ cpItemId: dItem.cpItem.id, quantity: qty })
+   320→            bucket.totalWork += qty * dItem.sizeRate
+   321→            bucket.totalQty += qty
+   322→            const currentMix = bucket.sizeMix.get(dItem.cpItem.size) || 0
+   323→            bucket.sizeMix.set(dItem.cpItem.size, currentMix + qty)
+   324→          }
+   325→        }
+   326→      } else {
+   327→        // No bundles — distribute by individual items, balancing workload
+   328→        // For each unit, give to the sewer with least totalWork
+   329→        // But do it in chunks for efficiency: divide proportionally
+   330→
+   331→        const totalAvailable = remaining
+   332→        // Calculate target work per sewer based on current loads
+   333→        const totalCurrentWork = buckets.reduce((s, b) => s + b.totalWork, 0)
+   334→        const totalTargetWork = totalCurrentWork + totalAvailable * dItem.sizeRate
+   335→        const targetPerSewer = totalTargetWork / buckets.length
+   336→
+   337→        // Sort by how far below target each sewer is (most below = gets more)
+   338→        const sortedBuckets = [...buckets].sort((a, b) => {
+   339→          const deficitA = targetPerSewer - a.totalWork
+   340→          const deficitB = targetPerSewer - b.totalWork
+   341→          return deficitB - deficitA // most deficit first
+   342→        })
+   343→
+   344→        let left = remaining
+   345→        for (let i = 0; i < sortedBuckets.length && left > 0; i++) {
+   346→          const bucket = sortedBuckets[i]
+   347→          // How many items can this sewer take to reach target?
+   348→          const workDeficit = targetPerSewer - bucket.totalWork
+   349→          let qty: number
+   350→
+   351→          if (i === sortedBuckets.length - 1) {
+   352→            // Last sewer gets everything remaining
+   353→            qty = left
+   354→          } else {
+   355→            // Give enough to approach target, but at least 1
+   356→            qty = workDeficit > 0
+   357→              ? Math.max(1, Math.min(left, Math.round(workDeficit / dItem.sizeRate)))
+   358→              : 1
+   359→          }
+   360→
+   361→          qty = Math.min(qty, left)
+   362→          if (qty > 0) {
+   363→            bucket.assignments.push({ cpItemId: dItem.cpItem.id, quantity: qty })
+   364→            bucket.totalWork += qty * dItem.sizeRate
+   365→            bucket.totalQty += qty
+   366→            const currentMix = bucket.sizeMix.get(dItem.cpItem.size) || 0
+   367→            bucket.sizeMix.set(dItem.cpItem.size, currentMix + qty)
+   368→            left -= qty
+   369→          }
+   370→        }
+   371→
+   372→        // If anything remains (rounding), give to least loaded
+   373→        if (left > 0) {
+   374→          const leastLoaded = [...buckets].sort((a, b) => a.totalWork - b.totalWork)[0]
+   375→          const existing = leastLoaded.assignments.find(a => a.cpItemId === dItem.cpItem.id)
+   376→          if (existing) {
+   377→            existing.quantity += left
+   378→          } else {
+   379→            leastLoaded.assignments.push({ cpItemId: dItem.cpItem.id, quantity: left })
+   380→          }
+   381→          leastLoaded.totalWork += left * dItem.sizeRate
+   382→          leastLoaded.totalQty += left
+   383→        }
+   384→      }
+   385→    }
+   386→
+   387→    // 4. Convert buckets to assignments array
+   388→    const newAssignments: Array<{
+   389→      id: string
+   390→      cuttingPlanItemId: string
+   391→      employeeId: string
+   392→      quantity: number
+   393→    }> = []
+   394→
+   395→    for (const bucket of buckets) {
+   396→      for (const a of bucket.assignments) {
+   397→        if (a.quantity > 0) {
+   398→          newAssignments.push({
+   399→            id: `auto-${a.cpItemId}-${bucket.sewer.id}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+   400→            cuttingPlanItemId: a.cpItemId,
+   401→            employeeId: bucket.sewer.id,
+   402→            quantity: a.quantity,
+   403→          })
+   404→        }
+   405→      }
+   406→    }
+   407→
+   408→    setAssignments(newAssignments)
+   409→    const firstAssigned = newAssignments[0]?.cuttingPlanItemId
+   410→    if (firstAssigned) setExpandedRow(firstAssigned)
+   411→
+   412→    // Compute fairness stats
+   413→    const workloads = buckets.map(b => Math.round(b.totalWork))
+   414→    const minWork = Math.min(...workloads)
+   415→    const maxWork = Math.max(...workloads)
+   416→    const fairnessPct = maxWork > 0 ? Math.round((minWork / maxWork) * 100) : 100
+   417→
+   418→    toast({
+   419→      title: 'Автоматическое распределение',
+   420→      description: `${newAssignments.length} назначений между ${activeSewers.length} швеями. Справедливость: ${fairnessPct}%`,
+   421→    })
+   422→  }, [selectedPlan, sewers, selectedSewerIds, sewerWorkload, getItemStats, bundleAware, toast])
+   423→
+   424→  // Toggle sewer selection for auto-distribution
+   425→  const toggleSewerSelection = useCallback((sewerId: string) => {
+   426→    setSelectedSewerIds(prev => {
+   427→      const next = new Set(prev)
+   428→      if (next.has(sewerId)) next.delete(sewerId)
+   429→      else next.add(sewerId)
+   430→      return next
+   431→    })
+   432→  }, [])
+   433→
+   434→  const selectAllSewers = useCallback(() => {
+   435→    setSelectedSewerIds(new Set(sewers.map((s: Employee) => s.id)))
+   436→  }, [sewers])
+   437→
+   438→  const deselectAllSewers = useCallback(() => {
+   439→    setSelectedSewerIds(new Set())
+   440→  }, [])
+   441→
+   442→  // Compute per-sewer summary for the fairness preview
+   443→  const sewerSummary = useMemo(() => {
+   444→    if (!selectedPlan || assignments.length === 0) return []
+   445→
+   446→    const summary: Record<string, { name: string; code: string; totalQty: number; totalWork: number; sizes: Map<string, number> }> = {}
+   447→    for (const s of sewers) {
+   448→      summary[s.id] = { name: s.name, code: s.code, totalQty: 0, totalWork: 0, sizes: new Map() }
+   449→    }
+   450→
+   451→    for (const a of assignments) {
+   452→      if (!a.employeeId || a.quantity <= 0) continue
+   453→      const cpItem = selectedPlan.items.find(i => i.id === a.cuttingPlanItemId)
+   454→      if (!cpItem) continue
+   455→
+   456→      if (!summary[a.employeeId]) {
+   457→        const sewer = sewers.find((s: Employee) => s.id === a.employeeId)
+   458→        summary[a.employeeId] = { name: sewer?.name || '?', code: sewer?.code || '?', totalQty: 0, totalWork: 0, sizes: new Map() }
+   459→      }
+   460→
+   461→      const bucket = summary[a.employeeId]
+   462→      bucket.totalQty += a.quantity
+   463→      bucket.totalWork += a.quantity * getSizeRate(cpItem)
+   464→      const cur = bucket.sizes.get(cpItem.size) || 0
+   465→      bucket.sizes.set(cpItem.size, cur + a.quantity)
+   466→    }
+   467→
+   468→    return Object.entries(summary)
+   469→      .filter(([, v]) => v.totalQty > 0)
+   470→      .sort((a, b) => b[1].totalWork - a[1].totalWork)
+   471→  }, [selectedPlan, assignments, sewers])
+   472→
+   473→  // Create sewing tasks from assignments
+   474→  const handleCreateTasks = useCallback(async () => {
+   475→    if (!selectedCuttingPlanId) {
+   476→      toast({ title: 'Ошибка', description: 'Выберите план раскроя', variant: 'destructive' })
+   477→      return
+   478→    }
+   479→
+   480→    const validAssignments = assignments.filter(a => a.employeeId && a.quantity > 0)
+   481→    if (validAssignments.length === 0) {
+   482→      toast({ title: 'Ошибка', description: 'Добавьте хотя бы одно назначение', variant: 'destructive' })
+   483→      return
+   484→    }
+   485→
+   486→    const plan = cutPlans.find((cp: CuttingPlan) => cp.id === selectedCuttingPlanId)
+   487→    if (!plan) return
+   488→
+   489→    for (const cpItem of plan.items) {
+   490→      const stats = getItemStats(cpItem)
+   491→      if (stats.remaining < 0) {
+   492→        toast({
+   493→          title: 'Ошибка',
+   494→          description: `Превышено количество: ${cpItem.product.name} ${cpItem.size} ${cpItem.color}`,
+   495→          variant: 'destructive',
+   496→        })
+   497→        return
+   498→      }
+   499→    }
+   500→
+   501→    setIsCreating(true)
+   502→    try {
+   503→      // Group by employee — one SewingTask per employee with all their items
+   504→      const byEmployee: Record<string, Array<typeof validAssignments[0]>> = {}
+   505→      for (const a of validAssignments) {
+   506→        if (!byEmployee[a.employeeId]) byEmployee[a.employeeId] = []
+   507→        byEmployee[a.employeeId].push(a)
+   508→      }
+   509→
+   510→      const promises = Object.entries(byEmployee).map(([employeeId, empAssignments]) => {
+   511→        const items = empAssignments.map((assignment) => {
+   512→          const cpItem = plan.items.find(i => i.id === assignment.cuttingPlanItemId)
+   513→          if (!cpItem) return null
+   514→          return {
+   515→            productId: cpItem.productId,
+   516→            size: cpItem.size,
+   517→            color: cpItem.color,
+   518→            colorHex: cpItem.colorHex,
+   519→            quantity: assignment.quantity,
+   520→          }
+   521→        }).filter(Boolean)
+   522→
+   523→        if (items.length === 0) return Promise.resolve(null)
+   524→
+   525→        return authFetch('/api/sewing-tasks', {
+   526→          method: 'POST',
+   527→          headers: { 'Content-Type': 'application/json' },
+   528→          body: JSON.stringify({
+   529→            cuttingPlanId: selectedCuttingPlanId,
+   530→            employeeId,
+   531→            items,
+   532→          }),
+   533→        }).then(r => {
+   534→          if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'Ошибка') })
+   535→          return r.json()
+   536→        })
+   537→      })
+   538→
+   539→      const results = await Promise.all(promises)
+   540→      const created = results.filter(Boolean).length
+   541→
+   542→      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
+   543→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+   544→      setAssignments([])
+   545→      toast({ title: 'Задания сформированы', description: `Создано ${created} заданий для швей` })
+   546→    } catch (err: unknown) {
+   547→      const msg = err instanceof Error ? err.message : 'Не удалось создать задания'
+   548→      toast({ title: 'Ошибка', description: msg, variant: 'destructive' })
+   549→    } finally {
+   550→      setIsCreating(false)
+   551→    }
+   552→  }, [selectedCuttingPlanId, assignments, cutPlans, getItemStats, queryClient, toast])
+   553→
+   554→  // Status update for existing tasks
+   555→  const updateStatusMutation = useMutation({
+   556→    mutationFn: ({ id, status }: { id: string; status: string }) =>
+   557→      authFetch(`/api/sewing-tasks/${id}`, {
+   558→        method: 'PATCH',
+   559→        headers: { 'Content-Type': 'application/json' },
+   560→        body: JSON.stringify({ status }),
+   561→      }).then(async (r) => {
+   562→        const result = await r.json()
+   563→        if (!r.ok) throw new Error(result.error || 'Не удалось обновить статус')
+   564→        return result
+   565→      }),
+   566→    onSuccess: () => {
+   567→      queryClient.invalidateQueries({ queryKey: ['sewing-tasks'] })
+   568→      toast({ title: 'Статус обновлён', description: 'Статус задания изменён' })
+   569→    },
+   570→    onError: (err: Error) => {
+   571→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   572→    },
+   573→  })
+   574→
+   575→  if (isLoading) {
+   576→    return (
+   577→      <div className="flex items-center justify-center p-8">
+   578→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   579→        <span className="ml-2 text-muted-foreground">Загрузка...</span>
+   580→      </div>
+   581→    )
+   582→  }
+   583→
+   584→  const hasNewAssignments = assignments.some(a => a.employeeId && a.quantity > 0)
+   585→  const totalAssignedQty = assignments.filter(a => a.employeeId && a.quantity > 0).reduce((s, a) => s + a.quantity, 0)
+   586→  const uniqueSewersInAssignments = new Set(assignments.filter(a => a.employeeId && a.quantity > 0).map(a => a.employeeId)).size
+   587→
+   588→  return (
+   589→    <div className="space-y-6">
+   590→      <h2 className="text-xl font-semibold">Задания для швей</h2>
+   591→
+   592→      {/* ===== Distribution Section ===== */}
+   593→      <Card>
+   594→        <CardHeader className="pb-3">
+   595→          <div className="flex items-center justify-between flex-wrap gap-2">
+   596→            <CardTitle className="text-base flex items-center gap-2">
+   597→              <ClipboardList className="h-5 w-5 text-emerald-600" />
+   598→              Распределение заданий
+   599→            </CardTitle>
+   600→            {selectedPlan && (
+   601→              <Button
+   602→                size="sm"
+   603→                variant="outline"
+   604→                className="gap-1.5"
+   605→                onClick={() => setShowAutoSettings(!showAutoSettings)}
+   606→              >
+   607→                <Zap className="h-4 w-4 text-amber-500" />
+   608→                Авто-распределение
+   609→              </Button>
+   610→            )}
+   611→          </div>
+   612→        </CardHeader>
+   613→        <CardContent className="space-y-4">
+   614→          <div className="max-w-xs">
+   615→            <Label className="text-sm">План раскроя</Label>
+   616→            <Select
+   617→              value={selectedCuttingPlanId}
+   618→              onValueChange={(v) => {
+   619→                setSelectedCuttingPlanId(v)
+   620→                setAssignments([])
+   621→                setExpandedRow(null)
+   622→              }}
+   623→            >
+   624→              <SelectTrigger><SelectValue placeholder="Выберите раскрой" /></SelectTrigger>
+   625→              <SelectContent>
+   626→                {cutPlans.length === 0 ? (
+   627→                  <SelectItem value="_none" disabled>Нет раскроенных планов</SelectItem>
+   628→                ) : (
+   629→                  cutPlans.map((cp: CuttingPlan) => (
+   630→                    <SelectItem key={cp.id} value={cp.id}>{cp.plan.name}</SelectItem>
+   631→                  ))
+   632→                )}
+   633→              </SelectContent>
+   634→            </Select>
+   635→          </div>
+   636→
+   637→          {/* ===== Auto-Distribution Settings Panel ===== */}
+   638→          {showAutoSettings && selectedPlan && (
+   639→            <Card className="border-amber-200 bg-amber-50/30">
+   640→              <CardHeader className="pb-2 pt-3 px-4">
+   641→                <CardTitle className="text-sm flex items-center gap-2">
+   642→                  <Settings2 className="h-4 w-4 text-amber-600" />
+   643→                  Настройки автоматического распределения
+   644→                </CardTitle>
+   645→              </CardHeader>
+   646→              <CardContent className="px-4 pb-3 space-y-3">
+   647→                {/* Sewer selection */}
+   648→                <div className="space-y-2">
+   649→                  <div className="flex items-center justify-between">
+   650→                    <Label className="text-xs font-medium">Швеи для распределения:</Label>
+   651→                    <div className="flex gap-2">
+   652→                      <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={selectAllSewers}>Все</Button>
+   653→                      <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={deselectAllSewers}>Сброс</Button>
+   654→                    </div>
+   655→                  </div>
+   656→                  <div className="flex flex-wrap gap-2">
+   657→                    {sewers.map((s: Employee) => {
+   658→                      const isSelected = selectedSewerIds.has(s.id)
+   659→                      const workload = sewerWorkload[s.id] || { taskCount: 0, totalQty: 0, totalWork: 0 }
+   660→                      return (
+   661→                        <label
+   662→                          key={s.id}
+   663→                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border cursor-pointer transition-colors text-sm ${
+   664→                            isSelected
+   665→                              ? 'border-amber-400 bg-amber-100 text-amber-800'
+   666→                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+   667→                          }`}
+   668→                        >
+   669→                          <Checkbox
+   670→                            checked={isSelected}
+   671→                            onCheckedChange={() => toggleSewerSelection(s.id)}
+   672→                            className="h-3.5 w-3.5"
+   673→                          />
+   674→                          <span className="font-medium">{s.name}</span>
+   675→                          <span className="text-xs opacity-70">({s.code})</span>
+   676→                          {workload.taskCount > 0 && (
+   677→                            <Badge variant="outline" className="text-[10px] ml-0.5 py-0 px-1">
+   678→                              {workload.taskCount} зад.
+   679→                            </Badge>
+   680→                          )}
+   681→                        </label>
+   682→                      )
+   683→                    })}
+   684→                  </div>
+   685→                  {sewers.length === 0 && (
+   686→                    <p className="text-xs text-muted-foreground">Нет швей в системе. Добавьте сотрудников с ролью &quot;швея&quot;.</p>
+   687→                  )}
+   688→                </div>
+   689→
+   690→                {/* Balance mode */}
+   691→                <div className="space-y-2">
+   692→                  <Label className="text-xs font-medium">Режим балансировки:</Label>
+   693→                  <div className="flex gap-2">
+   694→                    <Button
+   695→                      size="sm"
+   696→                      variant={balanceMode === 'workload' ? 'default' : 'outline'}
+   697→                      className={balanceMode === 'workload' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+   698→                      onClick={() => setBalanceMode('workload')}
+   699→                    >
+   700→                      <Scale className="h-3.5 w-3.5 mr-1" />
+   701→                      По трудоёмкости
+   702→                    </Button>
+   703→                    <Button
+   704→                      size="sm"
+   705→                      variant={balanceMode === 'quantity' ? 'default' : 'outline'}
+   706→                      className={balanceMode === 'quantity' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+   707→                      onClick={() => setBalanceMode('quantity')}
+   708→                    >
+   709→                      По количеству
+   710→                    </Button>
+   711→                  </div>
+   712→                  <p className="text-xs text-muted-foreground">
+   713→                    {balanceMode === 'workload'
+   714→                      ? 'Учитывает ставки по размерам: маленькие размеры легче, большие — тяжелее. Каждая швея получает справедливый набор.'
+   715→                      : 'Распределяет равное количество изделий каждому, без учёта размера.'}
+   716→                  </p>
+   717→                </div>
+   718→
+   719→                {/* Bundle-aware toggle */}
+   720→                <div className="flex items-center gap-3">
+   721→                  <Checkbox
+   722→                    id="bundle-aware"
+   723→                    checked={bundleAware}
+   724→                    onCheckedChange={(checked) => setBundleAware(!!checked)}
+   725→                  />
+   726→                  <Label htmlFor="bundle-aware" className="text-sm cursor-pointer">
+   727→                    Учитывать пачки при распределении (кратно количеству в пачке)
+   728→                  </Label>
+   729→                </div>
+   730→
+   731→                {/* Size difficulty preview */}
+   732→                {selectedPlan.items.length > 0 && (
+   733→                  <div className="space-y-1">
+   734→                    <Label className="text-xs font-medium">Сложность размеров:</Label>
+   735→                    <div className="flex flex-wrap gap-1.5">
+   736→                      {selectedPlan.items
+   737→                        .filter((item, idx, arr) =>
+   738→                          arr.findIndex(i => i.size === item.size) === idx
+   739→                        )
+   740→                        .sort((a, b) => getSizeOrderIndex(a.size) - getSizeOrderIndex(b.size))
+   741→                        .map((cpItem) => {
+   742→                          const diff = getSizeDifficultyLabel(cpItem)
+   743→                          const rate = getSizeRate(cpItem)
+   744→                          return (
+   745→                            <TooltipProvider key={cpItem.size}>
+   746→                              <Tooltip>
+   747→                                <TooltipTrigger asChild>
+   748→                                  <Badge
+   749→                                    variant="outline"
+   750→                                    className={`text-xs cursor-help ${diff.color}`}
+   751→                                  >
+   752→                                    {cpItem.size} — {diff.label}
+   753→                                  </Badge>
+   754→                                </TooltipTrigger>
+   755→                                <TooltipContent>
+   756→                                  <p>Ставка: {rate.toFixed(1)} ₽/шт</p>
+   757→                                  <p>Базовая: {(cpItem.product.sewerRate || 1).toFixed(1)} ₽/шт</p>
+   758→                                  <p>Коэфф: {(rate / (cpItem.product.sewerRate || 1)).toFixed(2)}</p>
+   759→                                </TooltipContent>
+   760→                              </Tooltip>
+   761→                            </TooltipProvider>
+   762→                          )
+   763→                        })}
+   764→                    </div>
+   765→                  </div>
+   766→                )}
+   767→
+   768→                {/* Auto-distribute button */}
+   769→                <Button
+   770→                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+   771→                  onClick={handleAutoDistribute}
+   772→                  disabled={selectedSewerIds.size === 0}
+   773→                >
+   774→                  <Zap className="h-4 w-4 mr-2" />
+   775→                  Распределить автоматически
+   776→                  {selectedSewerIds.size > 0 && ` (${selectedSewerIds.size} швей)`}
+   777→                </Button>
+   778→              </CardContent>
+   779→            </Card>
+   780→          )}
+   781→
+   782→          {selectedPlan && (
+   783→            <>
+   784→              <div className="border rounded-lg overflow-x-auto">
+   785→                <div className="overflow-x-auto">
+   786→                  <Table>
+   787→                    <TableHeader>
+   788→                      <TableRow>
+   789→                        <TableHead>Изделие</TableHead>
+   790→                        <TableHead>Размер</TableHead>
+   791→                        <TableHead>Цвет</TableHead>
+   792→                        <TableHead className="text-center">Всего</TableHead>
+   793→                        <TableHead className="text-center">Распределено</TableHead>
+   794→                        <TableHead className="text-center">Осталось</TableHead>
+   795→                        <TableHead>Сложность</TableHead>
+   796→                        <TableHead>Статус</TableHead>
+   797→                      </TableRow>
+   798→                    </TableHeader>
+   799→                    <TableBody>
+   800→                      {selectedPlan.items.map((cpItem) => {
+   801→                        const stats = getItemStats(cpItem)
+   802→                        const isExpanded = expandedRow === cpItem.id
+   803→                        const itemAssignments = assignments.filter(a => a.cuttingPlanItemId === cpItem.id)
+   804→                        const existingAssignments = getExistingAssignments(cpItem)
+   805→                        const maxForNewAssignment = stats.remaining + itemAssignments.reduce((s, a) => s + a.quantity, 0)
+   806→                        const diff = getSizeDifficultyLabel(cpItem)
+   807→                        const sizeRate = getSizeRate(cpItem)
+   808→
+   809→                        return (
+   810→                          <Fragment key={cpItem.id}>
+   811→                            <TableRow
+   812→                              className={`cursor-pointer hover:bg-emerald-50/50 ${stats.remaining === 0 ? 'bg-emerald-50/30' : ''}`}
+   813→                              onClick={() => setExpandedRow(isExpanded ? null : cpItem.id)}
+   814→                            >
+   815→                              <TableCell className="font-medium">{cpItem.product.name}</TableCell>
+   816→                              <TableCell>{cpItem.size}</TableCell>
+   817→                              <TableCell>
+   818→                                <span className="flex items-center">
+   819→                                  {getColorDot(cpItem.colorHex)}
+   820→                                  {cpItem.color}
+   821→                                </span>
+   822→                              </TableCell>
+   823→                              <TableCell className="text-center">
+   824→                                {stats.total}
+   825→                                {cpItem.bundleCount && cpItem.bundleCount > 0 && (
+   826→                                  <span className="text-xs text-muted-foreground ml-1">
+   827→                                    ({cpItem.bundleCount} пач.)
+   828→                                  </span>
+   829→                                )}
+   830→                              </TableCell>
+   831→                              <TableCell className="text-center">{stats.assigned}</TableCell>
+   832→                              <TableCell className={`text-center font-medium ${stats.remaining > 0 ? 'text-amber-600' : stats.remaining === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+   833→                                {stats.remaining}
+   834→                              </TableCell>
+   835→                              <TableCell>
+   836→                                <TooltipProvider>
+   837→                                  <Tooltip>
+   838→                                    <TooltipTrigger asChild>
+   839→                                      <Badge variant="outline" className={`text-xs cursor-help ${diff.color}`}>
+   840→                                        {diff.label}
+   841→                                      </Badge>
+   842→                                    </TooltipTrigger>
+   843→                                    <TooltipContent>
+   844→                                      <p>Ставка: {sizeRate.toFixed(1)} ₽/шт</p>
+   845→                                    </TooltipContent>
+   846→                                  </Tooltip>
+   847→                                </TooltipProvider>
+   848→                              </TableCell>
+   849→                              <TableCell>
+   850→                                {stats.remaining === 0 ? (
+   851→                                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">Распределено</Badge>
+   852→                                ) : stats.assigned > 0 ? (
+   853→                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">Частично</Badge>
+   854→                                ) : (
+   855→                                  <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 text-xs">Не начато</Badge>
+   856→                                )}
+   857→                              </TableCell>
+   858→                            </TableRow>
+   859→                            {isExpanded && (
+   860→                              <TableRow>
+   861→                                <TableCell colSpan={8} className="bg-gray-50/50 p-4">
+   862→                                  <div className="space-y-3">
+   863→                                    {/* Existing assignments */}
+   864→                                    {existingAssignments.length > 0 && (
+   865→                                      <div className="space-y-1">
+   866→                                        <Label className="text-xs text-muted-foreground font-medium">Уже назначено:</Label>
+   867→                                        {existingAssignments.map((ea, idx) => (
+   868→                                          <div key={idx} className="flex items-center gap-2 text-sm bg-white rounded px-3 py-1.5 border">
+   869→                                            <Users className="h-3.5 w-3.5 text-muted-foreground" />
+   870→                                            <span className="font-medium">{ea.employeeName}</span>
+   871→                                            <span className="text-muted-foreground">—</span>
+   872→                                            <span>{ea.quantity} шт</span>
+   873→                                            {ea.taskStatus !== 'done' && (
+   874→                                              <Badge variant="outline" className="text-[10px] ml-auto">
+   875→                                                {ea.taskStatus === 'issued' ? 'Выдано' : ea.taskStatus === 'in_work' ? 'В работе' : ''}
+   876→                                              </Badge>
+   877→                                            )}
+   878→                                          </div>
+   879→                                        ))}
+   880→                                      </div>
+   881→                                    )}
+   882→
+   883→                                    {/* New assignment rows */}
+   884→                                    {itemAssignments.map((assignment) => {
+   885→                                      const sewer = sewers.find((s: Employee) => s.id === assignment.employeeId)
+   886→                                      return (
+   887→                                        <div key={assignment.id} className="flex items-center gap-2 flex-wrap bg-white rounded-md px-3 py-2 border border-amber-200">
+   888→                                          <Select
+   889→                                            value={assignment.employeeId}
+   890→                                            onValueChange={(v) => updateAssignment(assignment.id, 'employeeId', v)}
+   891→                                          >
+   892→                                            <SelectTrigger className="w-52">
+   893→                                              <SelectValue placeholder="Выберите швею" />
+   894→                                            </SelectTrigger>
+   895→                                            <SelectContent>
+   896→                                              {sewers.map((s: Employee) => (
+   897→                                                <SelectItem key={s.id} value={s.id}>
+   898→                                                  {s.name} ({s.code})
+   899→                                                </SelectItem>
+   900→                                              ))}
+   901→                                            </SelectContent>
+   902→                                          </Select>
+   903→                                          <Input
+   904→                                            type="number"
+   905→                                            min={1}
+   906→                                            max={maxForNewAssignment}
+   907→                                            className="w-24"
+   908→                                            placeholder="Кол-во"
+   909→                                            value={assignment.quantity || ''}
+   910→                                            onChange={(e) => {
+   911→                                              const val = parseInt(e.target.value) || 0
+   912→                                              updateAssignment(assignment.id, 'quantity', val)
+   913→                                            }}
+   914→                                          />
+   915→                                          <span className="text-xs text-muted-foreground">шт</span>
+   916→                                          {sewer && (
+   917→                                            <span className="text-xs text-muted-foreground ml-auto">
+   918→                                              {sewerWorkload[sewer.id]?.taskCount || 0} зад.
+   919→                                            </span>
+   920→                                          )}
+   921→                                          <Button
+   922→                                            size="sm"
+   923→                                            variant="ghost"
+   924→                                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
+   925→                                            onClick={() => removeAssignment(assignment.id)}
+   926→                                          >
+   927→                                            <X className="h-4 w-4" />
+   928→                                          </Button>
+   929→                                        </div>
+   930→                                      )
+   931→                                    })}
+   932→
+   933→                                    {/* Add sewer button */}
+   934→                                    {stats.remaining > 0 && (
+   935→                                      <Button
+   936→                                        size="sm"
+   937→                                        variant="outline"
+   938→                                        onClick={() => addAssignment(cpItem.id)}
+   939→                                      >
+   940→                                        <Plus className="h-4 w-4 mr-1" />
+   941→                                        {itemAssignments.length > 0 ? 'Добавить ещё швею' : 'Назначить швею'}
+   942→                                      </Button>
+   943→                                    )}
+   944→
+   945→                                    {stats.remaining <= 0 && itemAssignments.length === 0 && (
+   946→                                      <p className="text-xs text-muted-foreground">Все изделия распределены</p>
+   947→                                    )}
+   948→                                  </div>
+   949→                                </TableCell>
+   950→                              </TableRow>
+   951→                            )}
+   952→                          </Fragment>
+   953→                        )
+   954→                      })}
+   955→                    </TableBody>
+   956→                  </Table>
+   957→                </div>
+   958→              </div>
+   959→
+   960→              {/* Fairness summary after auto-distribution */}
+   961→              {sewerSummary.length > 1 && hasNewAssignments && (
+   962→                <Card className="border-blue-200 bg-blue-50/30">
+   963→                  <CardContent className="pt-3 pb-3 px-4">
+   964→                    <div className="flex items-center gap-2 mb-2">
+   965→                      <Scale className="h-4 w-4 text-blue-600" />
+   966→                      <span className="text-sm font-medium text-blue-800">Справедливость распределения</span>
+   967→                      <TooltipProvider>
+   968→                        <Tooltip>
+   969→                          <TooltipTrigger asChild>
+   970→                            <Info className="h-3.5 w-3.5 text-blue-400 cursor-help" />
+   971→                          </TooltipTrigger>
+   972→                          <TooltipContent className="max-w-xs">
+   973→                            <p>Трудоёмкость = кол-во × ставка размера. Чем ближе к 100%, тем справедливее распределение. Маленькие размеры легче, поэтому их нужно больше для равной нагрузки.</p>
+   974→                          </TooltipContent>
+   975→                        </Tooltip>
+   976→                      </TooltipProvider>
+   977→                    </div>
+   978→                    <div className="space-y-1.5">
+   979→                      {sewerSummary.map(([sewerId, data]) => {
+   980→                        const maxWork = Math.max(...sewerSummary.map(([, d]) => d.totalWork))
+   981→                        const pct = maxWork > 0 ? Math.round((data.totalWork / maxWork) * 100) : 100
+   982→                        const sizes = Array.from(data.sizes.entries())
+   983→                          .sort((a, b) => getSizeOrderIndex(a[0]) - getSizeOrderIndex(b[0]))
+   984→                        return (
+   985→                          <div key={sewerId} className="space-y-0.5">
+   986→                            <div className="flex items-center gap-2 text-sm">
+   987→                              <span className="font-medium w-28 truncate">{data.name}</span>
+   988→                              <div className="flex-1 h-3 bg-blue-100 rounded-full overflow-hidden">
+   989→                                <div
+   990→                                  className="h-full bg-blue-500 rounded-full transition-all"
+   991→                                  style={{ width: `${pct}%` }}
+   992→                                />
+   993→                              </div>
+   994→                              <span className="text-xs text-muted-foreground w-20 text-right">
+   995→                                {data.totalQty} шт / {Math.round(data.totalWork)} р.
+   996→                              </span>
+   997→                            </div>
+   998→                            <div className="flex flex-wrap gap-1 ml-28">
+   999→                              {sizes.map(([size, qty]) => {
+  1000→                                const diff = getSizeDifficultyLabel({
+  1001→                                  ...selectedPlan.items.find(i => i.size === size)!,
+  1002→                                  product: selectedPlan.items.find(i => i.size === size)?.product || { sewerRate: 1 } as any,
+  1003→                                } as CuttingPlanItem)
+  1004→                                return (
+  1005→                                  <Badge key={size} variant="outline" className={`text-[10px] py-0 ${diff.color}`}>
+  1006→                                    {size}: {qty} шт
+  1007→                                  </Badge>
+  1008→                                )
+  1009→                              })}
+  1010→                            </div>
+  1011→                          </div>
+  1012→                        )
+  1013→                      })}
+  1014→                    </div>
+  1015→                  </CardContent>
+  1016→                </Card>
+  1017→              )}
+  1018→
+  1019→              {/* Summary + Create tasks button */}
+  1020→              {hasNewAssignments && (
+  1021→                <div className="space-y-2">
+  1022→                  <div className="flex flex-wrap gap-2 text-sm">
+  1023→                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+  1024→                      {assignments.filter(a => a.employeeId && a.quantity > 0).length} назначений
+  1025→                    </Badge>
+  1026→                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+  1027→                      {totalAssignedQty} шт всего
+  1028→                    </Badge>
+  1029→                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+  1030→                      {uniqueSewersInAssignments} швей
+  1031→                    </Badge>
+  1032→                  </div>
+  1033→                  <div className="flex justify-end gap-3">
+  1034→                    <Button variant="outline" onClick={() => setAssignments([])}>
+  1035→                      Сбросить
+  1036→                    </Button>
+  1037→                    <Button
+  1038→                      className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1039→                      onClick={handleCreateTasks}
+  1040→                      disabled={isCreating}
+  1041→                    >
+  1042→                      {isCreating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1043→                      <CheckCircle2 className="h-4 w-4 mr-1" />
+  1044→                      Сформировать задания ({uniqueSewersInAssignments} заданий для швей)
+  1045→                    </Button>
+  1046→                  </div>
+  1047→                </div>
+  1048→              )}
+  1049→            </>
+  1050→          )}
+  1051→
+  1052→          {!selectedPlan && cutPlans.length === 0 && (
+  1053→            <p className="text-sm text-muted-foreground text-center py-6">
+  1054→              Нет раскроенных планов для распределения. Утвердите план пошива и выполните раскрой.
+  1055→            </p>
+  1056→          )}
+  1057→          {!selectedPlan && cutPlans.length > 0 && (
+  1058→            <p className="text-sm text-muted-foreground text-center py-4">
+  1059→              Выберите план раскроя для распределения заданий
+  1060→            </p>
+  1061→          )}
+  1062→        </CardContent>
+  1063→      </Card>
+  1064→
+  1065→      {/* ===== Existing Sewing Tasks ===== */}
+  1066→      {sewingTasks.length > 0 && (
+  1067→        <div>
+  1068→          <h3 className="text-lg font-semibold mb-3">Существующие задания</h3>
+  1069→          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+  1070→            {sewingTasks.map((task: SewingTask) => (
+  1071→              <Card key={task.id} className="hover:shadow-md transition-shadow">
+  1072→                <CardHeader className="pb-3">
+  1073→                  <div className="flex items-start justify-between">
+  1074→                    <div>
+  1075→                      <CardTitle className="text-base">{task.employee.name}</CardTitle>
+  1076→                      <p className="text-xs text-muted-foreground mt-0.5">
+  1077→                        План: {task.cuttingPlan.plan.name}
+  1078→                      </p>
+  1079→                    </div>
+  1080→                    {getSewingTaskStatusBadge(task.status)}
+  1081→                  </div>
+  1082→                </CardHeader>
+  1083→                <CardContent className="space-y-3">
+  1084→                  <div className="space-y-1">
+  1085→                    {task.items.map((item) => (
+  1086→                      <div key={item.id} className="flex items-center justify-between text-sm">
+  1087→                        <span className="flex items-center">
+  1088→                          {getColorDot(item.colorHex)}
+  1089→                          {item.product.name} ({item.size})
+  1090→                        </span>
+  1091→                        <span className="font-medium">{item.quantity} шт</span>
+  1092→                      </div>
+  1093→                    ))}
+  1094→                  </div>
+  1095→                  <div className="flex gap-2 pt-1">
+  1096→                    {task.status === 'issued' && (
+  1097→                      <Button
+  1098→                        size="sm"
+  1099→                        className="flex-1 bg-amber-500 hover:bg-amber-600 text-white min-h-[44px]"
+  1100→                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'in_work' })}
+  1101→                        disabled={updateStatusMutation.isPending}
+  1102→                      >
+  1103→                        В работу
+  1104→                      </Button>
+  1105→                    )}
+  1106→                    {task.status === 'in_work' && (
+  1107→                      <Button
+  1108→                        size="sm"
+  1109→                        className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+  1110→                        onClick={() => updateStatusMutation.mutate({ id: task.id, status: 'completed' })}
+  1111→                        disabled={updateStatusMutation.isPending}
+  1112→                      >
+  1113→                        <CheckCircle2 className="h-4 w-4 mr-1" />
+  1114→                        Готово
+  1115→                      </Button>
+  1116→                    )}
+  1117→                    <Button
+  1118→                      size="sm"
+  1119→                      variant="ghost"
+  1120→                      onClick={() => printDocument('sewing-task', task.id)}
+  1121→                    >
+  1122→                      <Printer className="h-4 w-4 mr-1" />
+  1123→                      Печать
+  1124→                    </Button>
+  1125→                  </div>
+  1126→                </CardContent>
+  1127→              </Card>
+  1128→            ))}
+  1129→          </div>
+  1130→        </div>
+  1131→      )}
+  1132→    </div>
+  1133→  )
+  1134→}
+  1135→

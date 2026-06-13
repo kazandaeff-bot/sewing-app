@@ -1,0 +1,1216 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState, useCallback, useMemo, useEffect } from 'react'
+     4→     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→     5→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+     6→     6→import { Badge } from '@/components/ui/badge'
+     7→     7→import { Button } from '@/components/ui/button'
+     8→     8→import { Input } from '@/components/ui/input'
+     9→     9→import { Label } from '@/components/ui/label'
+    10→    10→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    11→    11→import { Separator } from '@/components/ui/separator'
+    12→    12→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    13→    13→import {
+    14→    14→  Dialog,
+    15→    15→  DialogContent,
+    16→    16→  DialogHeader,
+    17→    17→  DialogTitle,
+    18→    18→  DialogFooter,
+    19→    19→} from '@/components/ui/dialog'
+    20→    20→import {
+    21→    21→  Tooltip,
+    22→    22→  TooltipContent,
+    23→    23→  TooltipProvider,
+    24→    24→  TooltipTrigger,
+    25→    25→} from '@/components/ui/tooltip'
+    26→    26→import {
+    27→    27→  Loader2,
+    28→    28→  Calculator,
+    29→    29→  FlaskConical,
+    30→    30→  Ruler,
+    31→    31→  TrendingUp,
+    32→    32→  TrendingDown,
+    33→    33→  CheckCircle2,
+    34→    34→  AlertTriangle,
+    35→    35→  Save,
+    36→    36→  Warehouse,
+    37→    37→  Package,
+    38→    38→  Info,
+    39→    39→  RotateCcw,
+    40→    40→} from 'lucide-react'
+    41→    41→import { useToast } from '@/hooks/use-toast'
+    42→    42→import { authFetch, authFetchJson } from '@/components/auth-provider'
+    43→    43→
+    44→    44→// ============ КАЛЬКУЛЯТОР ТКАНИ ============
+    45→    45→// Два режима:
+    46→    46→// 1. Расчёт — сколько изделий можно накроить из имеющейся ткани
+    47→    47→// 2. Калибровка — определить реальный расход по фактическим данным раскроя
+    48→    48→
+    49→    49→interface SizeDistribution {
+    50→    50→  size: string
+    51→    51→  percentage: number
+    52→    52→}
+    53→    53→
+    54→    54→interface ActualSizeItem {
+    55→    55→  size: string
+    56→    56→  qty: number
+    57→    57→}
+    58→    58→
+    59→    59→interface FabricRoll {
+    60→    60→  id: string
+    61→    61→  name: string
+    62→    62→  totalQty: number
+    63→    63→  baseUnit: string
+    64→    64→  inputUnit: string
+    65→    65→  conversionRate: number
+    66→    66→  ownershipType: string
+    67→    67→  customerName?: string
+    68→    68→}
+    69→    69→
+    70→    70→interface CuttingPlanSummary {
+    71→    71→  id: string
+    72→    72→  label: string | null
+    73→    73→  status: string
+    74→    74→  date: string
+    75→    75→  totalFabricConsumed: number
+    76→    76→  items: Array<{
+    77→    77→    productId: string
+    78→    78→    productName: string
+    79→    79→    size: string
+    80→    80→    actualQty: number
+    81→    81→  }>
+    82→    82→}
+    83→    83→
+    84→    84→interface CalculateResult {
+    85→    85→  mode: 'calculate'
+    86→    86→  product: { id: string; name: string; article: string }
+    87→    87→  material: { id: string; name: string }
+    88→    88→  norm: { consumptionPerUnit: number; unit: string }
+    89→    89→  fabricQty: number
+    90→    90→  fabricUnit: string
+    91→    91→  totalQty: number
+    92→    92→  totalConsumption: number
+    93→    93→  fabricRemaining: number
+    94→    94→  sizes: Array<{
+    95→    95→    size: string
+    96→    96→    qty: number
+    97→    97→    percentage: number
+    98→    98→    coeff: number
+    99→    99→    consumptionPerUnit: number
+   100→   100→    totalConsumption: number
+   101→   101→  }>
+   102→   102→}
+   103→   103→
+   104→   104→interface CalibrateResult {
+   105→   105→  mode: 'calibrate'
+   106→   106→  product: { id: string; name: string; article: string }
+   107→   107→  material: { id: string; name: string }
+   108→   108→  norm: { consumptionPerUnit: number; unit: string }
+   109→   109→  fabricQty: number
+   110→   110→  fabricUnit: string
+   111→   111→  totalActualQty: number
+   112→   112→  avgConsumption: number
+   113→   113→  totalCalculated: number
+   114→   114→  sizes: Array<{
+   115→   115→    size: string
+   116→   116→    qty: number
+   117→   117→    coeff: number
+   118→   118→    realConsumptionPerUnit: number
+   119→   119→    totalConsumption: number
+   120→   120→    effectiveCoeff: number
+   121→   121→    diffWithNorm: number
+   122→   122→    diffPercent: number
+   123→   123→  }>
+   124→   124→  suggestedCoeffs: Array<{
+   125→   125→    size: string
+   126→   126→    fabricCoeff: number
+   127→   127→  }>
+   128→   128→}
+   129→   129→
+   130→   130→export function FabricCalculatorTab() {
+   131→   131→  const { toast } = useToast()
+   132→   132→  const queryClient = useQueryClient()
+   133→   133→
+   134→   134→  // ---- Общие параметры ----
+   135→   135→  const [productId, setProductId] = useState('')
+   136→   136→  const [materialId, setMaterialId] = useState('')
+   137→   137→  const [fabricQty, setFabricQty] = useState('')
+   138→   138→  const [fabricUnit, setFabricUnit] = useState<'m' | 'kg' | 'gr' | 'pm'>('m')
+   139→   139→  const [activeTab, setActiveTab] = useState('calculate')
+   140→   140→
+   141→   141→  // ---- Параметры режима «Расчёт» ----
+   142→   142→  const [sizeDistribution, setSizeDistribution] = useState<SizeDistribution[]>([])
+   143→   143→
+   144→   144→  // ---- Параметры режима «Калибровка» ----
+   145→   145→  const [actualSizes, setActualSizes] = useState<ActualSizeItem[]>([])
+   146→   146→
+   147→   147→  // ---- Результаты ----
+   148→   148→  const [calcResult, setCalcResult] = useState<CalculateResult | null>(null)
+   149→   149→  const [calibResult, setCalibResult] = useState<CalibrateResult | null>(null)
+   150→   150→
+   151→   151→  // ---- Диалог подтверждения сохранения коэффициентов ----
+   152→   152→  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+   153→   153→  const [pendingCoeffs, setPendingCoeffs] = useState<Array<{ size: string; fabricCoeff: number }>>([])
+   154→   154→
+   155→   155→  // ---- Запросы ----
+   156→   156→  const { data: products = [], isLoading: productsLoading } = useQuery({
+   157→   157→    queryKey: ['products'],
+   158→   158→    queryFn: async () => {
+   159→   159→      const r = await authFetch('/api/products')
+   160→   160→      const data = await r.json()
+   161→   161→      return Array.isArray(data) ? data : []
+   162→   162→    },
+   163→   163→  })
+   164→   164→
+   165→   165→  // Получаем нормы расхода для выбранного изделия
+   166→   166→  const selectedProduct = useMemo(
+   167→   167→    () => products.find((p: any) => p.id === productId),
+   168→   168→    [products, productId],
+   169→   169→  )
+   170→   170→
+   171→   171→  // Материалы (складские остатки) — только ткани
+   172→   172→  const { data: materials = [] } = useQuery({
+   173→   173→    queryKey: ['materials'],
+   174→   174→    queryFn: async () => {
+   175→   175→      const r = await authFetch('/api/materials')
+   176→   176→      const data = await r.json()
+   177→   177→      return Array.isArray(data) ? data : []
+   178→   178→    },
+   179→   179→  })
+   180→   180→
+   181→   181→  // Нормы расхода
+   182→   182→  const { data: materialNorms = [] } = useQuery({
+   183→   183→    queryKey: ['material-norms'],
+   184→   184→    queryFn: async () => {
+   185→   185→      const r = await authFetch('/api/material-norms')
+   186→   186→      const data = await r.json()
+   187→   187→      return Array.isArray(data) ? data : []
+   188→   188→    },
+   189→   189→  })
+   190→   190→
+   191→   191→  // Нормы расхода для выбранного изделия
+   192→   192→  const normsForProduct = useMemo(() => {
+   193→   193→    if (!productId) return []
+   194→   194→    return materialNorms.filter((n: any) => n.productId === productId)
+   195→   195→  }, [materialNorms, productId])
+   196→   196→
+   197→   197→  // Авто-выбор материала если только одна норма
+   198→   198→  useEffect(() => {
+   199→   199→    if (normsForProduct.length === 1) {
+   200→   200→      setMaterialId(normsForProduct[0].materialId)
+   201→   201→    } else if (normsForProduct.length > 1 && !normsForProduct.find((n: any) => n.materialId === materialId)) {
+   202→   202→      setMaterialId('')
+   203→   203→    }
+   204→   204→  }, [normsForProduct])
+   205→   205→
+   206→   206→  // Размеры изделия
+   207→   207→  const productSizes = useMemo(() => {
+   208→   208→    if (!selectedProduct) return []
+   209→   209→    return (selectedProduct as any).sizes?.map((s: any) => s.size) || []
+   210→   210→  }, [selectedProduct])
+   211→   211→
+   212→   212→  // Текущие коэффициенты расхода для изделия
+   213→   213→  const sizeRatesMap = useMemo(() => {
+   214→   214→    if (!selectedProduct) return {} as Record<string, number>
+   215→   215→    const rates = (selectedProduct as any).sizeRates || []
+   216→   216→    const map: Record<string, number> = {}
+   217→   217→    rates.forEach((r: any) => {
+   218→   218→      map[r.size] = r.fabricCoeff ?? 1.0
+   219→   219→    })
+   220→   220→    return map
+   221→   221→  }, [selectedProduct])
+   222→   222→
+   223→   223→  // Информация о выбранном материале (складской остаток)
+   224→   224→  const selectedMaterialInfo = useMemo(() => {
+   225→   225→    if (!materialId) return null
+   226→   226→    return materials.find((m: any) => m.id === materialId) as any || null
+   227→   227→  }, [materials, materialId])
+   228→   228→
+   229→   229→  // Доступный остаток выбранного материала
+   230→   230→  const materialStock = useMemo(() => {
+   231→   231→    if (!selectedMaterialInfo) return null
+   232→   232→    return {
+   233→   233→      totalQty: selectedMaterialInfo.totalQty,
+   234→   234→      baseUnit: selectedMaterialInfo.baseUnit,
+   235→   235→      name: selectedMaterialInfo.name,
+   236→   236→    }
+   237→   237→  }, [selectedMaterialInfo])
+   238→   238→
+   239→   239→  // Автообновление распределения по размерам при смене изделия
+   240→   240→  const handleProductChange = useCallback(
+   241→   241→    (id: string) => {
+   242→   242→      setProductId(id)
+   243→   243→      setMaterialId('')
+   244→   244→      setFabricQty('')
+   245→   245→      setCalcResult(null)
+   246→   246→      setCalibResult(null)
+   247→   247→      const prod = products.find((p: any) => p.id === id)
+   248→   248→      if (prod) {
+   249→   249→        const sizes = (prod as any).sizes?.map((s: any) => s.size) || []
+   250→   250→        const equalPct = sizes.length > 0 ? Math.floor(100 / sizes.length) : 0
+   251→   251→        setSizeDistribution(
+   252→   252→          sizes.map((s: string, i: number) => ({
+   253→   253→            size: s,
+   254→   254→            percentage: i === 0 ? equalPct + (100 - equalPct * sizes.length) : equalPct,
+   255→   255→          })),
+   256→   256→        )
+   257→   257→        setActualSizes(sizes.map((s: string) => ({ size: s, qty: 0 })))
+   258→   258→      } else {
+   259→   259→        setSizeDistribution([])
+   260→   260→        setActualSizes([])
+   261→   261→      }
+   262→   262→    },
+   263→   263→    [products],
+   264→   264→  )
+   265→   265→
+   266→   266→  // Подставить остаток со склада в поле количества
+   267→   267→  const fillFromStock = useCallback(() => {
+   268→   268→    if (!materialStock) return
+   269→   269→    setFabricQty(String(materialStock.totalQty))
+   270→   270→    // Авто-определение единицы измерения
+   271→   271→    const unit = materialStock.baseUnit
+   272→   272→    if (['м', 'm', 'метры'].includes(unit.toLowerCase())) setFabricUnit('m')
+   273→   273→    else if (['пм', 'pm', 'погонные метры'].includes(unit.toLowerCase())) setFabricUnit('pm')
+   274→   274→    else if (['кг', 'kg', 'килограммы'].includes(unit.toLowerCase())) setFabricUnit('kg')
+   275→   275→    else if (['гр', 'gr', 'граммы'].includes(unit.toLowerCase())) setFabricUnit('gr')
+   276→   276→    toast({ title: `Подставлено ${materialStock.totalQty} ${materialStock.baseUnit} со склада` })
+   277→   277→  }, [materialStock, toast])
+   278→   278→
+   279→   279→  // ---- Мутация: расчёт ----
+   280→   280→  const calculateMutation = useMutation({
+   281→   281→    mutationFn: async (body: any) => {
+   282→   282→      const res = await authFetchJson('/api/fabric-calculator', {
+   283→   283→        method: 'POST',
+   284→   284→        headers: { 'Content-Type': 'application/json' },
+   285→   285→        body: JSON.stringify(body),
+   286→   286→      })
+   287→   287→      return res
+   288→   288→    },
+   289→   289→    onSuccess: (data: any) => {
+   290→   290→      if (data.mode === 'calculate') {
+   291→   291→        setCalcResult(data as CalculateResult)
+   292→   292→        setCalibResult(null)
+   293→   293→      } else {
+   294→   294→        setCalibResult(data as CalibrateResult)
+   295→   295→        setCalcResult(null)
+   296→   296→      }
+   297→   297→      toast({ title: 'Расчёт выполнен' })
+   298→   298→    },
+   299→   299→    onError: (err: Error) => {
+   300→   300→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   301→   301→    },
+   302→   302→  })
+   303→   303→
+   304→   304→  // ---- Мутация: сохранить коэффициенты (все разом) ----
+   305→   305→  const saveCoeffsMutation = useMutation({
+   306→   306→    mutationFn: async ({ coeffs, productId: pid }: { coeffs: Array<{ size: string; fabricCoeff: number }>; productId: string }) => {
+   307→   307→      const results = await Promise.all(
+   308→   308→        coeffs.map((c) =>
+   309→   309→          authFetchJson(`/api/product-size-rates`, {
+   310→   310→            method: 'POST',
+   311→   311→            headers: { 'Content-Type': 'application/json' },
+   312→   312→            body: JSON.stringify({
+   313→   313→              productId: pid,
+   314→   314→              size: c.size,
+   315→   315→              fabricCoeff: c.fabricCoeff,
+   316→   316→            }),
+   317→   317→          })
+   318→   318→        )
+   319→   319→      )
+   320→   320→      return results
+   321→   321→    },
+   322→   322→    onSuccess: () => {
+   323→   323→      setSaveDialogOpen(false)
+   324→   324→      queryClient.invalidateQueries({ queryKey: ['products'] })
+   325→   325→      toast({ title: 'Коэффициенты обновлены', description: 'Теперь они будут использоваться при расчётах' })
+   326→   326→    },
+   327→   327→    onError: (err: Error) => {
+   328→   328→      toast({ title: 'Ошибка сохранения', description: err.message, variant: 'destructive' })
+   329→   329→    },
+   330→   330→  })
+   331→   331→
+   332→   332→  // ---- Обработчики ----
+   333→   333→  const handleCalculate = useCallback(() => {
+   334→   334→    if (!productId) {
+   335→   335→      toast({ title: 'Ошибка', description: 'Выберите изделие', variant: 'destructive' })
+   336→   336→      return
+   337→   337→    }
+   338→   338→    if (!fabricQty || parseFloat(fabricQty) <= 0) {
+   339→   339→      toast({ title: 'Ошибка', description: 'Укажите количество ткани', variant: 'destructive' })
+   340→   340→      return
+   341→   341→    }
+   342→   342→    calculateMutation.mutate({
+   343→   343→      mode: 'calculate',
+   344→   344→      productId,
+   345→   345→      materialId: materialId || undefined,
+   346→   346→      fabricQty: parseFloat(fabricQty),
+   347→   347→      fabricUnit,
+   348→   348→      sizeDistribution,
+   349→   349→    })
+   350→   350→  }, [productId, materialId, fabricQty, fabricUnit, sizeDistribution, calculateMutation, toast])
+   351→   351→
+   352→   352→  const handleCalibrate = useCallback(() => {
+   353→   353→    if (!productId) {
+   354→   354→      toast({ title: 'Ошибка', description: 'Выберите изделие', variant: 'destructive' })
+   355→   355→      return
+   356→   356→    }
+   357→   357→    if (!fabricQty || parseFloat(fabricQty) <= 0) {
+   358→   358→      toast({ title: 'Ошибка', description: 'Укажите количество израсходованной ткани', variant: 'destructive' })
+   359→   359→      return
+   360→   360→    }
+   361→   361→    const filledSizes = actualSizes.filter((s) => s.qty > 0)
+   362→   362→    if (filledSizes.length === 0) {
+   363→   363→      toast({ title: 'Ошибка', description: 'Укажите фактическое количество хотя бы по одному размеру', variant: 'destructive' })
+   364→   364→      return
+   365→   365→    }
+   366→   366→    calculateMutation.mutate({
+   367→   367→      mode: 'calibrate',
+   368→   368→      productId,
+   369→   369→      materialId: materialId || undefined,
+   370→   370→      fabricQty: parseFloat(fabricQty),
+   371→   371→      fabricUnit,
+   372→   372→      actualSizes: filledSizes,
+   373→   373→    })
+   374→   374→  }, [productId, materialId, fabricQty, fabricUnit, actualSizes, calculateMutation, toast])
+   375→   375→
+   376→   376→  const handleSaveCoeffs = useCallback(() => {
+   377→   377→    if (!calibResult || !productId) return
+   378→   378→    setPendingCoeffs(calibResult.suggestedCoeffs)
+   379→   379→    setSaveDialogOpen(true)
+   380→   380→  }, [calibResult, productId])
+   381→   381→
+   382→   382→  const confirmSaveCoeffs = useCallback(() => {
+   383→   383→    saveCoeffsMutation.mutate({ coeffs: pendingCoeffs, productId })
+   384→   384→  }, [pendingCoeffs, productId, saveCoeffsMutation])
+   385→   385→
+   386→   386→  const updateDistribution = useCallback((size: string, value: number) => {
+   387→   387→    setSizeDistribution((prev) => prev.map((d) => (d.size === size ? { ...d, percentage: value } : d)))
+   388→   388→  }, [])
+   389→   389→
+   390→   390→  const updateActualQty = useCallback((size: string, qty: number) => {
+   391→   391→    setActualSizes((prev) => prev.map((a) => (a.size === size ? { ...a, qty } : a)))
+   392→   392→  }, [])
+   393→   393→
+   394→   394→  // Сброс формы
+   395→   395→  const handleReset = useCallback(() => {
+   396→   396→    setProductId('')
+   397→   397→    setMaterialId('')
+   398→   398→    setFabricQty('')
+   399→   399→    setFabricUnit('m')
+   400→   400→    setCalcResult(null)
+   401→   401→    setCalibResult(null)
+   402→   402→    setSizeDistribution([])
+   403→   403→    setActualSizes([])
+   404→   404→  }, [])
+   405→   405→
+   406→   406→  // ---- Загрузка ----
+   407→   407→  if (productsLoading) {
+   408→   408→    return (
+   409→   409→      <div className="flex items-center justify-center p-8">
+   410→   410→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   411→   411→        <span className="ml-2 text-muted-foreground">Загрузка изделий...</span>
+   412→   412→      </div>
+   413→   413→    )
+   414→   414→  }
+   415→   415→
+   416→   416→  return (
+   417→   417→    <div className="space-y-6">
+   418→   418→      <div className="flex items-center justify-between">
+   419→   419→        <div className="flex items-center gap-3">
+   420→   420→          <div className="bg-emerald-100 text-emerald-700 rounded-lg p-2">
+   421→   421→            <Ruler className="h-6 w-6" />
+   422→   422→          </div>
+   423→   423→          <div>
+   424→   424→            <h2 className="text-xl font-bold">Калькулятор ткани</h2>
+   425→   425→            <p className="text-sm text-muted-foreground">Расчёт изделий из ткани и калибровка норм расхода</p>
+   426→   426→          </div>
+   427→   427→        </div>
+   428→   428→        <Button variant="outline" size="sm" onClick={handleReset}>
+   429→   429→          <RotateCcw className="h-4 w-4 mr-1" />
+   430→   430→          Сбросить
+   431→   431→        </Button>
+   432→   432→      </div>
+   433→   433→
+   434→   434→      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   435→   435→        <TabsList className="grid w-full grid-cols-2">
+   436→   436→          <TabsTrigger value="calculate" className="flex items-center gap-2">
+   437→   437→            <Calculator className="h-4 w-4" />
+   438→   438→            Расчёт изделий
+   439→   439→          </TabsTrigger>
+   440→   440→          <TabsTrigger value="calibrate" className="flex items-center gap-2">
+   441→   441→            <FlaskConical className="h-4 w-4" />
+   442→   442→            Калибровка нормы
+   443→   443→          </TabsTrigger>
+   444→   444→        </TabsList>
+   445→   445→
+   446→   446→        {/* ========== РЕЖИМ 1: РАСЧЁТ ========== */}
+   447→   447→        <TabsContent value="calculate" className="space-y-4 mt-4">
+   448→   448→          <Card>
+   449→   449→            <CardHeader className="pb-3">
+   450→   450→              <CardTitle className="text-base flex items-center gap-2">
+   451→   451→                <Calculator className="h-5 w-5 text-emerald-600" />
+   452→   452→                Сколько изделий можно накроить?
+   453→   453→              </CardTitle>
+   454→   454→              <CardDescription>
+   455→   455→                Укажите изделие, ткань и количество — калькулятор определит, сколько изделий каждого размера можно произвести
+   456→   456→              </CardDescription>
+   457→   457→            </CardHeader>
+   458→   458→            <CardContent className="space-y-4">
+   459→   459→              {/* Изделие */}
+   460→   460→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   461→   461→                <div className="space-y-2">
+   462→   462→                  <Label>Изделие</Label>
+   463→   463→                  <Select value={productId} onValueChange={handleProductChange}>
+   464→   464→                    <SelectTrigger>
+   465→   465→                      <SelectValue placeholder="Выберите изделие" />
+   466→   466→                    </SelectTrigger>
+   467→   467→                    <SelectContent>
+   468→   468→                      {products.map((p: any) => (
+   469→   469→                        <SelectItem key={p.id} value={p.id}>
+   470→   470→                          {p.name} ({p.article})
+   471→   471→                        </SelectItem>
+   472→   472→                      ))}
+   473→   473→                    </SelectContent>
+   474→   474→                  </Select>
+   475→   475→                </div>
+   476→   476→
+   477→   477→                {/* Материал */}
+   478→   478→                {productId && normsForProduct.length > 0 && (
+   479→   479→                  <div className="space-y-2">
+   480→   480→                    <Label>Материал / Ткань</Label>
+   481→   481→                    <Select value={materialId} onValueChange={setMaterialId}>
+   482→   482→                      <SelectTrigger>
+   483→   483→                        <SelectValue placeholder={normsForProduct.length === 1 ? normsForProduct[0].material?.name : 'Выберите материал'} />
+   484→   484→                      </SelectTrigger>
+   485→   485→                      <SelectContent>
+   486→   486→                        {normsForProduct.map((n: any) => (
+   487→   487→                          <SelectItem key={n.materialId} value={n.materialId}>
+   488→   488→                            {n.material?.name || n.materialId} ({n.consumptionPerUnit} {n.unit}/шт)
+   489→   489→                          </SelectItem>
+   490→   490→                        ))}
+   491→   491→                      </SelectContent>
+   492→   492→                    </Select>
+   493→   493→                  </div>
+   494→   494→                )}
+   495→   495→              </div>
+   496→   496→
+   497→   497→              {/* Норма расхода */}
+   498→   498→              {normsForProduct.length > 0 && productId && (
+   499→   499→                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+   500→   500→                  <div className="flex items-center gap-2 text-sm text-blue-800">
+   501→   501→                    <Ruler className="h-4 w-4 shrink-0" />
+   502→   502→                    <span className="font-medium">Норма расхода:</span>
+   503→   503→                    {normsForProduct.length === 1 ? (
+   504→   504→                      <span>
+   505→   505→                        {normsForProduct[0].consumptionPerUnit} {normsForProduct[0].unit}/шт —{' '}
+   506→   506→                        {normsForProduct[0].material?.name}
+   507→   507→                      </span>
+   508→   508→                    ) : materialId ? (
+   509→   509→                      <span>
+   510→   510→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.consumptionPerUnit}{' '}
+   511→   511→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.unit}/шт —{' '}
+   512→   512→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.material?.name}
+   513→   513→                      </span>
+   514→   514→                    ) : (
+   515→   515→                      <span>{normsForProduct.length} норм расхода — выберите материал</span>
+   516→   516→                    )}
+   517→   517→                  </div>
+   518→   518→                </div>
+   519→   519→              )}
+   520→   520→
+   521→   521→              {productId && normsForProduct.length === 0 && (
+   522→   522→                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+   523→   523→                  <div className="flex items-center gap-2 text-sm text-amber-800">
+   524→   524→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   525→   525→                    <span>Норма расхода ткани не задана. Добавьте её в Справочниках → Прочее → Нормы расхода.</span>
+   526→   526→                  </div>
+   527→   527→                </div>
+   528→   528→              )}
+   529→   529→
+   530→   530→              {/* Складской остаток */}
+   531→   531→              {materialId && materialStock && (
+   532→   532→                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+   533→   533→                  <div className="flex items-center justify-between">
+   534→   534→                    <div className="flex items-center gap-2 text-sm text-emerald-800">
+   535→   535→                      <Warehouse className="h-4 w-4 shrink-0" />
+   536→   536→                      <span className="font-medium">На складе:</span>
+   537→   537→                      <span>{materialStock.totalQty} {materialStock.baseUnit}</span>
+   538→   538→                      {selectedMaterialInfo?.ownershipType === 'customer' && (
+   539→   539→                        <Badge variant="outline" className="text-xs">давальческая</Badge>
+   540→   540→                      )}
+   541→   541→                    </div>
+   542→   542→                    <Button
+   543→   543→                      variant="outline"
+   544→   544→                      size="sm"
+   545→   545→                      className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+   546→   546→                      onClick={fillFromStock}
+   547→   547→                    >
+   548→   548→                      <Package className="h-3 w-3 mr-1" />
+   549→   549→                      Подставить
+   550→   550→                    </Button>
+   551→   551→                  </div>
+   552→   552→                </div>
+   553→   553→              )}
+   554→   554→
+   555→   555→              <Separator />
+   556→   556→
+   557→   557→              {/* Количество ткани */}
+   558→   558→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   559→   559→                <div className="space-y-2">
+   560→   560→                  <Label>Количество ткани</Label>
+   561→   561→                  <Input
+   562→   562→                    type="number"
+   563→   563→                    step="0.01"
+   564→   564→                    min="0"
+   565→   565→                    placeholder="0"
+   566→   566→                    value={fabricQty}
+   567→   567→                    onChange={(e) => setFabricQty(e.target.value)}
+   568→   568→                  />
+   569→   569→                </div>
+   570→   570→                <div className="space-y-2">
+   571→   571→                  <Label>Единица измерения</Label>
+   572→   572→                  <Select value={fabricUnit} onValueChange={(v) => setFabricUnit(v as any)}>
+   573→   573→                    <SelectTrigger>
+   574→   574→                      <SelectValue />
+   575→   575→                    </SelectTrigger>
+   576→   576→                    <SelectContent>
+   577→   577→                      <SelectItem value="m">метры (м)</SelectItem>
+   578→   578→                      <SelectItem value="pm">погонные метры (пм)</SelectItem>
+   579→   579→                      <SelectItem value="kg">килограммы (кг)</SelectItem>
+   580→   580→                      <SelectItem value="gr">граммы (гр)</SelectItem>
+   581→   581→                    </SelectContent>
+   582→   582→                  </Select>
+   583→   583→                </div>
+   584→   584→              </div>
+   585→   585→
+   586→   586→              <Separator />
+   587→   587→
+   588→   588→              {/* Распределение по размерам */}
+   589→   589→              {sizeDistribution.length > 0 && (
+   590→   590→                <div className="space-y-3">
+   591→   591→                  <div className="flex items-center justify-between">
+   592→   592→                    <Label className="text-base font-medium">Распределение по размерам</Label>
+   593→   593→                    <div className="flex items-center gap-2">
+   594→   594→                      <TooltipProvider>
+   595→   595→                        <Tooltip>
+   596→   596→                          <TooltipTrigger asChild>
+   597→   597→                            <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+   598→   598→                          </TooltipTrigger>
+   599→   599→                          <TooltipContent className="max-w-xs">
+   600→   600→                            <p>Укажите долю каждого размера в общем объёме. Сумма должна быть 100%.</p>
+   601→   601→                            <p className="mt-1">Коэффициент расхода показывает, насколько данный размер потребляет больше/меньше ткани относительно базового.</p>
+   602→   602→                          </TooltipContent>
+   603→   603→                        </Tooltip>
+   604→   604→                      </TooltipProvider>
+   605→   605→                      <Button
+   606→   606→                        variant="outline"
+   607→   607→                        size="sm"
+   608→   608→                        onClick={() => {
+   609→   609→                          const equalPct = Math.floor(100 / sizeDistribution.length)
+   610→   610→                          setSizeDistribution((prev) =>
+   611→   611→                            prev.map((d, i) => ({
+   612→   612→                              ...d,
+   613→   613→                              percentage:
+   614→   614→                                i === 0 ? equalPct + (100 - equalPct * prev.length) : equalPct,
+   615→   615→                            })),
+   616→   616→                          )
+   617→   617→                        }}
+   618→   618→                      >
+   619→   619→                        Равномерно
+   620→   620→                      </Button>
+   621→   621→                    </div>
+   622→   622→                  </div>
+   623→   623→                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+   624→   624→                    {sizeDistribution.map((d) => (
+   625→   625→                      <div key={d.size} className="space-y-1.5 rounded-lg border bg-white p-2.5">
+   626→   626→                        <div className="flex items-center justify-between">
+   627→   627→                          <Label className="text-sm font-semibold">{d.size}</Label>
+   628→   628→                          {sizeRatesMap[d.size] !== undefined && sizeRatesMap[d.size] !== 1.0 && (
+   629→   629→                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+   630→   630→                              ×{sizeRatesMap[d.size].toFixed(2)}
+   631→   631→                            </Badge>
+   632→   632→                          )}
+   633→   633→                        </div>
+   634→   634→                        <div className="flex items-center gap-1">
+   635→   635→                          <Input
+   636→   636→                            type="number"
+   637→   637→                            min={0}
+   638→   638→                            max={100}
+   639→   639→                            value={d.percentage}
+   640→   640→                            onChange={(e) => updateDistribution(d.size, parseInt(e.target.value) || 0)}
+   641→   641→                            className="w-20 h-8 text-sm"
+   642→   642→                          />
+   643→   643→                          <span className="text-sm text-muted-foreground">%</span>
+   644→   644→                        </div>
+   645→   645→                      </div>
+   646→   646→                    ))}
+   647→   647→                  </div>
+   648→   648→                  <div className="flex items-center gap-2 text-sm">
+   649→   649→                    <span className="text-muted-foreground">Итого:</span>
+   650→   650→                    <Badge
+   651→   651→                      variant={
+   652→   652→                        sizeDistribution.reduce((s, d) => s + d.percentage, 0) === 100
+   653→   653→                          ? 'default'
+   654→   654→                          : 'destructive'
+   655→   655→                      }
+   656→   656→                    >
+   657→   657→                      {sizeDistribution.reduce((s, d) => s + d.percentage, 0)}%
+   658→   658→                    </Badge>
+   659→   659→                  </div>
+   660→   660→                </div>
+   661→   661→              )}
+   662→   662→
+   663→   663→              {/* Кнопка расчёта */}
+   664→   664→              <Button
+   665→   665→                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+   666→   666→                onClick={handleCalculate}
+   667→   667→                disabled={calculateMutation.isPending || !productId || normsForProduct.length === 0}
+   668→   668→              >
+   669→   669→                {calculateMutation.isPending ? (
+   670→   670→                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   671→   671→                ) : (
+   672→   672→                  <Calculator className="h-4 w-4 mr-2" />
+   673→   673→                )}
+   674→   674→                Рассчитать
+   675→   675→              </Button>
+   676→   676→            </CardContent>
+   677→   677→          </Card>
+   678→   678→
+   679→   679→          {/* Результат расчёта */}
+   680→   680→          {calcResult && (
+   681→   681→            <Card className="border-emerald-200 bg-emerald-50/30">
+   682→   682→              <CardHeader className="pb-3">
+   683→   683→                <CardTitle className="text-base flex items-center gap-2">
+   684→   684→                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+   685→   685→                  Результат расчёта — {calcResult.product.name}
+   686→   686→                </CardTitle>
+   687→   687→              </CardHeader>
+   688→   688→              <CardContent className="space-y-4">
+   689→   689→                {/* Сводка */}
+   690→   690→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   691→   691→                  <div className="bg-white rounded-lg border p-3 text-center">
+   692→   692→                    <div className="text-2xl font-bold text-emerald-700">{calcResult.totalQty}</div>
+   693→   693→                    <div className="text-xs text-muted-foreground">Изделий всего</div>
+   694→   694→                  </div>
+   695→   695→                  <div className="bg-white rounded-lg border p-3 text-center">
+   696→   696→                    <div className="text-2xl font-bold text-blue-700">
+   697→   697→                      {calcResult.totalConsumption.toLocaleString('ru-RU')}
+   698→   698→                    </div>
+   699→   699→                    <div className="text-xs text-muted-foreground">Расход ({calcResult.fabricUnit})</div>
+   700→   700→                  </div>
+   701→   701→                  <div className="bg-white rounded-lg border p-3 text-center">
+   702→   702→                    <div className="text-2xl font-bold text-amber-700">
+   703→   703→                      {calcResult.fabricRemaining.toLocaleString('ru-RU')}
+   704→   704→                    </div>
+   705→   705→                    <div className="text-xs text-muted-foreground">Остаток ({calcResult.fabricUnit})</div>
+   706→   706→                  </div>
+   707→   707→                  <div className="bg-white rounded-lg border p-3 text-center">
+   708→   708→                    <div className="text-2xl font-bold text-gray-700">
+   709→   709→                      {calcResult.norm.consumptionPerUnit} {calcResult.norm.unit}
+   710→   710→                    </div>
+   711→   711→                    <div className="text-xs text-muted-foreground">Норма на 1 шт</div>
+   712→   712→                  </div>
+   713→   713→                </div>
+   714→   714→
+   715→   715→                <Separator />
+   716→   716→
+   717→   717→                {/* По размерам */}
+   718→   718→                <div className="overflow-x-auto">
+   719→   719→                  <table className="w-full text-sm">
+   720→   720→                    <thead>
+   721→   721→                      <tr className="border-b bg-white/50">
+   722→   722→                        <th className="p-2 text-left font-medium">Размер</th>
+   723→   723→                        <th className="p-2 text-right font-medium">Кол-во</th>
+   724→   724→                        <th className="p-2 text-right font-medium">%</th>
+   725→   725→                        <th className="p-2 text-right font-medium">Коэфф.</th>
+   726→   726→                        <th className="p-2 text-right font-medium">Расход/шт</th>
+   727→   727→                        <th className="p-2 text-right font-medium">Итого расход</th>
+   728→   728→                      </tr>
+   729→   729→                    </thead>
+   730→   730→                    <tbody>
+   731→   731→                      {calcResult.sizes.map((s) => (
+   732→   732→                        <tr key={s.size} className="border-b last:border-0 hover:bg-white/60">
+   733→   733→                          <td className="p-2 font-medium">{s.size}</td>
+   734→   734→                          <td className="p-2 text-right font-semibold">{s.qty}</td>
+   735→   735→                          <td className="p-2 text-right text-muted-foreground">{s.percentage}%</td>
+   736→   736→                          <td className="p-2 text-right text-muted-foreground">
+   737→   737→                            {s.coeff !== 1.0 ? s.coeff.toFixed(2) : '—'}
+   738→   738→                          </td>
+   739→   739→                          <td className="p-2 text-right">
+   740→   740→                            {s.consumptionPerUnit.toLocaleString('ru-RU')} {calcResult.fabricUnit}
+   741→   741→                          </td>
+   742→   742→                          <td className="p-2 text-right font-medium">
+   743→   743→                            {s.totalConsumption.toLocaleString('ru-RU')} {calcResult.fabricUnit}
+   744→   744→                          </td>
+   745→   745→                        </tr>
+   746→   746→                      ))}
+   747→   747→                    </tbody>
+   748→   748→                  </table>
+   749→   749→                </div>
+   750→   750→
+   751→   751→                {/* Подсказка: остаток ткани */}
+   752→   752→                {calcResult.fabricRemaining > 0 && (
+   753→   753→                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+   754→   754→                    <div className="flex items-center gap-2 text-sm text-amber-800">
+   755→   755→                      <AlertTriangle className="h-4 w-4 shrink-0" />
+   756→   756→                      <span>
+   757→   757→                        Остаток {calcResult.fabricRemaining.toLocaleString('ru-RU')} {calcResult.fabricUnit} — 
+   758→   758→                        этого хватит ещё примерно на{' '}
+   759→   759→                        <strong>{Math.floor(calcResult.fabricRemaining / (calcResult.totalConsumption / calcResult.totalQty))} шт.</strong>
+   760→   760→                      </span>
+   761→   761→                    </div>
+   762→   762→                  </div>
+   763→   763→                )}
+   764→   764→              </CardContent>
+   765→   765→            </Card>
+   766→   766→          )}
+   767→   767→        </TabsContent>
+   768→   768→
+   769→   769→        {/* ========== РЕЖИМ 2: КАЛИБРОВКА ========== */}
+   770→   770→        <TabsContent value="calibrate" className="space-y-4 mt-4">
+   771→   771→          <Card>
+   772→   772→            <CardHeader className="pb-3">
+   773→   773→              <CardTitle className="text-base flex items-center gap-2">
+   774→   774→                <FlaskConical className="h-5 w-5 text-blue-600" />
+   775→   775→                Определить реальный расход по факту раскроя
+   776→   776→              </CardTitle>
+   777→   777→              <CardDescription>
+   778→   778→                Введите данные о фактическом раскрое (сколько ткани израсходовано и сколько изделий каждого размера получено), 
+   779→   779→                чтобы узнать реальный расход ткани и откалибровать нормы для будущих расчётов.
+   780→   780→              </CardDescription>
+   781→   781→            </CardHeader>
+   782→   782→            <CardContent className="space-y-4">
+   783→   783→              {/* Изделие */}
+   784→   784→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   785→   785→                <div className="space-y-2">
+   786→   786→                  <Label>Изделие</Label>
+   787→   787→                  <Select value={productId} onValueChange={handleProductChange}>
+   788→   788→                    <SelectTrigger>
+   789→   789→                      <SelectValue placeholder="Выберите изделие" />
+   790→   790→                    </SelectTrigger>
+   791→   791→                    <SelectContent>
+   792→   792→                      {products.map((p: any) => (
+   793→   793→                        <SelectItem key={p.id} value={p.id}>
+   794→   794→                          {p.name} ({p.article})
+   795→   795→                        </SelectItem>
+   796→   796→                      ))}
+   797→   797→                    </SelectContent>
+   798→   798→                  </Select>
+   799→   799→                </div>
+   800→   800→
+   801→   801→                {productId && normsForProduct.length > 0 && (
+   802→   802→                  <div className="space-y-2">
+   803→   803→                    <Label>Материал / Ткань</Label>
+   804→   804→                    <Select value={materialId} onValueChange={setMaterialId}>
+   805→   805→                      <SelectTrigger>
+   806→   806→                        <SelectValue placeholder={normsForProduct.length === 1 ? normsForProduct[0].material?.name : 'Выберите материал'} />
+   807→   807→                      </SelectTrigger>
+   808→   808→                      <SelectContent>
+   809→   809→                        {normsForProduct.map((n: any) => (
+   810→   810→                          <SelectItem key={n.materialId} value={n.materialId}>
+   811→   811→                            {n.material?.name || n.materialId} ({n.consumptionPerUnit} {n.unit}/шт)
+   812→   812→                          </SelectItem>
+   813→   813→                        ))}
+   814→   814→                      </SelectContent>
+   815→   815→                    </Select>
+   816→   816→                  </div>
+   817→   817→                )}
+   818→   818→              </div>
+   819→   819→
+   820→   820→              {/* Норма расхода */}
+   821→   821→              {normsForProduct.length > 0 && productId && (
+   822→   822→                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+   823→   823→                  <div className="flex items-center gap-2 text-sm text-blue-800">
+   824→   824→                    <Ruler className="h-4 w-4 shrink-0" />
+   825→   825→                    <span className="font-medium">Текущая норма:</span>
+   826→   826→                    {normsForProduct.length === 1 ? (
+   827→   827→                      <span>
+   828→   828→                        {normsForProduct[0].consumptionPerUnit} {normsForProduct[0].unit}/шт —{' '}
+   829→   829→                        {normsForProduct[0].material?.name}
+   830→   830→                      </span>
+   831→   831→                    ) : materialId ? (
+   832→   832→                      <span>
+   833→   833→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.consumptionPerUnit}{' '}
+   834→   834→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.unit}/шт —{' '}
+   835→   835→                        {normsForProduct.find((n: any) => n.materialId === materialId)?.material?.name}
+   836→   836→                      </span>
+   837→   837→                    ) : (
+   838→   838→                      <span>{normsForProduct.length} норм расхода — выберите материал</span>
+   839→   839→                    )}
+   840→   840→                  </div>
+   841→   841→                  {/* Показать текущие коэффициенты по размерам */}
+   842→   842→                  {Object.keys(sizeRatesMap).length > 0 && (
+   843→   843→                    <div className="mt-2 flex flex-wrap gap-1.5">
+   844→   844→                      <span className="text-xs text-blue-600">Коэффициенты:</span>
+   845→   845→                      {Object.entries(sizeRatesMap).map(([size, coeff]) => (
+   846→   846→                        <Badge key={size} variant="outline" className="text-[10px] px-1.5 py-0">
+   847→   847→                          {size}: ×{coeff.toFixed(2)}
+   848→   848→                        </Badge>
+   849→   849→                      ))}
+   850→   850→                    </div>
+   851→   851→                  )}
+   852→   852→                </div>
+   853→   853→              )}
+   854→   854→
+   855→   855→              {productId && normsForProduct.length === 0 && (
+   856→   856→                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+   857→   857→                  <div className="flex items-center gap-2 text-sm text-amber-800">
+   858→   858→                    <AlertTriangle className="h-4 w-4 shrink-0" />
+   859→   859→                    <span>Норма расхода ткани не задана. Добавьте её в Справочниках → Прочее → Нормы расхода.</span>
+   860→   860→                  </div>
+   861→   861→                </div>
+   862→   862→              )}
+   863→   863→
+   864→   864→              <Separator />
+   865→   865→
+   866→   866→              {/* Израсходовано ткани */}
+   867→   867→              <div className="space-y-2">
+   868→   868→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   869→   869→                  <div className="space-y-2">
+   870→   870→                    <Label>Израсходовано ткани (всего)</Label>
+   871→   871→                    <Input
+   872→   872→                      type="number"
+   873→   873→                      step="0.01"
+   874→   874→                      min="0"
+   875→   875→                      placeholder="0"
+   876→   876→                      value={fabricQty}
+   877→   877→                      onChange={(e) => setFabricQty(e.target.value)}
+   878→   878→                    />
+   879→   879→                  </div>
+   880→   880→                  <div className="space-y-2">
+   881→   881→                    <Label>Единица измерения</Label>
+   882→   882→                    <Select value={fabricUnit} onValueChange={(v) => setFabricUnit(v as any)}>
+   883→   883→                      <SelectTrigger>
+   884→   884→                        <SelectValue />
+   885→   885→                      </SelectTrigger>
+   886→   886→                      <SelectContent>
+   887→   887→                        <SelectItem value="m">метры (м)</SelectItem>
+   888→   888→                        <SelectItem value="pm">погонные метры (пм)</SelectItem>
+   889→   889→                        <SelectItem value="kg">килограммы (кг)</SelectItem>
+   890→   890→                        <SelectItem value="gr">граммы (гр)</SelectItem>
+   891→   891→                      </SelectContent>
+   892→   892→                    </Select>
+   893→   893→                  </div>
+   894→   894→                </div>
+   895→   895→                {/* Подсказка — подставить из остатков */}
+   896→   896→                {materialId && materialStock && (
+   897→   897→                  <div className="flex items-center gap-2">
+   898→   898→                    <Button
+   899→   899→                      variant="ghost"
+   900→   900→                      size="sm"
+   901→   901→                      className="h-7 text-xs text-muted-foreground hover:text-emerald-700"
+   902→   902→                      onClick={fillFromStock}
+   903→   903→                    >
+   904→   904→                      <Warehouse className="h-3 w-3 mr-1" />
+   905→   905→                      Подставить со склада ({materialStock.totalQty} {materialStock.baseUnit})
+   906→   906→                    </Button>
+   907→   907→                  </div>
+   908→   908→                )}
+   909→   909→              </div>
+   910→   910→
+   911→   911→              <Separator />
+   912→   912→
+   913→   913→              {/* Фактическое количество по размерам */}
+   914→   914→              {actualSizes.length > 0 && (
+   915→   915→                <div className="space-y-3">
+   916→   916→                  <div className="flex items-center justify-between">
+   917→   917→                    <Label className="text-base font-medium">Фактическое количество по размерам</Label>
+   918→   918→                    <TooltipProvider>
+   919→   919→                      <Tooltip>
+   920→   920→                        <TooltipTrigger asChild>
+   921→   921→                          <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+   922→   922→                        </TooltipTrigger>
+   923→   923→                        <TooltipContent className="max-w-xs">
+   924→   924→                          <p>Введите фактическое количество выкроенных изделий каждого размера из указанного количества ткани.</p>
+   925→   925→                          <p className="mt-1">Калькулятор определит реальный расход на единицу и предложит обновлённые коэффициенты.</p>
+   926→   926→                        </TooltipContent>
+   927→   927→                      </Tooltip>
+   928→   928→                    </TooltipProvider>
+   929→   929→                  </div>
+   930→   930→                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+   931→   931→                    {actualSizes.map((a) => (
+   932→   932→                      <div key={a.size} className="space-y-1.5 rounded-lg border bg-white p-2.5">
+   933→   933→                        <div className="flex items-center justify-between">
+   934→   934→                          <Label className="text-sm font-semibold">{a.size}</Label>
+   935→   935→                          {sizeRatesMap[a.size] !== undefined && sizeRatesMap[a.size] !== 1.0 && (
+   936→   936→                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+   937→   937→                              сейчас ×{sizeRatesMap[a.size].toFixed(2)}
+   938→   938→                            </Badge>
+   939→   939→                          )}
+   940→   940→                        </div>
+   941→   941→                        <Input
+   942→   942→                          type="number"
+   943→   943→                          min={0}
+   944→   944→                          placeholder="0"
+   945→   945→                          value={a.qty || ''}
+   946→   946→                          onChange={(e) => updateActualQty(a.size, parseInt(e.target.value) || 0)}
+   947→   947→                          className="h-8 text-sm"
+   948→   948→                        />
+   949→   949→                      </div>
+   950→   950→                    ))}
+   951→   951→                  </div>
+   952→   952→                  <div className="flex items-center gap-2 text-sm">
+   953→   953→                    <span className="text-muted-foreground">Всего изделий:</span>
+   954→   954→                    <Badge variant="secondary">
+   955→   955→                      {actualSizes.reduce((s, a) => s + a.qty, 0)} шт
+   956→   956→                    </Badge>
+   957→   957→                  </div>
+   958→   958→                </div>
+   959→   959→              )}
+   960→   960→
+   961→   961→              {/* Кнопка калибровки */}
+   962→   962→              <Button
+   963→   963→                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+   964→   964→                onClick={handleCalibrate}
+   965→   965→                disabled={calculateMutation.isPending || !productId || normsForProduct.length === 0}
+   966→   966→              >
+   967→   967→                {calculateMutation.isPending ? (
+   968→   968→                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   969→   969→                ) : (
+   970→   970→                  <FlaskConical className="h-4 w-4 mr-2" />
+   971→   971→                )}
+   972→   972→                Калибровать
+   973→   973→              </Button>
+   974→   974→            </CardContent>
+   975→   975→          </Card>
+   976→   976→
+   977→   977→          {/* Результат калибровки */}
+   978→   978→          {calibResult && (
+   979→   979→            <Card className="border-blue-200 bg-blue-50/30">
+   980→   980→              <CardHeader className="pb-3">
+   981→   981→                <CardTitle className="text-base flex items-center gap-2">
+   982→   982→                  <CheckCircle2 className="h-5 w-5 text-blue-600" />
+   983→   983→                  Результат калибровки — {calibResult.product.name}
+   984→   984→                </CardTitle>
+   985→   985→              </CardHeader>
+   986→   986→              <CardContent className="space-y-4">
+   987→   987→                {/* Сводка */}
+   988→   988→                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+   989→   989→                  <div className="bg-white rounded-lg border p-3 text-center">
+   990→   990→                    <div className="text-2xl font-bold text-blue-700">{calibResult.totalActualQty}</div>
+   991→   991→                    <div className="text-xs text-muted-foreground">Изделий всего</div>
+   992→   992→                  </div>
+   993→   993→                  <div className="bg-white rounded-lg border p-3 text-center">
+   994→   994→                    <div className="text-2xl font-bold text-gray-700">
+   995→   995→                      {calibResult.fabricQty.toLocaleString('ru-RU')}
+   996→   996→                    </div>
+   997→   997→                    <div className="text-xs text-muted-foreground">Ткани ({calibResult.fabricUnit})</div>
+   998→   998→                  </div>
+   999→   999→                  <div className="bg-white rounded-lg border p-3 text-center">
+  1000→  1000→                    <div className="text-2xl font-bold text-emerald-700">
+  1001→  1001→                      {calibResult.avgConsumption.toLocaleString('ru-RU')}
+  1002→  1002→                    </div>
+  1003→  1003→                    <div className="text-xs text-muted-foreground">Средний расход/шт</div>
+  1004→  1004→                  </div>
+  1005→  1005→                  <div className="bg-white rounded-lg border p-3 text-center">
+  1006→  1006→                    <div className="text-2xl font-bold text-amber-700">
+  1007→  1007→                      {calibResult.norm.consumptionPerUnit} {calibResult.norm.unit}
+  1008→  1008→                    </div>
+  1009→  1009→                    <div className="text-xs text-muted-foreground">Норма (была)</div>
+  1010→  1010→                  </div>
+  1011→  1011→                </div>
+  1012→  1012→
+  1013→  1013→                {/* Сравнение: норма vs факт */}
+  1014→  1014→                <div className="bg-white rounded-lg border p-3">
+  1015→  1015→                  <div className="flex items-center gap-2 text-sm mb-2">
+  1016→  1016→                    <span className="font-medium">Сравнение нормы и факта:</span>
+  1017→  1017→                  </div>
+  1018→  1018→                  <div className="flex items-center gap-4">
+  1019→  1019→                    <div className="flex-1">
+  1020→  1020→                      <div className="flex items-center justify-between text-sm mb-1">
+  1021→  1021→                        <span>Норма: {calibResult.norm.consumptionPerUnit} {calibResult.norm.unit}/шт</span>
+  1022→  1022→                        <span>Факт: {calibResult.avgConsumption.toLocaleString('ru-RU')} {calibResult.fabricUnit}/шт</span>
+  1023→  1023→                      </div>
+  1024→  1024→                      <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
+  1025→  1025→                        {(() => {
+  1026→  1026→                          const normVal = calibResult.norm.consumptionPerUnit
+  1027→  1027→                          const factVal = calibResult.avgConsumption
+  1028→  1028→                          const maxVal = Math.max(normVal, factVal) * 1.2
+  1029→  1029→                          return (
+  1030→  1030→                            <div className="relative h-full">
+  1031→  1031→                              <div
+  1032→  1032→                                className="absolute top-0 left-0 h-full bg-blue-300 rounded-full"
+  1033→  1033→                                style={{ width: `${(normVal / maxVal) * 100}%` }}
+  1034→  1034→                              />
+  1035→  1035→                              <div
+  1036→  1036→                                className="absolute top-0 left-0 h-full bg-emerald-500 rounded-full opacity-70"
+  1037→  1037→                                style={{ width: `${(factVal / maxVal) * 100}%` }}
+  1038→  1038→                              />
+  1039→  1039→                            </div>
+  1040→  1040→                          )
+  1041→  1041→                        })()}
+  1042→  1042→                      </div>
+  1043→  1043→                      <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+  1044→  1044→                        <span className="flex items-center gap-1">
+  1045→  1045→                          <span className="w-2 h-2 bg-blue-300 rounded-full inline-block" /> Норма
+  1046→  1046→                        </span>
+  1047→  1047→                        <span className="flex items-center gap-1">
+  1048→  1048→                          <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block" /> Факт
+  1049→  1049→                        </span>
+  1050→  1050→                      </div>
+  1051→  1051→                    </div>
+  1052→  1052→                    <div className="text-center">
+  1053→  1053→                      <div className={`text-lg font-bold ${calibResult.avgConsumption > calibResult.norm.consumptionPerUnit ? 'text-red-600' : 'text-emerald-600'}`}>
+  1054→  1054→                        {((calibResult.avgConsumption / calibResult.norm.consumptionPerUnit - 1) * 100).toFixed(1)}%
+  1055→  1055→                      </div>
+  1056→  1056→                      <div className="text-xs text-muted-foreground">
+  1057→  1057→                        {calibResult.avgConsumption > calibResult.norm.consumptionPerUnit ? 'перерасход' : 'экономия'}
+  1058→  1058→                      </div>
+  1059→  1059→                    </div>
+  1060→  1060→                  </div>
+  1061→  1061→                </div>
+  1062→  1062→
+  1063→  1063→                <Separator />
+  1064→  1064→
+  1065→  1065→                {/* По размерам */}
+  1066→  1066→                <div className="overflow-x-auto">
+  1067→  1067→                  <table className="w-full text-sm">
+  1068→  1068→                    <thead>
+  1069→  1069→                      <tr className="border-b bg-white/50">
+  1070→  1070→                        <th className="p-2 text-left font-medium">Размер</th>
+  1071→  1071→                        <th className="p-2 text-right font-medium">Кол-во</th>
+  1072→  1072→                        <th className="p-2 text-right font-medium">Реальный расход/шт</th>
+  1073→  1073→                        <th className="p-2 text-right font-medium">Разница</th>
+  1074→  1074→                        <th className="p-2 text-right font-medium">Отклонение</th>
+  1075→  1075→                        <th className="p-2 text-right font-medium">Эфф. коэфф.</th>
+  1076→  1076→                      </tr>
+  1077→  1077→                    </thead>
+  1078→  1078→                    <tbody>
+  1079→  1079→                      {calibResult.sizes.map((s) => (
+  1080→  1080→                        <tr key={s.size} className="border-b last:border-0 hover:bg-white/60">
+  1081→  1081→                          <td className="p-2 font-medium">{s.size}</td>
+  1082→  1082→                          <td className="p-2 text-right">{s.qty}</td>
+  1083→  1083→                          <td className="p-2 text-right font-semibold">
+  1084→  1084→                            {s.realConsumptionPerUnit.toLocaleString('ru-RU')} {calibResult.fabricUnit}
+  1085→  1085→                          </td>
+  1086→  1086→                          <td className="p-2 text-right">
+  1087→  1087→                            <span
+  1088→  1088→                              className={
+  1089→  1089→                                s.diffWithNorm > 0 ? 'text-red-600' : s.diffWithNorm < 0 ? 'text-emerald-600' : ''
+  1090→  1090→                              }
+  1091→  1091→                            >
+  1092→  1092→                              {s.diffWithNorm > 0 ? '+' : ''}
+  1093→  1093→                              {s.diffWithNorm.toLocaleString('ru-RU')}
+  1094→  1094→                            </span>
+  1095→  1095→                          </td>
+  1096→  1096→                          <td className="p-2 text-right">
+  1097→  1097→                            <Badge
+  1098→  1098→                              variant={Math.abs(s.diffPercent) > 10 ? 'destructive' : Math.abs(s.diffPercent) > 5 ? 'secondary' : 'outline'}
+  1099→  1099→                              className="text-xs"
+  1100→  1100→                            >
+  1101→  1101→                              {s.diffPercent > 0 ? (
+  1102→  1102→                                <TrendingUp className="h-3 w-3 mr-1" />
+  1103→  1103→                              ) : s.diffPercent < 0 ? (
+  1104→  1104→                                <TrendingDown className="h-3 w-3 mr-1" />
+  1105→  1105→                              ) : null}
+  1106→  1106→                              {s.diffPercent > 0 ? '+' : ''}
+  1107→  1107→                              {s.diffPercent}%
+  1108→  1108→                            </Badge>
+  1109→  1109→                          </td>
+  1110→  1110→                          <td className="p-2 text-right font-medium">{s.effectiveCoeff.toFixed(3)}</td>
+  1111→  1111→                        </tr>
+  1112→  1112→                      ))}
+  1113→  1113→                    </tbody>
+  1114→  1114→                  </table>
+  1115→  1115→                </div>
+  1116→  1116→
+  1117→  1117→                <Separator />
+  1118→  1118→
+  1119→  1119→                {/* Предлагаемые коэффициенты */}
+  1120→  1120→                <div className="space-y-3">
+  1121→  1121→                  <div className="flex items-center justify-between">
+  1122→  1122→                    <Label className="text-base font-medium">Предлагаемые коэффициенты расхода</Label>
+  1123→  1123→                    <Button
+  1124→  1124→                      variant="outline"
+  1125→  1125→                      size="sm"
+  1126→  1126→                      className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+  1127→  1127→                      onClick={handleSaveCoeffs}
+  1128→  1128→                      disabled={saveCoeffsMutation.isPending}
+  1129→  1129→                    >
+  1130→  1130→                      {saveCoeffsMutation.isPending ? (
+  1131→  1131→                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+  1132→  1132→                      ) : (
+  1133→  1133→                        <Save className="h-4 w-4 mr-1" />
+  1134→  1134→                      )}
+  1135→  1135→                      Сохранить коэффициенты
+  1136→  1136→                    </Button>
+  1137→  1137→                  </div>
+  1138→  1138→                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+  1139→  1139→                    {calibResult.suggestedCoeffs.map((c) => {
+  1140→  1140→                      const prevSize = calibResult.sizes.find((s) => s.size === c.size)
+  1141→  1141→                      const oldCoeff = sizeRatesMap[c.size] ?? 1.0
+  1142→  1142→                      const coeffChanged = Math.abs(c.fabricCoeff - oldCoeff) > 0.001
+  1143→  1143→                      return (
+  1144→  1144→                        <div key={c.size} className={`rounded-lg border p-3 text-center ${coeffChanged ? 'bg-amber-50 border-amber-200' : 'bg-white'}`}>
+  1145→  1145→                          <div className="text-sm font-medium mb-1">{c.size}</div>
+  1146→  1146→                          <div className="text-lg font-bold text-emerald-700">{c.fabricCoeff.toFixed(3)}</div>
+  1147→  1147→                          {coeffChanged && (
+  1148→  1148→                            <div className="text-xs text-amber-600 mt-1">
+  1149→  1149→                              было ×{oldCoeff.toFixed(2)}
+  1150→  1150→                            </div>
+  1151→  1151→                          )}
+  1152→  1152→                          {prevSize && (
+  1153→  1153→                            <div className="text-xs text-muted-foreground mt-1">
+  1154→  1154→                              {prevSize.diffPercent > 0 ? '↑' : prevSize.diffPercent < 0 ? '↓' : '='}
+  1155→  1155→                              {' '}
+  1156→  1156→                              {Math.abs(prevSize.diffPercent)}% от нормы
+  1157→  1157→                            </div>
+  1158→  1158→                          )}
+  1159→  1159→                        </div>
+  1160→  1160→                      )
+  1161→  1161→                    })}
+  1162→  1162→                  </div>
+  1163→  1163→                </div>
+  1164→  1164→              </CardContent>
+  1165→  1165→            </Card>
+  1166→  1166→          )}
+  1167→  1167→        </TabsContent>
+  1168→  1168→      </Tabs>
+  1169→  1169→
+  1170→  1170→      {/* Диалог подтверждения сохранения коэффициентов */}
+  1171→  1171→      <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
+  1172→  1172→        <DialogContent className="sm:max-w-md">
+  1173→  1173→          <DialogHeader>
+  1174→  1174→            <DialogTitle>Сохранить коэффициенты?</DialogTitle>
+  1175→  1175→          </DialogHeader>
+  1176→  1176→          <p className="text-sm text-muted-foreground">
+  1177→  1177→            Новые коэффициенты расхода ткани будут сохранены для размеров этого изделия.
+  1178→  1178→            Старые значения будут перезаписаны. Это повлияет на все будущие расчёты.
+  1179→  1179→          </p>
+  1180→  1180→          <div className="space-y-2 mt-2">
+  1181→  1181→            {pendingCoeffs.map((c) => {
+  1182→  1182→              const oldCoeff = sizeRatesMap[c.size] ?? 1.0
+  1183→  1183→              const changed = Math.abs(c.fabricCoeff - oldCoeff) > 0.001
+  1184→  1184→              return (
+  1185→  1185→                <div key={c.size} className={`flex items-center justify-between text-sm rounded p-2 ${changed ? 'bg-amber-50 border border-amber-200' : 'bg-muted/50'}`}>
+  1186→  1186→                  <span className="font-medium">{c.size}</span>
+  1187→  1187→                  <div className="flex items-center gap-2">
+  1188→  1188→                    {changed && (
+  1189→  1189→                      <span className="text-xs text-muted-line-through text-muted-foreground">×{oldCoeff.toFixed(2)}</span>
+  1190→  1190→                    )}
+  1191→  1191→                    <Badge variant={changed ? 'default' : 'outline'}>×{c.fabricCoeff.toFixed(3)}</Badge>
+  1192→  1192→                  </div>
+  1193→  1193→                </div>
+  1194→  1194→              )
+  1195→  1195→            })}
+  1196→  1196→          </div>
+  1197→  1197→          <DialogFooter>
+  1198→  1198→            <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>
+  1199→  1199→              Отмена
+  1200→  1200→            </Button>
+  1201→  1201→            <Button
+  1202→  1202→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1203→  1203→              onClick={confirmSaveCoeffs}
+  1204→  1204→              disabled={saveCoeffsMutation.isPending}
+  1205→  1205→            >
+  1206→  1206→              {saveCoeffsMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1207→  1207→              <Save className="h-4 w-4 mr-1" />
+  1208→  1208→              Сохранить
+  1209→  1209→            </Button>
+  1210→  1210→          </DialogFooter>
+  1211→  1211→        </DialogContent>
+  1212→  1212→      </Dialog>
+  1213→  1213→    </div>
+  1214→  1214→  )
+  1215→  1215→}
+  1216→  1216→

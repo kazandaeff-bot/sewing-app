@@ -1,0 +1,1463 @@
+     1→'use client'
+     2→
+     3→import { useState, useCallback } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Label } from '@/components/ui/label'
+    10→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    11→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+    12→import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+    13→import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+    14→import { ScrollArea } from '@/components/ui/scroll-area'
+    15→import { Separator } from '@/components/ui/separator'
+    16→import { Progress } from '@/components/ui/progress'
+    17→import {
+    18→  Loader2,
+    19→  Plus,
+    20→  Trash2,
+    21→  CheckCircle2,
+    22→  FileText,
+    23→  X,
+    24→  Play,
+    25→  Ship,
+    26→  Banknote,
+    27→  Pencil,
+    28→  Undo2,
+    29→  Eye,
+    30→  Flame,
+    31→  CalendarClock,
+    32→  BarChart3,
+    33→  Scissors,
+    34→  Users,
+    35→} from 'lucide-react'
+    36→import { useToast } from '@/hooks/use-toast'
+    37→import { authFetch } from '@/components/auth-provider'
+    38→import type { Product, Plan, PlanItem, CuttingPlanItem, SewingTaskItem } from '@/types'
+    39→import { formatDate, parseKitComboColors, getKitLabel, printDocument } from '@/lib/formatters'
+    40→import { getColorDot, getPlanStatusBadge, getCuttingStatusBadge, getSewingTaskStatusBadge } from '@/lib/status-badges'
+    41→import { useItemRows } from '@/hooks/use-item-rows'
+    42→import { useProductColorSelect } from '@/hooks/use-product-color-select'
+    43→
+    44→export function SewingPlansTab() {
+    45→  const { toast } = useToast()
+    46→  const queryClient = useQueryClient()
+    47→  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+    48→  const [planCustomerId, setPlanCustomerId] = useState('')
+    49→  const [planPriority, setPlanPriority] = useState<string>('normal')
+    50→  const [planDeadline, setPlanDeadline] = useState<string>('')
+    51→
+    52→  // Quick mode state for create dialog
+    53→  const [quickMode, setQuickMode] = useState(true)
+    54→  const [quickGroups, setQuickGroups] = useState<Array<{ productId: string; quantities: Record<string, number>; colorHexMap: Record<string, string>; kitCombos: Record<string, string[]> }>>([])
+    55→
+    56→  // Combo input state for quick mode
+    57→  const [newComboKey, setNewComboKey] = useState('')
+    58→  const [newComboValue, setNewComboValue] = useState('')
+    59→
+    60→  // Combo input state for table mode (per product)
+    61→  const [tableKitCombos, setTableKitCombos] = useState<Record<string, Record<string, string[]>>>({})
+    62→  const [tableComboInputs, setTableComboInputs] = useState<Record<string, { key: string; value: string }>>({})
+    63→
+    64→  // Use shared hooks for item row management
+    65→  const createRows = useItemRows()
+    66→  const editRows = useItemRows([])
+    67→  const supplementRows = useItemRows()
+    68→
+    69→  // Use shared hooks for product/color selection
+    70→  const createColorSelect = useProductColorSelect(createRows.setRows)
+    71→  const editColorSelect = useProductColorSelect(editRows.setRows)
+    72→  const supplementColorSelect = useProductColorSelect(supplementRows.setRows)
+    73→
+    74→  const [editDialogOpen, setEditDialogOpen] = useState(false)
+    75→  const [editingPlanId, setEditingPlanId] = useState('')
+    76→
+    77→  const [filterCustomerId, setFilterCustomerId] = useState('all')
+    78→
+    79→  const [supplementDialogOpen, setSupplementDialogOpen] = useState(false)
+    80→  const [supplementPlanId, setSupplementPlanId] = useState('')
+    81→  const [supplementPlanName, setSupplementPlanName] = useState('')
+    82→
+    83→  // Delete confirmation state
+    84→  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+    85→
+    86→  // Plan detail dialog state
+    87→  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+    88→  const [detailPlanId, setDetailPlanId] = useState('')
+    89→  const [detailData, setDetailData] = useState<{
+    90→    id: string
+    91→    name: string
+    92→    status: string
+    93→    customer: { id: string; name: string } | null
+    94→    items: PlanItem[]
+    95→    cuttingPlans: Array<{
+    96→      id: string
+    97→      label: string | null
+    98→      status: string
+    99→      items: CuttingPlanItem[]
+   100→      sewingTasks: Array<{
+   101→        id: string
+   102→        status: string
+   103→        employee: { id: string; name: string }
+   104→        items: SewingTaskItem[]
+   105→      }>
+   106→    }>
+   107→    progress: {
+   108→      items: Array<{
+   109→        planItemId: string
+   110→        productId: string
+   111→        productName: string
+   112→        size: string
+   113→        color: string
+   114→        colorHex: string
+   115→        isComboItem?: boolean
+   116→        expandedColors?: string[]
+   117→        totalPlanned: number
+   118→        totalCut: number
+   119→        assignedToSewers: number
+   120→        sewnQty: number
+   121→        checkedQty: number
+   122→      }>
+   123→      total: {
+   124→        planned: number
+   125→        cut: number
+   126→        assigned: number
+   127→        sewn: number
+   128→        checked: number
+   129→        sewnPercent: number
+   130→        checkedPercent: number
+   131→      }
+   132→    }
+   133→  } | null>(null)
+   134→  const [detailLoading, setDetailLoading] = useState(false)
+   135→
+   136→  const handleOpenDetail = useCallback(async (planId: string) => {
+   137→    setDetailPlanId(planId)
+   138→    setDetailDialogOpen(true)
+   139→    setDetailLoading(true)
+   140→    setDetailData(null)
+   141→    try {
+   142→      const res = await authFetch(`/api/plans/${planId}`)
+   143→      const data = await res.json()
+   144→      setDetailData(data)
+   145→    } catch {
+   146→      toast({ title: 'Ошибка', description: 'Не удалось загрузить данные плана', variant: 'destructive' })
+   147→    } finally {
+   148→      setDetailLoading(false)
+   149→    }
+   150→  }, [toast])
+   151→
+   152→  const { data: plans = [], isLoading: plansLoading } = useQuery({
+   153→    queryKey: ['plans'],
+   154→    queryFn: async () => {
+   155→      const r = await authFetch('/api/plans')
+   156→      const data = await r.json()
+   157→      return Array.isArray(data) ? data : []
+   158→    },
+   159→  })
+   160→
+   161→  const { data: products = [] } = useQuery({
+   162→    queryKey: ['products'],
+   163→    queryFn: async () => {
+   164→      const r = await authFetch('/api/products')
+   165→      const data = await r.json()
+   166→      return Array.isArray(data) ? data : []
+   167→    },
+   168→  })
+   169→
+   170→  const { data: customers = [] } = useQuery({
+   171→    queryKey: ['customers'],
+   172→    queryFn: async () => {
+   173→      const r = await authFetch('/api/customers')
+   174→      const data = await r.json()
+   175→      return Array.isArray(data) ? data : []
+   176→    },
+   177→  })
+   178→
+   179→  const createMutation = useMutation({
+   180→    mutationFn: (data: { customerId: string; priority?: string; deadline?: string; items: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
+   181→      authFetch('/api/plans', {
+   182→        method: 'POST',
+   183→        headers: { 'Content-Type': 'application/json' },
+   184→        body: JSON.stringify(data),
+   185→      }).then(async (r) => {
+   186→        const result = await r.json()
+   187→        if (!r.ok) throw new Error(result.error || 'Не удалось создать план')
+   188→        return result
+   189→      }),
+   190→    onSuccess: () => {
+   191→      queryClient.invalidateQueries({ queryKey: ['plans'] })
+   192→      setCreateDialogOpen(false)
+   193→      setPlanCustomerId('')
+   194→      setPlanPriority('normal')
+   195→      setPlanDeadline('')
+   196→      createRows.resetRows()
+   197→      setQuickGroups([])
+   198→      toast({ title: 'План создан', description: 'Новый план пошива создан' })
+   199→    },
+   200→    onError: (err: Error) => {
+   201→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   202→    },
+   203→  })
+   204→
+   205→  const statusMutation = useMutation({
+   206→    mutationFn: ({ id, status }: { id: string; status: string }) =>
+   207→      authFetch(`/api/plans/${id}`, {
+   208→        method: 'PATCH',
+   209→        headers: { 'Content-Type': 'application/json' },
+   210→        body: JSON.stringify({ status }),
+   211→      }).then(async (r) => {
+   212→        const data = await r.json()
+   213→        if (!r.ok) throw new Error(data.error || 'Ошибка обновления статуса')
+   214→        return data
+   215→      }),
+   216→    onSuccess: () => {
+   217→      queryClient.invalidateQueries({ queryKey: ['plans'] })
+   218→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+   219→      toast({ title: 'Статус обновлён' })
+   220→    },
+   221→    onError: (err: Error) => {
+   222→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   223→    },
+   224→  })
+   225→
+   226→  const deleteMutation = useMutation({
+   227→    mutationFn: (id: string) =>
+   228→      authFetch(`/api/plans/${id}`, { method: 'DELETE' }).then(async (r) => {
+   229→        const result = await r.json()
+   230→        if (!r.ok) throw new Error(result.error || 'Не удалось удалить план')
+   231→        return result
+   232→      }),
+   233→    onSuccess: () => {
+   234→      queryClient.invalidateQueries({ queryKey: ['plans'] })
+   235→      toast({ title: 'План удалён', description: 'План пошива удалён' })
+   236→    },
+   237→    onError: (err: Error) => {
+   238→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   239→    },
+   240→  })
+   241→
+   242→  const updatePlanMutation = useMutation({
+   243→    mutationFn: ({ id, items }: { id: string; items: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
+   244→      authFetch(`/api/plans/${id}`, {
+   245→        method: 'PATCH',
+   246→        headers: { 'Content-Type': 'application/json' },
+   247→        body: JSON.stringify({ items }),
+   248→      }).then(async (r) => {
+   249→        const result = await r.json()
+   250→        if (!r.ok) throw new Error(result.error || 'Не удалось обновить план')
+   251→        return result
+   252→      }),
+   253→    onSuccess: () => {
+   254→      queryClient.invalidateQueries({ queryKey: ['plans'] })
+   255→      setEditDialogOpen(false)
+   256→      toast({ title: 'План обновлён', description: 'Позиции плана обновлены' })
+   257→    },
+   258→    onError: (err: Error) => {
+   259→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   260→    },
+   261→  })
+   262→
+   263→  const supplementMutation = useMutation({
+   264→    mutationFn: ({ id, addItems }: { id: string; addItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }> }) =>
+   265→      authFetch(`/api/plans/${id}`, {
+   266→        method: 'PATCH',
+   267→        headers: { 'Content-Type': 'application/json' },
+   268→        body: JSON.stringify({ addItems }),
+   269→      }).then(async (r) => {
+   270→        const result = await r.json()
+   271→        if (!r.ok) throw new Error(result.error || 'Не удалось дополнить план')
+   272→        return result
+   273→      }),
+   274→    onSuccess: () => {
+   275→      queryClient.invalidateQueries({ queryKey: ['plans'] })
+   276→      queryClient.invalidateQueries({ queryKey: ['cutting-plans'] })
+   277→      setSupplementDialogOpen(false)
+   278→      setSupplementPlanId('')
+   279→      setSupplementPlanName('')
+   280→      supplementRows.resetRows()
+   281→      toast({ title: 'План дополнен', description: 'Новые позиции добавлены в план' })
+   282→    },
+   283→    onError: (err: Error) => {
+   284→      toast({ title: 'Ошибка', description: err.message, variant: 'destructive' })
+   285→    },
+   286→  })
+   287→
+   288→  const handleCreate = useCallback(() => {
+   289→    if (!planCustomerId) {
+   290→      toast({ title: 'Ошибка', description: 'Выберите заказчика', variant: 'destructive' })
+   291→      return
+   292→    }
+   293→    let validItems: Array<{ productId: string; size: string; color: string; colorHex: string; quantity: number }>
+   294→    if (quickMode) {
+   295→      if (quickGroups.some(g => !g.productId)) {
+   296→        toast({ title: 'Ошибка', description: 'Выберите изделие для всех групп', variant: 'destructive' })
+   297→        return
+   298→      }
+   299→      validItems = quickGroups.flatMap(group =>
+   300→        Object.entries(group.quantities)
+   301→          .filter(([, qty]) => qty > 0)
+   302→          .map(([key, qty]) => {
+   303→            const [size, color] = key.split('|')
+   304→            return { productId: group.productId, size, color, colorHex: group.colorHexMap[key] || '#9ca3af', quantity: qty }
+   305→          })
+   306→      )
+   307→      if (validItems.length === 0) {
+   308→        toast({ title: 'Ошибка', description: 'Укажите количество хотя бы для одной позиции', variant: 'destructive' })
+   309→        return
+   310→      }
+   311→    } else {
+   312→      validItems = createRows.rows.filter((i) => i.productId && i.size && i.color && i.quantity > 0)
+   313→      if (validItems.length === 0) {
+   314→        toast({ title: 'Ошибка', description: 'Добавьте хотя бы одну позицию', variant: 'destructive' })
+   315→        return
+   316→      }
+   317→    }
+   318→    createMutation.mutate({ customerId: planCustomerId, priority: planPriority, deadline: planDeadline || undefined, items: validItems })
+   319→  }, [planCustomerId, planPriority, planDeadline, quickMode, quickGroups, createRows.rows, createMutation, toast])
+   320→
+   321→  const handleEdit = useCallback((plan: Plan) => {
+   322→    setEditingPlanId(plan.id)
+   323→    editRows.setRowsFromPlanItems(plan.items)
+   324→    setEditDialogOpen(true)
+   325→  }, [editRows])
+   326→
+   327→  const handleEditSave = useCallback(() => {
+   328→    const validItems = editRows.rows.filter((i) => i.productId && i.size && i.color && i.quantity > 0)
+   329→    if (validItems.length === 0) {
+   330→      toast({ title: 'Ошибка', description: 'Добавьте хотя бы одну позицию', variant: 'destructive' })
+   331→      return
+   332→    }
+   333→    updatePlanMutation.mutate({ id: editingPlanId, items: validItems })
+   334→  }, [editRows.rows, editingPlanId, updatePlanMutation, toast])
+   335→
+   336→  const handleSupplementSave = useCallback(() => {
+   337→    const validItems = supplementRows.rows.filter((i) => i.productId && i.size && i.color && i.quantity > 0)
+   338→    if (validItems.length === 0) {
+   339→      toast({ title: 'Ошибка', description: 'Добавьте хотя бы одну позицию', variant: 'destructive' })
+   340→      return
+   341→    }
+   342→    supplementMutation.mutate({ id: supplementPlanId, addItems: validItems })
+   343→  }, [supplementRows.rows, supplementPlanId, supplementMutation, toast])
+   344→
+   345→  const handleOpenSupplement = useCallback((plan: Plan) => {
+   346→    setSupplementPlanId(plan.id)
+   347→    setSupplementPlanName(plan.name)
+   348→    supplementRows.resetRows()
+   349→    setSupplementDialogOpen(true)
+   350→  }, [supplementRows])
+   351→
+   352→  const filteredPlans = filterCustomerId === 'all'
+   353→    ? plans
+   354→    : plans.filter((p: Plan) => p.customerId === filterCustomerId)
+   355→
+   356→  // Sort plans: urgent first, then by deadline, then by creation date
+   357→  const sortedPlans = [...filteredPlans].sort((a: Plan, b: Plan) => {
+   358→    const priorityOrder: Record<string, number> = { urgent: 0, normal: 1, low: 2 }
+   359→    const pa = priorityOrder[a.priority || 'normal'] ?? 1
+   360→    const pb = priorityOrder[b.priority || 'normal'] ?? 1
+   361→    if (pa !== pb) return pa - pb
+   362→    if (a.deadline && b.deadline) return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
+   363→    if (a.deadline) return -1
+   364→    if (b.deadline) return 1
+   365→    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+   366→  })
+   367→
+   368→  if (plansLoading) {
+   369→    return (
+   370→      <div className="flex items-center justify-center p-8">
+   371→        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+   372→        <span className="ml-2 text-muted-foreground">Загрузка...</span>
+   373→      </div>
+   374→    )
+   375→  }
+   376→
+   377→  // Reusable item row renderer
+   378→  const renderItemRow = (
+   379→    item: { productId: string; size: string; color: string; colorHex: string; quantity: number },
+   380→    index: number,
+   381→    rowsHook: ReturnType<typeof useItemRows>,
+   382→    colorSelectHook: ReturnType<typeof useProductColorSelect>,
+   383→  ) => {
+   384→    const selectedProduct = products.find((p: Product) => p.id === item.productId)
+   385→    const availableSizes = selectedProduct?.sizes || []
+   386→    const availableColors = selectedProduct?.colors || []
+   387→
+   388→    // Merge product kitComboColors + user-defined tableKitCombos
+   389→    const productKitCombo = selectedProduct?.isKit ? parseKitComboColors(selectedProduct.kitComboColors) : {}
+   390→    const userKitCombo = tableKitCombos[item.productId] || {}
+   391→    const allKitCombos: Record<string, string[]> = { ...productKitCombo, ...userKitCombo }
+   392→    const comboInput = tableComboInputs[item.productId] || { key: '', value: '' }
+   393→
+   394→    // Check if current color is a combo code
+   395→    const isCurrentColorCombo = !!allKitCombos[item.color]
+   396→
+   397→    return (
+   398→      <div key={index} className="flex flex-col gap-2">
+   399→        <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+   400→          <div className="flex-1 sm:min-w-[140px]">
+   401→            <Label className="text-xs text-muted-foreground">Изделие</Label>
+   402→            <Select
+   403→              value={item.productId}
+   404→              onValueChange={(v) => colorSelectHook.handleProductChange(index, v)}
+   405→            >
+   406→              <SelectTrigger className="w-full">
+   407→                <SelectValue placeholder="Выберите" />
+   408→              </SelectTrigger>
+   409→              <SelectContent>
+   410→                {products.map((p: Product) => (
+   411→                  <SelectItem key={p.id} value={p.id}>
+   412→                    {p.name} ({p.article}){getKitLabel(p)}
+   413→                  </SelectItem>
+   414→                ))}
+   415→              </SelectContent>
+   416→            </Select>
+   417→          </div>
+   418→          <div className="sm:w-24">
+   419→            <Label className="text-xs text-muted-foreground">Размер</Label>
+   420→            {availableSizes.length > 0 ? (
+   421→              <Select
+   422→                value={item.size}
+   423→                onValueChange={(v) => rowsHook.updateRow(index, 'size', v)}
+   424→              >
+   425→                <SelectTrigger className="w-full">
+   426→                  <SelectValue placeholder="Размер" />
+   427→                </SelectTrigger>
+   428→                <SelectContent>
+   429→                  {availableSizes.map((s) => (
+   430→                    <SelectItem key={s.id} value={s.size}>
+   431→                      {s.size}
+   432→                    </SelectItem>
+   433→                  ))}
+   434→                </SelectContent>
+   435→              </Select>
+   436→            ) : (
+   437→              <Input
+   438→                placeholder="Размер"
+   439→                value={item.size}
+   440→                onChange={(e) => rowsHook.updateRow(index, 'size', e.target.value)}
+   441→              />
+   442→            )}
+   443→          </div>
+   444→          <div className="sm:w-28">
+   445→            <Label className="text-xs text-muted-foreground">Цвет</Label>
+   446→            {availableColors.length > 0 || (selectedProduct?.isKit) ? (
+   447→              <Select
+   448→                value={item.color}
+   449→                onValueChange={(v) => {
+   450→                  // Check if it's a combo code (from product or user-defined)
+   451→                  if (allKitCombos[v]) {
+   452→                    rowsHook.updateRow(index, 'color', v)
+   453→                    rowsHook.updateRow(index, 'colorHex', '#808080')
+   454→                  } else {
+   455→                    colorSelectHook.handleColorSelect(index, v, selectedProduct)
+   456→                  }
+   457→                }}
+   458→              >
+   459→                <SelectTrigger className="w-full">
+   460→                  <SelectValue placeholder="Цвет" />
+   461→                </SelectTrigger>
+   462→                <SelectContent>
+   463→                  {availableColors.map((c) => (
+   464→                    <SelectItem key={c.id} value={c.color}>
+   465→                      <span className="flex items-center gap-1.5">
+   466→                        <span
+   467→                          className="inline-block w-3 h-3 rounded-full border border-gray-200"
+   468→                          style={{ backgroundColor: c.colorHex }}
+   469→                        />
+   470→                        {c.color}
+   471→                      </span>
+   472→                    </SelectItem>
+   473→                  ))}
+   474→                  {selectedProduct?.isKit && Object.keys(allKitCombos).map(key => (
+   475→                    <SelectItem key={key} value={key}>
+   476→                      <span className="flex items-center gap-1.5">
+   477→                        <span
+   478→                          className="inline-block w-3 h-3 rounded-full border border-amber-300 bg-amber-200"
+   479→                        />
+   480→                        <span className="font-medium">{key}</span>
+   481→                        <span className="text-amber-600 text-[10px]">({allKitCombos[key].join(', ')})</span>
+   482→                      </span>
+   483→                    </SelectItem>
+   484→                  ))}
+   485→                </SelectContent>
+   486→              </Select>
+   487→            ) : (
+   488→              <Input
+   489→                placeholder="Цвет"
+   490→                value={item.color}
+   491→                onChange={(e) => rowsHook.updateRow(index, 'color', e.target.value)}
+   492→              />
+   493→            )}
+   494→            {isCurrentColorCombo && (
+   495→              <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px] px-1.5 py-0 mt-1">
+   496→                <Scissors className="h-2.5 w-2.5 mr-0.5" />
+   497→                комбо: {item.color} → {allKitCombos[item.color].join(', ')}
+   498→              </Badge>
+   499→            )}
+   500→          </div>
+   501→          <div className="sm:w-16">
+   502→            <Label className="text-xs text-muted-foreground">Hex</Label>
+   503→            <div className="flex items-center gap-1">
+   504→              <input
+   505→                type="color"
+   506→                value={item.colorHex}
+   507→                onChange={(e) => rowsHook.updateRow(index, 'colorHex', e.target.value)}
+   508→                className="w-6 h-8 rounded cursor-pointer border-0 p-0"
+   509→              />
+   510→            </div>
+   511→          </div>
+   512→          <div className="sm:w-20">
+   513→            <Label className="text-xs text-muted-foreground">Кол-во</Label>
+   514→            <Input
+   515→              type="number"
+   516→              min="0"
+   517→              value={item.quantity || ''}
+   518→              onChange={(e) => rowsHook.updateRow(index, 'quantity', parseInt(e.target.value) || 0)}
+   519→            />
+   520→          </div>
+   521→          <Button
+   522→            size="sm"
+   523→            variant="ghost"
+   524→            className="text-red-500 hover:text-red-700 hover:bg-red-50 mb-0.5"
+   525→            onClick={() => rowsHook.removeRow(index)}
+   526→            disabled={rowsHook.rows.length <= 1}
+   527→          >
+   528→            <X className="h-4 w-4" />
+   529→          </Button>
+   530→        </div>
+   531→
+   532→        {/* Kit combo code management in table mode */}
+   533→        {selectedProduct?.isKit && (
+   534→          <div className="ml-0 sm:ml-[0px] rounded-md border border-amber-200 bg-amber-50/50 p-2 space-y-1.5">
+   535→            <div className="flex items-center gap-1.5 text-[10px] font-medium text-amber-700">
+   536→              <Scissors className="h-3 w-3" />
+   537→              Комбо-коды комплекта
+   538→            </div>
+   539→            {Object.keys(allKitCombos).length > 0 && (
+   540→              <div className="flex flex-wrap gap-1">
+   541→                {Object.entries(allKitCombos).map(([key, val]) => {
+   542→                  const isUserDefined = !!userKitCombo[key]
+   543→                  return (
+   544→                    <Badge
+   545→                      key={key}
+   546→                      variant="outline"
+   547→                      className="bg-amber-100 border-amber-300 text-amber-800 gap-0.5 pr-1 text-[10px]"
+   548→                    >
+   549→                      <span className="font-semibold">{key}</span>
+   550→                      <span className="text-amber-600/70">→</span>
+   551→                      <span>{val.join(', ')}</span>
+   552→                      {isUserDefined && (
+   553→                        <button
+   554→                          type="button"
+   555→                          className="ml-0.5 rounded-full p-0.5 hover:bg-amber-300/50 text-amber-500 hover:text-red-600 transition-colors"
+   556→                          onClick={() => {
+   557→                            setTableKitCombos(prev => {
+   558→                              const productCombos = { ...prev[item.productId] }
+   559→                              const { [key]: _, ...rest } = productCombos
+   560→                              return { ...prev, [item.productId]: rest }
+   561→                            })
+   562→                          }}
+   563→                        >
+   564→                          <X className="h-2.5 w-2.5" />
+   565→                        </button>
+   566→                      )}
+   567→                    </Badge>
+   568→                  )
+   569→                })}
+   570→              </div>
+   571→            )}
+   572→            <div className="flex items-center gap-1">
+   573→              <Input
+   574→                className="h-6 text-[10px] w-16 border-amber-200 focus:border-amber-400"
+   575→                placeholder="Код"
+   576→                value={comboInput.key}
+   577→                onChange={(e) => setTableComboInputs(prev => ({
+   578→                  ...prev,
+   579→                  [item.productId]: { ...prev[item.productId], key: e.target.value }
+   580→                }))}
+   581→              />
+   582→              <Input
+   583→                className="h-6 text-[10px] flex-1 border-amber-200 focus:border-amber-400"
+   584→                placeholder="Цвета через запятую"
+   585→                value={comboInput.value}
+   586→                onChange={(e) => setTableComboInputs(prev => ({
+   587→                  ...prev,
+   588→                  [item.productId]: { ...prev[item.productId], value: e.target.value }
+   589→                }))}
+   590→              />
+   591→              <Button
+   592→                size="sm"
+   593→                className="h-6 bg-amber-500 hover:bg-amber-600 text-white text-[10px] px-2"
+   594→                disabled={!comboInput.key.trim() || !comboInput.value.trim()}
+   595→                onClick={() => {
+   596→                  const k = comboInput.key.trim()
+   597→                  const vals = comboInput.value.split(',').map(v => v.trim()).filter(Boolean)
+   598→                  if (!k || vals.length === 0) return
+   599→                  if (allKitCombos[k]) {
+   600→                    toast({ title: 'Ошибка', description: 'Такой код уже существует', variant: 'destructive' })
+   601→                    return
+   602→                  }
+   603→                  setTableKitCombos(prev => ({
+   604→                    ...prev,
+   605→                    [item.productId]: { ...(prev[item.productId] || {}), [k]: vals }
+   606→                  }))
+   607→                  setTableComboInputs(prev => ({
+   608→                    ...prev,
+   609→                    [item.productId]: { key: '', value: '' }
+   610→                  }))
+   611→                }}
+   612→              >
+   613→                <Plus className="h-3 w-3 mr-0.5" />
+   614→                Добавить
+   615→              </Button>
+   616→            </div>
+   617→          </div>
+   618→        )}
+   619→      </div>
+   620→    )
+   621→  }
+   622→
+   623→  return (
+   624→    <div className="space-y-6">
+   625→      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+   626→        <h2 className="text-xl font-semibold">Планы пошива</h2>
+   627→        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+   628→          <Select value={filterCustomerId} onValueChange={setFilterCustomerId}>
+   629→            <SelectTrigger className="w-48">
+   630→              <SelectValue placeholder="Все заказчики" />
+   631→            </SelectTrigger>
+   632→            <SelectContent>
+   633→              <SelectItem value="all">Все заказчики</SelectItem>
+   634→              {customers.map((c: { id: string; name: string }) => (
+   635→                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+   636→              ))}
+   637→            </SelectContent>
+   638→          </Select>
+   639→          <Button
+   640→            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   641→            onClick={() => {
+   642→              setCreateDialogOpen(true)
+   643→              if (quickGroups.length === 0) {
+   644→                setQuickGroups([{ productId: '', quantities: {}, colorHexMap: {}, kitCombos: {} }])
+   645→              }
+   646→            }}
+   647→          >
+   648→            <Plus className="h-4 w-4 mr-1" />
+   649→            Создать план
+   650→          </Button>
+   651→        </div>
+   652→      </div>
+   653→
+   654→      {filteredPlans.length === 0 ? (
+   655→        <Card className="border-dashed">
+   656→          <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+   657→            <FileText className="h-12 w-12 mb-3 opacity-30" />
+   658→            <p>Нет планов пошива</p>
+   659→          </CardContent>
+   660→        </Card>
+   661→      ) : (
+   662→        <div className="border rounded-lg overflow-x-auto">
+   663→          <Table>
+   664→            <TableHeader>
+   665→              <TableRow>
+   666→                <TableHead className="text-xs sm:text-sm">Название</TableHead>
+   667→                <TableHead className="hidden md:table-cell">Заказчик</TableHead>
+   668→                <TableHead className="text-xs sm:text-sm">Статус</TableHead>
+   669→                <TableHead className="hidden sm:table-cell">Позиций</TableHead>
+   670→                <TableHead className="hidden lg:table-cell">Раскрой</TableHead>
+   671→                <TableHead className="hidden md:table-cell text-xs sm:text-sm">Дата</TableHead>
+   672→                <TableHead className="text-right text-xs sm:text-sm">Действия</TableHead>
+   673→              </TableRow>
+   674→            </TableHeader>
+   675→            <TableBody>
+   676→              {sortedPlans.map((plan: Plan) => (
+   677→                <TableRow key={plan.id} className="cursor-pointer hover:bg-emerald-50/50" onClick={() => handleOpenDetail(plan.id)}>
+   678→                  <TableCell className="font-medium">
+   679→                    <div className="flex items-center gap-2">
+   680→                      <Eye className="h-4 w-4 text-emerald-600 shrink-0" />
+   681→                      {plan.name}
+   682→                      {plan.priority === 'urgent' && (
+   683→                        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px] px-1.5 py-0"><Flame className="h-3 w-3 mr-0.5" />СРОЧНЫЙ</Badge>
+   684→                      )}
+   685→                      {plan.priority === 'low' && (
+   686→                        <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-100 text-[10px] px-1.5 py-0">НИЗКИЙ</Badge>
+   687→                      )}
+   688→                    </div>
+   689→                  </TableCell>
+   690→                  <TableCell className="hidden md:table-cell">
+   691→                    {plan.customer?.name || <Badge variant="outline" className="text-amber-600 border-amber-300">Не указан</Badge>}
+   692→                  </TableCell>
+   693→                  <TableCell>{getPlanStatusBadge(plan.status)}</TableCell>
+   694→                  <TableCell className="hidden sm:table-cell">{plan.items.length === 0 ? (
+   695→                    <Badge variant="outline" className="text-amber-600 border-amber-300 text-xs">нет позиций</Badge>
+   696→                  ) : plan.items.length}</TableCell>
+   697→                  <TableCell className="hidden lg:table-cell">
+   698→                    {plan.cuttingPlans && plan.cuttingPlans.length > 0 ? (
+   699→                      plan.cuttingPlans.length > 1 ? (
+   700→                        <Badge variant="secondary" className="bg-orange-100 text-orange-700 hover:bg-orange-100">
+   701→                          {plan.cuttingPlans.length} раскроя
+   702→                        </Badge>
+   703→                      ) : (
+   704→                        <Badge variant="secondary" className={plan.cuttingPlans[0].status === 'cut' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-amber-100 text-amber-700 hover:bg-amber-100'}>
+   705→                          Раскрой: {plan.cuttingPlans[0].status === 'cut' ? 'раскроено' : 'в работе'}
+   706→                        </Badge>
+   707→                      )
+   708→                    ) : null}
+   709→                  </TableCell>
+   710→                  <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{formatDate(plan.createdAt)}
+   711→                    {plan.deadline && (
+   712→                      <div className={`text-[10px] mt-0.5 ${new Date(plan.deadline) < new Date() && plan.status !== 'shipped' && plan.status !== 'shipped_paid' ? 'text-red-600 font-semibold' : 'text-amber-600'}`}>
+   713→                        <CalendarClock className="h-3 w-3 inline mr-0.5" />
+   714→                        Дедлайн: {formatDate(plan.deadline)}
+   715→                        {new Date(plan.deadline) < new Date() && plan.status !== 'shipped' && plan.status !== 'shipped_paid' && ' (просрочен)'}
+   716→                      </div>
+   717→                    )}
+   718→                  </TableCell>
+   719→                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+   720→                    <div className="flex items-center justify-end gap-1 sm:gap-2">
+   721→                      {plan.status === 'draft' && (
+   722→                        <>
+   723→                          <Button
+   724→                            size="sm"
+   725→                            variant="outline"
+   726→                            onClick={() => handleEdit(plan)}
+   727→                            disabled={updatePlanMutation.isPending}
+   728→                          >
+   729→                            <Pencil className="h-4 w-4" />
+   730→                          </Button>
+   731→                          <Button
+   732→                            size="sm"
+   733→                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   734→                            onClick={() => statusMutation.mutate({ id: plan.id, status: 'approved' })}
+   735→                            disabled={statusMutation.isPending}
+   736→                          >
+   737→                            <CheckCircle2 className="h-4 w-4 sm:mr-1" />
+   738→                            <span className="hidden sm:inline">Утвердить</span>
+   739→                          </Button>
+   740→                          <Button
+   741→                            size="sm"
+   742→                            variant="destructive"
+   743→                            onClick={() => setDeleteConfirmId(plan.id)}
+   744→                            disabled={deleteMutation.isPending}
+   745→                          >
+   746→                            <Trash2 className="h-4 w-4" />
+   747→                          </Button>
+   748→                        </>
+   749→                      )}
+   750→                      {plan.status === 'approved' && (
+   751→                        <>
+   752→                          <Button
+   753→                            size="sm"
+   754→                            className="bg-amber-500 hover:bg-amber-600 text-white"
+   755→                            onClick={() => statusMutation.mutate({ id: plan.id, status: 'in_work' })}
+   756→                            disabled={statusMutation.isPending}
+   757→                          >
+   758→                            <Play className="h-4 w-4 sm:mr-1" />
+   759→                            <span className="hidden sm:inline">В работу</span>
+   760→                          </Button>
+   761→                          {!plan.cuttingPlans?.some((cp) => cp.status === 'cut') && (
+   762→                            <Button
+   763→                              size="sm"
+   764→                              variant="outline"
+   765→                              className="border-amber-400 text-amber-600 hover:bg-amber-50"
+   766→                              onClick={() => statusMutation.mutate({ id: plan.id, status: 'draft' })}
+   767→                              disabled={statusMutation.isPending}
+   768→                            >
+   769→                              <Undo2 className="h-4 w-4 sm:mr-1" />
+   770→                              <span className="hidden sm:inline">Вернуть</span>
+   771→                            </Button>
+   772→                          )}
+   773→                          <Button
+   774→                            size="sm"
+   775→                            variant="outline"
+   776→                            className="border-emerald-400 text-emerald-600 hover:bg-emerald-50"
+   777→                            onClick={() => handleOpenSupplement(plan)}
+   778→                            disabled={supplementMutation.isPending}
+   779→                          >
+   780→                            <Plus className="h-4 w-4 sm:mr-1" />
+   781→                            <span className="hidden sm:inline">Дополнить</span>
+   782→                          </Button>
+   783→                        </>
+   784→                      )}
+   785→                      {plan.status === 'in_work' && (
+   786→                        <>
+   787→                          <Button
+   788→                            size="sm"
+   789→                            className="bg-sky-500 hover:bg-sky-600 text-white"
+   790→                            onClick={() => statusMutation.mutate({ id: plan.id, status: 'shipped' })}
+   791→                            disabled={statusMutation.isPending}
+   792→                          >
+   793→                            <Ship className="h-4 w-4 sm:mr-1" />
+   794→                            <span className="hidden sm:inline">Отгружен</span>
+   795→                          </Button>
+   796→                          <Button
+   797→                            size="sm"
+   798→                            variant="outline"
+   799→                            className="border-emerald-400 text-emerald-600 hover:bg-emerald-50"
+   800→                            onClick={() => handleOpenSupplement(plan)}
+   801→                            disabled={supplementMutation.isPending}
+   802→                          >
+   803→                            <Plus className="h-4 w-4 sm:mr-1" />
+   804→                            <span className="hidden sm:inline">Дополнить</span>
+   805→                          </Button>
+   806→                        </>
+   807→                      )}
+   808→                      {plan.status === 'shipped' && (
+   809→                        <Button
+   810→                          size="sm"
+   811→                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   812→                          onClick={() => statusMutation.mutate({ id: plan.id, status: 'shipped_paid' })}
+   813→                          disabled={statusMutation.isPending}
+   814→                        >
+   815→                          <Banknote className="h-4 w-4 sm:mr-1" />
+   816→                          <span className="hidden sm:inline">Оплачен</span>
+   817→                        </Button>
+   818→                      )}
+   819→                    </div>
+   820→                  </TableCell>
+   821→                </TableRow>
+   822→              ))}
+   823→            </TableBody>
+   824→          </Table>
+   825→        </div>
+   826→      )}
+   827→
+   828→      {/* Create Plan Dialog */}
+   829→      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+   830→        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
+   831→          <DialogHeader>
+   832→            <DialogTitle>Создать план пошива</DialogTitle>
+   833→          </DialogHeader>
+   834→          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
+   835→            <div className="space-y-4">
+   836→              <div className="space-y-2">
+   837→                <Label>Заказчик <span className="text-red-500">*</span></Label>
+   838→                <Select value={planCustomerId} onValueChange={setPlanCustomerId}>
+   839→                  <SelectTrigger className="w-full">
+   840→                    <SelectValue placeholder="Выберите заказчика" />
+   841→                  </SelectTrigger>
+   842→                  <SelectContent>
+   843→                    {customers.map((c: { id: string; name: string }) => (
+   844→                      <SelectItem key={c.id} value={c.id}>
+   845→                        {c.name}
+   846→                      </SelectItem>
+   847→                    ))}
+   848→                  </SelectContent>
+   849→                </Select>
+   850→              </div>
+   851→              <div className="grid grid-cols-2 gap-3">
+   852→                <div className="space-y-2">
+   853→                  <Label>Приоритет</Label>
+   854→                  <Select value={planPriority} onValueChange={setPlanPriority}>
+   855→                    <SelectTrigger><SelectValue /></SelectTrigger>
+   856→                    <SelectContent>
+   857→                      <SelectItem value="urgent"><span className="flex items-center gap-1"><Flame className="h-3 w-3 text-red-500" />Срочный</span></SelectItem>
+   858→                      <SelectItem value="normal">Обычный</SelectItem>
+   859→                      <SelectItem value="low">Низкий</SelectItem>
+   860→                    </SelectContent>
+   861→                  </Select>
+   862→                </div>
+   863→                <div className="space-y-2">
+   864→                  <Label>Дедлайн</Label>
+   865→                  <Input type="date" value={planDeadline} onChange={(e) => setPlanDeadline(e.target.value)} />
+   866→                </div>
+   867→              </div>
+   868→
+   869→              <Separator />
+   870→
+   871→              {/* Mode toggle */}
+   872→              <div className="flex gap-1 bg-muted rounded-lg p-1">
+   873→                <Button
+   874→                  size="sm"
+   875→                  variant={quickMode ? 'default' : 'ghost'}
+   876→                  className={`flex-1 ${quickMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+   877→                  onClick={() => setQuickMode(true)}
+   878→                >
+   879→                  Быстрое создание
+   880→                </Button>
+   881→                <Button
+   882→                  size="sm"
+   883→                  variant={!quickMode ? 'default' : 'ghost'}
+   884→                  className={`flex-1 ${!quickMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+   885→                  onClick={() => setQuickMode(false)}
+   886→                >
+   887→                  Табличный ввод
+   888→                </Button>
+   889→              </div>
+   890→
+   891→              {quickMode ? (
+   892→                /* Quick input mode: product selection + size×color grid */
+   893→                <div className="space-y-3">
+   894→                  {quickGroups.map((group, gi) => {
+   895→                    const product = products.find((p: Product) => p.id === group.productId)
+   896→                    const sizes = product?.sizes?.map(s => s.size) || []
+   897→                    const colors = product?.colors?.map(c => ({ color: c.color, colorHex: c.colorHex, isCombo: false })) || []
+   898→
+   899→                    // Merge product kitComboColors + user-defined kitCombos
+   900→                    const allKitCombos: Record<string, string[]> = {}
+   901→                    if (product?.isKit) {
+   902→                      const productCombo = parseKitComboColors(product.kitComboColors)
+   903→                      Object.entries(productCombo).forEach(([key, val]) => { allKitCombos[key] = val })
+   904→                    }
+   905→                    if (group.kitCombos) {
+   906→                      Object.entries(group.kitCombos).forEach(([key, val]) => { allKitCombos[key] = val })
+   907→                    }
+   908→
+   909→                    // Add combo codes to colors list
+   910→                    Object.keys(allKitCombos).forEach(key => {
+   911→                      if (!colors.find(c => c.color === key)) {
+   912→                        colors.push({ color: key, colorHex: '#808080', isCombo: true })
+   913→                      }
+   914→                    })
+   915→
+   916→                    // Helper: rebuild quantities and colorHexMap for a group given a list of colors
+   917→                    const rebuildGridForGroup = (g: typeof group, newColors: typeof colors) => {
+   918→                      const finalSizes = sizes.length > 0 ? sizes : ['—']
+   919→                      const finalColors = newColors.length > 0 ? newColors : [{ color: '—', colorHex: '#9ca3af', isCombo: false }]
+   920→                      const quantities: Record<string, number> = {}
+   921→                      const colorHexMap: Record<string, string> = {}
+   922→                      for (const size of finalSizes) {
+   923→                        for (const c of finalColors) {
+   924→                          const key = `${size}|${c.color}`
+   925→                          quantities[key] = g.quantities[key] || 0
+   926→                          colorHexMap[key] = c.colorHex
+   927→                        }
+   928→                      }
+   929→                      return { ...g, quantities, colorHexMap }
+   930→                    }
+   931→
+   932→                    // Determine which combos are user-defined (not from product)
+   933→                    const userCombos = group.kitCombos || {}
+   934→
+   935→                    return (
+   936→                      <Card key={gi} className="border border-emerald-200 bg-emerald-50/30">
+   937→                        <CardHeader className="py-2 px-3">
+   938→                          <div className="flex items-center justify-between">
+   939→                            <CardTitle className="text-sm font-medium">
+   940→                              {product ? `${product.name} (${product.article})${getKitLabel(product)}` : 'Выберите изделие'}
+   941→                            </CardTitle>
+   942→                            <Button
+   943→                              size="sm"
+   944→                              variant="ghost"
+   945→                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-7"
+   946→                              onClick={() => setQuickGroups(prev => prev.filter((_, i) => i !== gi))}
+   947→                              disabled={quickGroups.length <= 1}
+   948→                            >
+   949→                              <Trash2 className="h-3.5 w-3.5" />
+   950→                            </Button>
+   951→                          </div>
+   952→                        </CardHeader>
+   953→                        <CardContent className="py-2 px-3 space-y-3">
+   954→                          <Select
+   955→                            value={group.productId}
+   956→                            onValueChange={(v) => {
+   957→                              const p = products.find((pp: Product) => pp.id === v)
+   958→                              if (!p) return
+   959→                              const sList = p.sizes.map(s => s.size)
+   960→                              const cList = p.colors.map(c => ({ color: c.color, colorHex: c.colorHex, isCombo: false }))
+   961→                              if (p.isKit) {
+   962→                                const kitCombo = parseKitComboColors(p.kitComboColors)
+   963→                                Object.keys(kitCombo).forEach(key => {
+   964→                                  if (!cList.find(c => c.color === key)) {
+   965→                                    cList.push({ color: key, colorHex: '#808080', isCombo: true })
+   966→                                  }
+   967→                                })
+   968→                              }
+   969→                              const quantities: Record<string, number> = {}
+   970→                              const colorHexMap: Record<string, string> = {}
+   971→                              const finalSizes = sList.length > 0 ? sList : ['—']
+   972→                              const finalColors = cList.length > 0 ? cList : [{ color: '—', colorHex: '#9ca3af', isCombo: false }]
+   973→                              for (const size of finalSizes) {
+   974→                                for (const c of finalColors) {
+   975→                                  const key = `${size}|${c.color}`
+   976→                                  quantities[key] = 0
+   977→                                  colorHexMap[key] = c.colorHex
+   978→                                }
+   979→                              }
+   980→                              setQuickGroups(prev => prev.map((g, i) => i === gi ? { productId: v, quantities, colorHexMap, kitCombos: g.kitCombos || {} } : g))
+   981→                            }}
+   982→                          >
+   983→                            <SelectTrigger><SelectValue placeholder="Выберите изделие" /></SelectTrigger>
+   984→                            <SelectContent>
+   985→                              {products.map((p: Product) => (
+   986→                                <SelectItem key={p.id} value={p.id}>
+   987→                                  {p.name} ({p.article}){getKitLabel(p)}
+   988→                                </SelectItem>
+   989→                              ))}
+   990→                            </SelectContent>
+   991→                          </Select>
+   992→
+   993→                          {/* Kit combo code management */}
+   994→                          {product?.isKit && (
+   995→                            <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50/50 p-2.5">
+   996→                              <div className="flex items-center gap-1.5 text-xs font-medium text-amber-700">
+   997→                                <Scissors className="h-3.5 w-3.5" />
+   998→                                Комбо-коды комплекта
+   999→                              </div>
+  1000→                              <p className="text-[10px] text-amber-600/80">
+  1001→                                Комбо-код — это условное обозначение группы цветов (напр. «ч/б» → чёрный, белый). При создании раскроя каждая позиция с комбо-кодом будет развернута в отдельные цвета.
+  1002→                              </p>
+  1003→                              {Object.keys(allKitCombos).length > 0 && (
+  1004→                                <div className="flex flex-wrap gap-1.5">
+  1005→                                  {Object.entries(allKitCombos).map(([key, val]) => {
+  1006→                                    const isUserDefined = !!userCombos[key]
+  1007→                                    return (
+  1008→                                      <Badge
+  1009→                                        key={key}
+  1010→                                        variant="outline"
+  1011→                                        className="bg-amber-100 border-amber-300 text-amber-800 gap-1 pr-1 text-xs"
+  1012→                                      >
+  1013→                                        <span className="font-semibold">{key}</span>
+  1014→                                        <span className="text-amber-600/70">→</span>
+  1015→                                        <span>{val.join(', ')}</span>
+  1016→                                        {isUserDefined && (
+  1017→                                          <button
+  1018→                                            type="button"
+  1019→                                            className="ml-0.5 rounded-full p-0.5 hover:bg-amber-300/50 text-amber-500 hover:text-red-600 transition-colors"
+  1020→                                            onClick={() => {
+  1021→                                              setQuickGroups(prev => prev.map((g, i) => {
+  1022→                                                if (i !== gi) return g
+  1023→                                                const { [key]: _, ...rest } = g.kitCombos || {}
+  1024→                                                // Remove combo from colors and rebuild grid
+  1025→                                                const updatedColors = colors.filter(c => c.color !== key)
+  1026→                                                return rebuildGridForGroup({ ...g, kitCombos: rest }, updatedColors)
+  1027→                                              }))
+  1028→                                            }}
+  1029→                                          >
+  1030→                                            <X className="h-3 w-3" />
+  1031→                                          </button>
+  1032→                                        )}
+  1033→                                      </Badge>
+  1034→                                    )
+  1035→                                  })}
+  1036→                                </div>
+  1037→                              )}
+  1038→                              <div className="flex items-center gap-1.5">
+  1039→                                <Input
+  1040→                                  className="h-7 text-xs w-20 border-amber-200 focus:border-amber-400"
+  1041→                                  placeholder="Код"
+  1042→                                  value={newComboKey}
+  1043→                                  onChange={(e) => setNewComboKey(e.target.value)}
+  1044→                                />
+  1045→                                <Input
+  1046→                                  className="h-7 text-xs flex-1 border-amber-200 focus:border-amber-400"
+  1047→                                  placeholder="Цвета через запятую (напр. чёрный, белый)"
+  1048→                                  value={newComboValue}
+  1049→                                  onChange={(e) => setNewComboValue(e.target.value)}
+  1050→                                />
+  1051→                                <Button
+  1052→                                  size="sm"
+  1053→                                  className="h-7 bg-amber-500 hover:bg-amber-600 text-white text-xs px-2"
+  1054→                                  disabled={!newComboKey.trim() || !newComboValue.trim()}
+  1055→                                  onClick={() => {
+  1056→                                    const key = newComboKey.trim()
+  1057→                                    const vals = newComboValue.split(',').map(v => v.trim()).filter(Boolean)
+  1058→                                    if (!key || vals.length === 0) return
+  1059→                                    if (colors.find(c => c.color === key)) {
+  1060→                                      toast({ title: 'Ошибка', description: 'Такой код уже существует', variant: 'destructive' })
+  1061→                                      return
+  1062→                                    }
+  1063→                                    setQuickGroups(prev => prev.map((g, i) => {
+  1064→                                      if (i !== gi) return g
+  1065→                                      const newKitCombos = { ...g.kitCombos, [key]: vals }
+  1066→                                      const newColors = [...colors, { color: key, colorHex: '#808080', isCombo: true }]
+  1067→                                      return rebuildGridForGroup({ ...g, kitCombos: newKitCombos }, newColors)
+  1068→                                    }))
+  1069→                                    setNewComboKey('')
+  1070→                                    setNewComboValue('')
+  1071→                                  }}
+  1072→                                >
+  1073→                                  <Plus className="h-3 w-3 mr-0.5" />
+  1074→                                  Добавить
+  1075→                                </Button>
+  1076→                              </div>
+  1077→                            </div>
+  1078→                          )}
+  1079→
+  1080→                          {product && sizes.length > 0 && colors.length > 0 && (
+  1081→                            <div className="overflow-x-auto -mx-1">
+  1082→                              <table className="w-full text-sm border-collapse">
+  1083→                                <thead>
+  1084→                                  <tr className="border-b">
+  1085→                                    <th className="text-left p-1.5 text-xs text-muted-foreground min-w-[80px] whitespace-nowrap">Цвет \ Размер</th>
+  1086→                                    {sizes.map(size => (
+  1087→                                      <th key={size} className="text-center p-1.5 text-xs text-muted-foreground min-w-[60px]">{size}</th>
+  1088→                                    ))}
+  1089→                                  </tr>
+  1090→                                </thead>
+  1091→                                <tbody>
+  1092→                                  {colors.map(c => (
+  1093→                                    <tr key={c.color} className={`border-b last:border-0 ${c.isCombo ? 'bg-amber-50/60' : ''}`}>
+  1094→                                      <td className="p-1.5">
+  1095→                                        <span className="flex items-center gap-1.5 text-xs whitespace-nowrap">
+  1096→                                          <span
+  1097→                                            className="inline-block w-3 h-3 rounded-full border border-gray-200 shrink-0"
+  1098→                                            style={{ backgroundColor: c.colorHex }}
+  1099→                                          />
+  1100→                                          {c.color}
+  1101→                                          {c.isCombo && (
+  1102→                                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[9px] px-1 py-0 ml-0.5">комбо</Badge>
+  1103→                                          )}
+  1104→                                        </span>
+  1105→                                      </td>
+  1106→                                      {sizes.map(size => {
+  1107→                                        const key = `${size}|${c.color}`
+  1108→                                        return (
+  1109→                                          <td key={key} className="p-1 text-center">
+  1110→                                            <Input
+  1111→                                              type="number"
+  1112→                                              min="0"
+  1113→                                              className="w-16 h-8 text-center text-sm mx-auto"
+  1114→                                              value={group.quantities[key] || ''}
+  1115→                                              onChange={(e) => setQuickGroups(prev => prev.map((g, i) =>
+  1116→                                                i === gi ? { ...g, quantities: { ...g.quantities, [key]: parseInt(e.target.value) || 0 } } : g
+  1117→                                              ))}
+  1118→                                            />
+  1119→                                          </td>
+  1120→                                        )
+  1121→                                      })}
+  1122→                                    </tr>
+  1123→                                  ))}
+  1124→                                </tbody>
+  1125→                              </table>
+  1126→                            </div>
+  1127→                          )}
+  1128→                          {product && (sizes.length === 0 || colors.length === 0) && (
+  1129→                            <p className="text-xs text-muted-foreground italic">
+  1130→                              У изделия не заданы размеры или цвета. Используйте табличный ввод.
+  1131→                            </p>
+  1132→                          )}
+  1133→                        </CardContent>
+  1134→                      </Card>
+  1135→                    )
+  1136→                  })}
+  1137→                  <Button
+  1138→                    size="sm"
+  1139→                    variant="outline"
+  1140→                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 w-full"
+  1141→                    onClick={() => setQuickGroups(prev => [...prev, { productId: '', quantities: {}, colorHexMap: {}, kitCombos: {} }])}
+  1142→                  >
+  1143→                    <Plus className="h-4 w-4 mr-1" />
+  1144→                    Добавить изделие
+  1145→                  </Button>
+  1146→                </div>
+  1147→              ) : (
+  1148→                /* Table mode (existing one-by-one input) */
+  1149→                <div className="space-y-3">
+  1150→                  <div className="flex items-center justify-between">
+  1151→                    <Label className="text-sm font-medium">Позиции</Label>
+  1152→                    <Button size="sm" variant="outline" onClick={createRows.addRow}>
+  1153→                      <Plus className="h-4 w-4 mr-1" />
+  1154→                      Добавить
+  1155→                    </Button>
+  1156→                  </div>
+  1157→
+  1158→                  <div className="space-y-2">
+  1159→                    {createRows.rows.map((item, index) => renderItemRow(item, index, createRows, createColorSelect))}
+  1160→                  </div>
+  1161→                </div>
+  1162→              )}
+  1163→            </div>
+  1164→          </ScrollArea>
+  1165→          <DialogFooter>
+  1166→            <Button variant="outline" onClick={() => {
+  1167→              setCreateDialogOpen(false)
+  1168→              setPlanCustomerId('')
+  1169→              setPlanPriority('normal')
+  1170→              setPlanDeadline('')
+  1171→              setQuickGroups([])
+  1172→            }}>
+  1173→              Отмена
+  1174→            </Button>
+  1175→            <Button
+  1176→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1177→              onClick={handleCreate}
+  1178→              disabled={createMutation.isPending}
+  1179→            >
+  1180→              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1181→              Создать
+  1182→            </Button>
+  1183→          </DialogFooter>
+  1184→        </DialogContent>
+  1185→      </Dialog>
+  1186→
+  1187→      {/* Edit Plan Dialog */}
+  1188→      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+  1189→        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
+  1190→          <DialogHeader>
+  1191→            <DialogTitle>
+  1192→              Редактирование: {(plans as Plan[]).find((p) => p.id === editingPlanId)?.name || 'План'}
+  1193→            </DialogTitle>
+  1194→          </DialogHeader>
+  1195→          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
+  1196→            <div className="space-y-4">
+  1197→              <Separator />
+  1198→
+  1199→              <div className="space-y-3">
+  1200→                <div className="flex items-center justify-between">
+  1201→                  <Label className="text-sm font-medium">Позиции</Label>
+  1202→                  <Button size="sm" variant="outline" onClick={editRows.addRow}>
+  1203→                    <Plus className="h-4 w-4 mr-1" />
+  1204→                    Добавить
+  1205→                  </Button>
+  1206→                </div>
+  1207→
+  1208→                <div className="space-y-2">
+  1209→                  {editRows.rows.map((item, index) => renderItemRow(item, index, editRows, editColorSelect))}
+  1210→                </div>
+  1211→              </div>
+  1212→            </div>
+  1213→          </ScrollArea>
+  1214→          <DialogFooter>
+  1215→            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+  1216→              Отмена
+  1217→            </Button>
+  1218→            <Button
+  1219→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1220→              onClick={handleEditSave}
+  1221→              disabled={updatePlanMutation.isPending}
+  1222→            >
+  1223→              {updatePlanMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1224→              Сохранить
+  1225→            </Button>
+  1226→          </DialogFooter>
+  1227→        </DialogContent>
+  1228→      </Dialog>
+  1229→
+  1230→      {/* Supplement Plan Dialog */}
+  1231→      <Dialog open={supplementDialogOpen} onOpenChange={setSupplementDialogOpen}>
+  1232→        <DialogContent className="sm:max-w-3xl max-h-[85vh]">
+  1233→          <DialogHeader>
+  1234→            <DialogTitle>Дополнить план: {supplementPlanName}</DialogTitle>
+  1235→          </DialogHeader>
+  1236→          <ScrollArea className="max-h-[65vh] sm:max-h-[70vh] pr-2 sm:pr-4">
+  1237→            <div className="space-y-4">
+  1238→              <div className="space-y-3">
+  1239→                <div className="flex items-center justify-between">
+  1240→                  <Label className="text-sm font-medium">Новые позиции</Label>
+  1241→                  <Button size="sm" variant="outline" onClick={supplementRows.addRow}>
+  1242→                    <Plus className="h-4 w-4 mr-1" />
+  1243→                    Добавить
+  1244→                  </Button>
+  1245→                </div>
+  1246→
+  1247→                <div className="space-y-2">
+  1248→                  {supplementRows.rows.map((item, index) => renderItemRow(item, index, supplementRows, supplementColorSelect))}
+  1249→                </div>
+  1250→              </div>
+  1251→            </div>
+  1252→          </ScrollArea>
+  1253→          <DialogFooter>
+  1254→            <Button variant="outline" onClick={() => setSupplementDialogOpen(false)}>
+  1255→              Отмена
+  1256→            </Button>
+  1257→            <Button
+  1258→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1259→              onClick={handleSupplementSave}
+  1260→              disabled={supplementMutation.isPending}
+  1261→            >
+  1262→              {supplementMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+  1263→              Добавить позиции
+  1264→            </Button>
+  1265→          </DialogFooter>
+  1266→        </DialogContent>
+  1267→      </Dialog>
+  1268→
+  1269→      {/* Plan Detail Dialog */}
+  1270→      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+  1271→        <DialogContent className="sm:max-w-4xl max-h-[85vh]">
+  1272→          <DialogHeader>
+  1273→            <DialogTitle className="flex items-center gap-2">
+  1274→              <BarChart3 className="h-5 w-5 text-emerald-600" />
+  1275→              {detailData?.name || 'План пошива'}
+  1276→            </DialogTitle>
+  1277→            {detailData && (
+  1278→              <DialogDescription className="flex items-center gap-3 mt-1">
+  1279→                {detailData.customer?.name && <span>Заказчик: {detailData.customer.name}</span>}
+  1280→                {getPlanStatusBadge(detailData.status)}
+  1281→              </DialogDescription>
+  1282→            )}
+  1283→          </DialogHeader>
+  1284→          {detailLoading ? (
+  1285→            <div className="flex items-center justify-center py-12">
+  1286→              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+  1287→              <span className="ml-2 text-muted-foreground">Загрузка...</span>
+  1288→            </div>
+  1289→          ) : detailData && detailData.progress ? (
+  1290→            <ScrollArea className="max-h-[60vh] sm:max-h-[70vh] pr-2 sm:pr-4">
+  1291→              <div className="space-y-6">
+  1292→                {/* Overall progress */}
+  1293→                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+  1294→                  <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-200">
+  1295→                    <div className="text-xs text-blue-600 mb-1">Планируется</div>
+  1296→                    <div className="text-xl font-bold text-blue-700">{detailData.progress.total.planned}</div>
+  1297→                  </div>
+  1298→                  <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-200">
+  1299→                    <div className="text-xs text-amber-600 mb-1">Раскроено</div>
+  1300→                    <div className="text-xl font-bold text-amber-700">{detailData.progress.total.cut}</div>
+  1301→                  </div>
+  1302→                  <div className="text-center p-3 bg-sky-50 rounded-lg border border-sky-200">
+  1303→                    <div className="text-xs text-sky-600 mb-1">Назначено</div>
+  1304→                    <div className="text-xl font-bold text-sky-700">{detailData.progress.total.assigned}</div>
+  1305→                  </div>
+  1306→                  <div className="text-center p-3 bg-orange-50 rounded-lg border border-orange-200">
+  1307→                    <div className="text-xs text-orange-600 mb-1">Отшито</div>
+  1308→                    <div className="text-xl font-bold text-orange-700">{detailData.progress.total.sewn}</div>
+  1309→                  </div>
+  1310→                  <div className="text-center p-3 bg-emerald-50 rounded-lg border border-emerald-200 col-span-2 sm:col-span-1">
+  1311→                    <div className="text-xs text-emerald-600 mb-1">Проверено ОТК</div>
+  1312→                    <div className="text-xl font-bold text-emerald-700">{detailData.progress.total.checked}</div>
+  1313→                  </div>
+  1314→                </div>
+  1315→
+  1316→                {/* Progress bars */}
+  1317→                <div className="space-y-3">
+  1318→                  <div>
+  1319→                    <div className="flex items-center justify-between text-sm mb-1">
+  1320→                      <span className="text-muted-foreground">Прогресс пошива</span>
+  1321→                      <span className="font-semibold text-orange-700">{detailData.progress.total.sewnPercent}%</span>
+  1322→                    </div>
+  1323→                    <Progress value={detailData.progress.total.sewnPercent} className="h-3" />
+  1324→                  </div>
+  1325→                  <div>
+  1326→                    <div className="flex items-center justify-between text-sm mb-1">
+  1327→                      <span className="text-muted-foreground">Проверено ОТК</span>
+  1328→                      <span className="font-semibold text-emerald-700">{detailData.progress.total.checkedPercent}%</span>
+  1329→                    </div>
+  1330→                    <Progress value={detailData.progress.total.checkedPercent} className="h-3" />
+  1331→                  </div>
+  1332→                </div>
+  1333→
+  1334→                <Separator />
+  1335→
+  1336→                {/* Per-position progress */}
+  1337→                <div>
+  1338→                  <h4 className="text-sm font-semibold mb-3">Прогресс по позициям</h4>
+  1339→                  <div className="border rounded-lg overflow-x-auto">
+  1340→                    <Table>
+  1341→                      <TableHeader>
+  1342→                        <TableRow>
+  1343→                          <TableHead>Изделие</TableHead>
+  1344→                          <TableHead>Размер</TableHead>
+  1345→                          <TableHead>Цвет</TableHead>
+  1346→                          <TableHead className="text-center">План</TableHead>
+  1347→                          <TableHead className="text-center">Раскрой</TableHead>
+  1348→                          <TableHead className="text-center">Назначено</TableHead>
+  1349→                          <TableHead className="text-center">Отшито</TableHead>
+  1350→                          <TableHead className="text-center">ОТК</TableHead>
+  1351→                          <TableHead className="text-center">Прогресс</TableHead>
+  1352→                        </TableRow>
+  1353→                      </TableHeader>
+  1354→                      <TableBody>
+  1355→                        {detailData.progress.items.map((item) => {
+  1356→                          const percent = item.totalPlanned > 0 ? Math.round((item.checkedQty / item.totalPlanned) * 100) : 0
+  1357→                          const sewnPercent = item.totalPlanned > 0 ? Math.round((item.sewnQty / item.totalPlanned) * 100) : 0
+  1358→                          return (
+  1359→                            <TableRow key={item.planItemId} className={item.isComboItem ? 'bg-amber-50/50' : ''}>
+  1360→                              <TableCell className="font-medium">{item.productName}</TableCell>
+  1361→                              <TableCell>{item.size}</TableCell>
+  1362→                              <TableCell>
+  1363→                                <span className="flex items-center gap-1.5">
+  1364→                                  {getColorDot(item.isComboItem ? '#f59e0b' : item.colorHex)}
+  1365→                                  <span>{item.color}</span>
+  1366→                                  {item.isComboItem && item.expandedColors && item.expandedColors.length > 0 && (
+  1367→                                    <span className="text-xs text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-1">
+  1368→                                      {item.expandedColors.join(' + ')}
+  1369→                                    </span>
+  1370→                                  )}
+  1371→                                </span>
+  1372→                              </TableCell>
+  1373→                              <TableCell className="text-center">{item.totalPlanned}</TableCell>
+  1374→                              <TableCell className="text-center">{item.totalCut}</TableCell>
+  1375→                              <TableCell className="text-center">{item.assignedToSewers}</TableCell>
+  1376→                              <TableCell className="text-center">{item.sewnQty}</TableCell>
+  1377→                              <TableCell className="text-center font-semibold text-emerald-700">{item.checkedQty}</TableCell>
+  1378→                              <TableCell className="text-center w-32">
+  1379→                                <div className="flex items-center gap-2">
+  1380→                                  <Progress value={sewnPercent} className="h-2 flex-1" />
+  1381→                                  <span className="text-xs text-muted-foreground w-8">{percent}%</span>
+  1382→                                </div>
+  1383→                              </TableCell>
+  1384→                            </TableRow>
+  1385→                          )
+  1386→                        })}
+  1387→                      </TableBody>
+  1388→                    </Table>
+  1389→                  </div>
+  1390→                </div>
+  1391→
+  1392→                {/* Sewing tasks info */}
+  1393→                {detailData.cuttingPlans.length > 0 && (
+  1394→                  <>
+  1395→                    <Separator />
+  1396→                    <div>
+  1397→                      <h4 className="text-sm font-semibold mb-3">Задания швеям</h4>
+  1398→                      <div className="space-y-2">
+  1399→                        {detailData.cuttingPlans.map((cp) => (
+  1400→                          <div key={cp.id}>
+  1401→                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+  1402→                              <Scissors className="h-3 w-3" />
+  1403→                              <span className="font-medium">Раскрой: {cp.label || 'Основной'}</span>
+  1404→                              {getCuttingStatusBadge(cp.status)}
+  1405→                            </div>
+  1406→                            {cp.sewingTasks.length === 0 ? (
+  1407→                              <p className="text-xs text-muted-foreground pl-5">Нет заданий</p>
+  1408→                            ) : (
+  1409→                              <div className="space-y-1 pl-5">
+  1410→                                {cp.sewingTasks.map((st) => (
+  1411→                                  <div key={st.id} className="flex items-center gap-2 text-sm bg-muted/40 rounded px-3 py-1.5">
+  1412→                                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+  1413→                                    <span className="font-medium">{st.employee.name}</span>
+  1414→                                    {getSewingTaskStatusBadge(st.status)}
+  1415→                                    <span className="text-muted-foreground">—</span>
+  1416→                                    <span>{st.items.length} поз., {st.items.reduce((s, i) => s + i.quantity, 0)} шт</span>
+  1417→                                  </div>
+  1418→                                ))}
+  1419→                              </div>
+  1420→                            )}
+  1421→                          </div>
+  1422→                        ))}
+  1423→                      </div>
+  1424→                    </div>
+  1425→                  </>
+  1426→                )}
+  1427→              </div>
+  1428→            </ScrollArea>
+  1429→          ) : (
+  1430→            <div className="text-center py-8 text-muted-foreground">Нет данных</div>
+  1431→          )}
+  1432→        </DialogContent>
+  1433→      </Dialog>
+  1434→
+  1435→      {/* Delete Confirmation */}
+  1436→      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null) }}>
+  1437→        <AlertDialogContent>
+  1438→          <AlertDialogHeader>
+  1439→            <AlertDialogTitle>Удалить план пошива?</AlertDialogTitle>
+  1440→            <AlertDialogDescription>
+  1441→              Это действие нельзя отменить. План будет удалён навсегда вместе со всеми связанными данными.
+  1442→            </AlertDialogDescription>
+  1443→          </AlertDialogHeader>
+  1444→          <AlertDialogFooter>
+  1445→            <AlertDialogCancel>Отмена</AlertDialogCancel>
+  1446→            <AlertDialogAction
+  1447→              className="bg-red-600 hover:bg-red-700 text-white"
+  1448→              onClick={() => {
+  1449→                if (deleteConfirmId) {
+  1450→                  deleteMutation.mutate(deleteConfirmId)
+  1451→                  setDeleteConfirmId(null)
+  1452→                }
+  1453→              }}
+  1454→            >
+  1455→              Удалить
+  1456→            </AlertDialogAction>
+  1457→          </AlertDialogFooter>
+  1458→        </AlertDialogContent>
+  1459→      </AlertDialog>
+  1460→    </div>
+  1461→  )
+  1462→}
+  1463→
