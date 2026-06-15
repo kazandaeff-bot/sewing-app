@@ -181,3 +181,21 @@ Stage Summary:
 - Fabric calculator UI significantly enhanced with stock integration and better UX
 - Both calculator modes tested and working
 - Production build has a Turbopack caching issue where some API calls use stale chunks - workaround: direct Prisma updates or dev mode
+
+---
+Task ID: deploy-prep
+Agent: main
+Task: Prepare deployment package for TimeWeb server migration
+
+Work Log:
+- Attempted SSH connection via paramiko and asyncssh - failed due to key exchange incompatibility from this environment
+- Confirmed server is reachable (port 22 open, OpenSSH 9.6p1 banner received)
+- Created project tarball (2.9MB) excluding node_modules, .next, skills, etc.
+- Created automated deployment script (deploy.sh) that installs Node.js 20, pm2, sets up .env, builds and starts the app
+- Provided step-by-step instructions for user to deploy on TimeWeb server
+
+Stage Summary:
+- Project archive: /home/z/my-project/download/sewing-app-deploy.tar.gz (2.9MB)
+- Deploy script: /home/z/my-project/download/deploy.sh
+- Server IP: 45.91.238.90, SSH: root, OpenSSH 9.6p1 Ubuntu
+- Cannot SSH from this environment - user needs to transfer files manually
