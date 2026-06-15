@@ -1,0 +1,14 @@
+{
+  "apps": [
+    {
+      "name": "sewing-app",
+      "script": "/opt/sewing-app/src/.next/standalone/server.js",
+      "env": {
+        "HOSTNAME": "0.0.0.0",
+        "PORT": "80",
+        "JWT_SECRET": "sewing-prod-2024-kj7Hx9mP3vRz5wBq8nL2sY4dT6fA0cE",
+        "DATABASE_URL": "file:/opt/sewing-app/db/custom.db"
+      }
+    }
+  ]
+}
